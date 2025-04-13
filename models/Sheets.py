@@ -1,4 +1,5 @@
 import json
+
 from pathlib import Path
 from datetime import datetime, timedelta
 import random
@@ -7,12 +8,13 @@ import time
 
 from config import CACHE_DIR
 
+    
 class Sheets:
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
         self.json_path = Path(CACHE_DIR, "sheet_cache.json")
         self.data = {}
-        self.load()
+        self._load()
     
     
     def Get(self,pull_new=False):
@@ -39,7 +41,7 @@ class Sheets:
             self._save()
         else:
             self.logger.info(f"Read sheet data from file cache")
-            self.load()
+            self._load()
            
         return self.data
 
@@ -73,10 +75,10 @@ class Sheets:
     
     def _save(self):
         with open(self.json_path, 'w') as f:
-            self.logger.info(f"Saving sheet data to file")
+            self.logger.info(f"Saving sheet data to file cache")
             json.dump(self.data, f, indent=2)
     
-    def load(self):
+    def _load(self):
         if self.json_path.exists():
             with open(self.json_path, 'r') as f:
                 self.logger.info(f"Loading sheet data from file cache")
@@ -100,14 +102,14 @@ class Sheets:
             departure_str = f"{departure_hour:02d}:{arrival.minute:02d}"
 
             data = {
-                "Timestamp": now.strftime("%d/%m/%Y %H:%M:%S"),
+                "Timestamp": "03/04/2025 13:42:28",
                 "Email address": "me@here.com",
                 "Name of Lead Person": "Me You",
                 "Mobile Number for Lead Person": "0123456789",
                 "Chelmsford Scout Group": random.choice(DISTRICT_GROUPS),
                 "Number of people": str(random.randint(10, 30)),
-                "Arrival Date / Time": arrival.strftime("%d/%m/%Y %H:%M:%S"),
-                "Departure Time": departure_str,
+                "Arrival Date / Time": "23/06/2025 18:00:00",
+                "Departure Time": "21:00:00",
                 "Campsite": random.choice(FACILITIES)
             }
 
