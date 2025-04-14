@@ -6,7 +6,7 @@ import time
 from markupsafe import Markup
 from datetime import datetime
 from markupsafe import Markup
-from utils import secs_to_hr
+
 
 app = Flask(__name__)
 app.secret_key = 'dev-key'
@@ -24,22 +24,18 @@ bookings.Load(sheet_bookings)
 @app.route('/')
 @app.route('/bookings')
 def show_bookings():
-    last_retrieved = secs_to_hr(int(time.time()) - bookings.GetLastRetrieved())
-   
     status_options = bookings.GetStatusOptions()
-    return render_template('sheet.html', bookings=bookings.Get(), last_retrieved=last_retrieved, status_options=status_options)
+    return render_template('sheet.html', bookings=bookings.Get(), age=bookings.Age(), status_options=status_options)
 
 @app.route("/pull")
 def pull_now():
-    added = bookings.Load(sheets.Get())
+    added = bookings.Load(sheets.Get(pull_new=True))
     flash(f"Bookings added: {added}")
     return redirect(url_for("show_bookings"))
 
 @app.route('/update/<booking_id>', methods=['POST'])
 def update(booking_id):
     updates = request.form.to_dict()
-    
-    
     
     # Convert date strings to epoch if they exist
     for field in ["Arriving", "Departing"]:

@@ -5,7 +5,7 @@ import hashlib
 import json
 import time
 from datetime import datetime
-
+from utils import secs_to_hr
 from config import CACHE_DIR
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
@@ -20,8 +20,17 @@ class Bookings:
     def GetStatusOptions(self):
         return status_options
 
-    def GetLastRetrieved(self):
-        return self.data["timestamp"]
+    def Age(self):
+        """
+        String showing the age of the bookings or when they were last retrieved from sheets
+
+        Returns:
+            str: Either 'NEVER' if not data exists, or string like '1d 5h 35m 17s'
+        """
+        if "timestamp" in self.data:
+            return secs_to_hr(int(time.time()) - self.data["timestamp"])
+        else:
+            return "NEVER!"
     
     def Get(self, booking_id=None):
         
@@ -126,36 +135,40 @@ class Bookings:
     def Load(self, sheet_bookings):
         
         bookings_added = 0
-        self.data["timestamp"] = int(time.time())
-        print(self.data["timestamp"])
         
-        #
-        ## Need to normalise the new data from Sheet to our structure
-        for sb in sheet_bookings["sheet_data"]:
-            booking_id = self._md5_of_dict(sb)
+        if "timestamp" in sheet_bookings and sheet_bookings["timestamp"]:
             
-            if booking_id not in self.data["bookings"]:
+            self.data["timestamp"] = sheet_bookings["timestamp"]
+            
+            #
+            ## Need to normalise the new data from Sheet to our structure
+            for sb in sheet_bookings["sheet_data"]:
                 
-                start_dt = datetime.strptime(sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S")
+                booking_id = self._md5_of_dict(sb)
                 
-                # Parse the departure time and replace the time part of arrival
-                dep_time = datetime.strptime(sb["Departure Time"], "%H:%M:%S").time()
-                end_dt = start_dt.replace(hour=dep_time.hour, minute=dep_time.minute, second=0)
-                
-                new_booking = {
-                    booking_id: {
-                        "original_sheet_data": sb,
-                        "Group": sb["Chelmsford Scout Group"],
-                        "Leader": sb["Name of Lead Person"],
-                        "Arriving": int(start_dt.timestamp()),
-                        "Departing": int(end_dt.timestamp()),
-                        "Number": sb["Number of people"],
-                        "Status": "New",
+                if booking_id not in self.data["bookings"]:
+                    
+                    start_dt = datetime.strptime(sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S")
+                    
+                    # Parse the departure time and replace the time part of arrival
+                    dep_time = datetime.strptime(sb["Departure Time"], "%H:%M:%S").time()
+                    end_dt = start_dt.replace(hour=dep_time.hour, minute=dep_time.minute, second=0)
+                    
+                    new_booking = {
+                        booking_id: {
+                            "original_sheet_data": sb,
+                            "Group": sb["Chelmsford Scout Group"],
+                            "Leader": sb["Name of Lead Person"],
+                            "Arriving": int(start_dt.timestamp()),
+                            "Departing": int(end_dt.timestamp()),
+                            "Number": sb["Number of people"],
+                            "Status": "New",
+                        }
                     }
-                }
-                
-                self.data["bookings"].update(new_booking)
-                bookings_added += 1
+                    
+                    self.data["bookings"].update(new_booking)
+                    bookings_added += 1
 
-        self._save()
+            self._save()
+            
         return bookings_added
