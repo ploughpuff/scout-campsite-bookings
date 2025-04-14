@@ -19,6 +19,9 @@ class Bookings:
     
     def GetStatusOptions(self):
         return status_options
+
+    def GetLastRetrieved(self):
+        return self.data["timestamp"]
     
     def Get(self, booking_id=None):
         
@@ -98,6 +101,11 @@ class Bookings:
     #
     ## Function to load a sheet of data in dict format into our booking structure
     def Load(self, sheet_bookings):
+        
+        bookings_added = 0
+        self.data["timestamp"] = int(time.time())
+        print(self.data["timestamp"])
+        
         #
         ## Need to normalise the new data from Sheet to our structure
         for sb in sheet_bookings["sheet_data"]:
@@ -124,5 +132,7 @@ class Bookings:
                 }
                 
                 self.data["bookings"].update(new_booking)
+                bookings_added += 1
 
         self._save()
+        return bookings_added

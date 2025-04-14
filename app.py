@@ -6,9 +6,10 @@ import time
 from markupsafe import Markup
 from datetime import datetime
 from markupsafe import Markup
+from utils import secs_to_hr
 
 app = Flask(__name__)
-
+app.secret_key = 'dev-key'
 
 logger = setup_logger()
 logger.info("Starting")
@@ -23,17 +24,16 @@ bookings.Load(sheet_bookings)
 @app.route('/')
 @app.route('/bookings')
 def show_bookings():
-    return render_template('sheet.html', bookings=bookings.Get(), status_options=bookings.GetStatusOptions())
+    last_retrieved = secs_to_hr(int(time.time()) - bookings.GetLastRetrieved())
+   
+    status_options = bookings.GetStatusOptions()
+    return render_template('sheet.html', bookings=bookings.Get(), last_retrieved=last_retrieved, status_options=status_options)
 
-@app.route("/booking/<booking_id>")
-def show_booking_details(booking_id):
-    booking_data = bookings.Get(booking_id)
-
-    if not booking_data:
-        return "Booking not found", 404
-
-    # You can pass the full booking data to the template
-    return render_template("booking_details.html", booking=booking_data)
+@app.route("/pull")
+def pull_now():
+    added = bookings.Load(sheets.Get())
+    flash(f"Bookings added: {added}")
+    return redirect(url_for("show_bookings"))
 
 @app.route('/update/<booking_id>', methods=['POST'])
 def update(booking_id):
