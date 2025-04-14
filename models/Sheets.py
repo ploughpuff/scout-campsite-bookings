@@ -90,7 +90,7 @@ class Sheets:
             
     def _ti_create_test_data(self, count=1):
         
-        DISTRICT_GROUPS = ["1st Town", "2nd Village", "26th City", "1st Smallville"]
+        DISTRICT_GROUPS = ["1st Town", "2nd Village", "3rd City", "4th Smallville"]
         FACILITIES = ["Top", "Bottom", "Trees", "Campfire", "Badgers"]
         
         test_data = []
