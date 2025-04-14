@@ -57,22 +57,45 @@ class Bookings:
     
 
     def Update(self, booking_id, updates: dict) -> bool:
+        """
+        Update a booking in self.data. Only allowed fields are updated.
+        Changes are logged only if a value is actually modified.
+
+        Args:
+            booking_id (str): The ID of the booking to update.
+            updates (dict): The fields to update.
+
+        Returns:
+            bool: True if update was successful, False if booking not found.
+        """
         allowed_fields = {"Group", "Leader", "Number", "Status", "Arriving", "Departing"}
-        
-        """Update a booking in self.data. Returns True if successful."""
+
         self._load()  # Ensure fresh data
 
         if booking_id not in self.data["bookings"]:
             return False  # Booking not found
 
         booking = self.data["bookings"][booking_id]
+        changes = {}
 
-        for key, value in updates.items():
+        for key, new_value in updates.items():
             if key in allowed_fields:
-                booking[key] = value
+                old_value = booking.get(key)
+                if str(old_value) != str(new_value):  # Compare as strings for safety
+                    booking[key] = new_value
+                    changes[key] = (old_value, new_value)
 
-        self._save()  # Persist changes
+        if changes:
+            self._save()
+            change_list = ", ".join(
+                f"{key}: '{old}' > '{new}'" for key, (old, new) in changes.items()
+            )
+            self.logger.info(f"Booking {booking_id} updated: {change_list}")
+        else:
+            self.logger.info(f"Booking {booking_id} checked for update — no changes.")
+
         return True
+
 
     
     def _save(self):
