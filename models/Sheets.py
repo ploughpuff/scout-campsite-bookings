@@ -24,7 +24,9 @@ class Sheets:
         if pull_new is True:
             self.logger.info(f"User forced update of sheet data from provider")
             
-            # ToDo - Use Google API to pull sheet data
+            #
+            ## ToDo - Use Google API to pull sheet data
+            ## We have internal and external types of data but just do internal for now
             new_data = self._ti_create_test_data(count=2)
             
             # ToDo - For testing append new data, not replace it
