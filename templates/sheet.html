@@ -69,10 +69,6 @@
                           <span class="badge bg-warning text-dark" role="button" data-bs-toggle="modal" data-bs-target="#editModal{{ booking.ID }}">
                             New
                           </span>
-                        {% elif booking.Status == 'Pending' %}
-                        <span class="badge bg-warning text-dark" role="button" data-bs-toggle="modal" data-bs-target="#editModal{{ booking.ID }}">
-                            Pending
-                          </span>
                         {% elif booking.Status == 'Confirmed' %}
                         <span class="badge bg-info text-dark" role="button" data-bs-toggle="modal" data-bs-target="#editModal{{ booking.ID }}">
                             Confirmed
