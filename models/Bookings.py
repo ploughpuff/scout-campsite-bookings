@@ -7,11 +7,13 @@ import time
 from datetime import datetime
 from utils import secs_to_hr
 from config import CACHE_DIR
+from models.Mailer import send_booking_confirmation
 
-status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
+status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
 class Bookings:
-    def __init__(self):
+    def __init__(self, calendar=None):
+        self.calendar = calendar  # GoogleCalendar instance
         self.logger = logging.getLogger("app_logger")
         self.json_path = Path(CACHE_DIR, "bookings.json")
         self.data = {}
@@ -86,6 +88,9 @@ class Bookings:
 
         booking = self.data["bookings"][booking_id]
         changes = {}
+        now_confirmed = False
+        now_cancelled = False
+        
 
         for key, new_value in updates.items():
             if key in allowed_fields:
@@ -94,6 +99,25 @@ class Bookings:
                     booking[key] = new_value
                     changes[key] = (old_value, new_value)
 
+                    if key == "Status" and new_value == "Confirmed":
+                        now_confirmed = True
+                    
+                    if key == "Status" and new_value == "Cancelled":
+                        now_cancelled = True
+
+        if now_confirmed:
+            send_booking_confirmation(booking)
+            
+            event_id = self.calendar.AddEvent(booking)
+            if event_id:
+                booking["google_calendar_event_id"] = event_id
+        
+        if now_cancelled:
+            if booking.get("google_calendar_event_id"):
+                self.calendar.DeleteEvent(booking["google_calendar_event_id"])
+                booking["google_calendar_event_id"] = None
+        
+        # Log changes
         if changes:
             self._save()
             change_list = ", ".join(
@@ -104,8 +128,6 @@ class Bookings:
             self.logger.info(f"Booking {booking_id} checked for update — no changes.")
 
         return True
-
-
     
     def _save(self):
         with open(self.json_path, 'w') as f:
