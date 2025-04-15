@@ -2,10 +2,14 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from models.Logger import setup_logger
 from models.Sheets import Sheets
 from models.Bookings import Bookings
+from models.Calendar import GoogleCalendar
 import time
 from markupsafe import Markup
 from datetime import datetime
 from markupsafe import Markup
+
+import config
+
 
 
 app = Flask(__name__)
@@ -17,8 +21,13 @@ logger.info("Starting")
 sheets = Sheets()
 sheet_bookings = sheets.Get()
 
-bookings = Bookings()
+gc = GoogleCalendar(config.GOOGLE_CREDS, config.GOOGLE_CALENDAR_ID)
+
+bookings = Bookings(calendar=gc)
 bookings.Load(sheet_bookings)
+
+
+
 
 
 @app.route('/')
