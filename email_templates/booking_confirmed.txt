@@ -1,0 +1,9 @@
+Hi {{ leader }},
+
+Your booking for the {{ campsite }} campsite starting {{ arriving }} has been confirmed.
+
+We're excited to have your group on site!
+
+If you have any questions, feel free to reply to this email.
+
+— Campsite Team
