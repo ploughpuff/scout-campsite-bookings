@@ -40,25 +40,44 @@ def booking_detail(booking_id):
         abort(404)
     return render_template("booking.html", booking=booking, booking_id=booking_id)
 
-@app.route("/cancel/<booking_id>", methods=["POST"])
-def cancel_booking(booking_id):
-    reason = request.form.get("reason")
+@app.route("/booking/<action>/<booking_id>", methods=["POST"])
+def update_booking_status(action, booking_id):
+    
+    booking = bookings.Get(booking_id)
+    updated_fields = {}
+    
+    if not booking:
+        flash(f"Booking {booking_id} not found.", "danger")
+    
+    elif action == "cancel":
+        # The cancel modal prompt the user for some reason text
+        reason = request.form.get("reason")
+        
+        if not reason:
+            flash("Cancellation reason is required.", "danger")
+            return redirect(url_for("booking_detail", booking_id=booking_id))
+    
+        updated_fields = {
+            "Status": "Cancelled",
+            "Notes": "Cancelled Reason: " + reason
+        }
 
-    if not reason:
-        flash("Cancellation reason is required.", "danger")
-        return redirect(url_for("booking_detail", booking_id=booking_id)) 
-    
-    updated_fields = {
-        "Status": "Cancelled",
-        "Notes": "Cancelled Reason: " + reason
-    }
-    
-    if bookings.Update(booking_id, updated_fields):
-        flash(f"Booking {booking_id} has been cancelled.", "success")
+    elif action == "resurrect":
+         updated_fields = {
+            "Status": "New",
+            "Notes": "Resurrected"
+        }
     else:
-        flash(f"Booking {booking_id} not updated successfully.", "danger")
-
+        flash(f"Unsupported action: {action}", "danger")
+    
+    if updated_fields:
+        if bookings.Update(booking_id, updated_fields):
+            flash(f"Booking {booking_id} has been {action}.", "success")
+        else:
+            flash(f"Booking {booking_id} with action {action} unsuccessful.", "danger")
+    
     return redirect(url_for("all_bookings"))
+
 
 @app.route("/test-flash")
 def test_flash():
