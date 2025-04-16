@@ -95,7 +95,7 @@ class Bookings:
         Returns:
             bool: True if update was successful, False if booking not found.
         """
-        allowed_fields = {"Group", "Leader", "Number", "Status", "Arriving", "Departing"}
+        allowed_fields = {"Group", "Leader", "Number", "Status", "Arriving", "Departing", "Notes"}
 
         self._load()  # Ensure fresh data
 
@@ -156,6 +156,11 @@ class Bookings:
         return True
     
     def _save(self):
+        # Searilise the BookingType ENUM to string before saving
+        for booking in self.data.get("bookings", {}).values():
+            if isinstance(booking.get("booking_type"), BookingType):
+                booking["booking_type"] = booking["booking_type"].name  # Or .label if you prefer
+
         with open(self.json_path, 'w') as f:
             self.logger.info(f"Saving bookings data to file")
             json.dump(self.data, f, indent=2)
@@ -166,6 +171,15 @@ class Bookings:
             with open(self.json_path, 'r') as f:
                 self.logger.info(f"Loading bookings data from file cache")
                 self.data = json.load(f)
+                
+                # Deseralise BookingType string back to ENUM
+                for booking in self.data.get("bookings", {}).values():
+                    bt_raw = booking.get("booking_type")
+                    try:
+                        booking["booking_type"] = BookingType[bt_raw]
+                    except (KeyError, TypeError):
+                        self.logger.warning(f"Unknown or missing booking_type: {bt_raw}")
+    
         else:
             self.data = {
                 "timestamp": int(time.time()),
@@ -221,12 +235,14 @@ class Bookings:
                         new_booking_id: {
                             "original_sheet_md5": new_booking_md5,
                             "original_sheet_data": sb,
+                            "booking_type": booking_type.name,
                             "Group": sb["Chelmsford Scout Group"],
                             "Leader": sb["Name of Lead Person"],
                             "Arriving": int(start_dt.timestamp()),
                             "Departing": int(end_dt.timestamp()),
                             "Number": sb["Number of people"],
                             "Status": "New",
+                            "Notes": ""
                         }
                     }
                     
