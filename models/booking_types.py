@@ -3,8 +3,8 @@ from datetime import datetime
 import re
 
 class BookingType(Enum):
-    DISTRICT_DAY_VISIT = ("district_day_visit", "RDV")
-    SCHOOL = ("school", "RPE")
+    DISTRICT_DAY_VISIT = ("district_day_visit", "CDS")
+    SCHOOL = ("school", "SCH")
 
     def __init__(self, label, prefix):
         self.label = label
