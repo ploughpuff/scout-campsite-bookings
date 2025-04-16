@@ -1,3 +1,4 @@
+from flask import flash, jsonify
 import json
 from pathlib import Path
 import logging
@@ -11,6 +12,14 @@ from models.Mailer import send_booking_confirmation
 
 status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
+status_transitions = {
+    "New":       [       "Confirmed",                         "Cancelled"],
+    "Confirmed": [                    "Invoice", "Completed", "Cancelled"],
+    "Invoice":   [                               "Completed",            ],
+    "Completed": [                                                       ],
+    "Cancelled": [                                                       ]
+}
+
 class Bookings:
     def __init__(self, calendar=None):
         self.calendar = calendar  # GoogleCalendar instance
@@ -19,8 +28,8 @@ class Bookings:
         self.data = {}
         self._load()
     
-    def GetStatusOptions(self):
-        return status_options
+    def GetStates(self):
+        return {"names": status_options, "transitions": status_transitions}
 
     def Age(self):
         """
@@ -65,7 +74,9 @@ class Bookings:
 
         return bookings
 
-    
+    def _can_transition(self, from_status, to_status):
+        return to_status in status_transitions.get(from_status, [])
+
 
     def Update(self, booking_id, updates: dict) -> bool:
         """
@@ -84,49 +95,59 @@ class Bookings:
         self._load()  # Ensure fresh data
 
         if booking_id not in self.data["bookings"]:
+            flash(f"Cannot update booking as ID not found {booking_id}", "danger")
             return False  # Booking not found
 
         booking = self.data["bookings"][booking_id]
-        changes = {}
-        now_confirmed = False
-        now_cancelled = False
+        changes = []
         
-
-        for key, new_value in updates.items():
-            if key in allowed_fields:
-                old_value = booking.get(key)
-                if str(old_value) != str(new_value):  # Compare as strings for safety
-                    booking[key] = new_value
-                    changes[key] = (old_value, new_value)
-
-                    if key == "Status" and new_value == "Confirmed":
-                        now_confirmed = True
-                    
-                    if key == "Status" and new_value == "Cancelled":
-                        now_cancelled = True
-
-        if now_confirmed:
-            send_booking_confirmation(booking)
+        new_status = updates.get("Status")
+        current_status = booking.get("Status")
+        
+        if new_status and new_status != current_status:
+            if not self._can_transition(current_status, new_status):
+                self.logger.warning(f"Invalid status transition: {booking_id}: {current_status} > {new_status}")
+                flash(f"Invalid state transition: {booking_id}: {current_status} > {new_status}", "danger")
+                return False
             
-            event_id = self.calendar.AddEvent(booking)
-            if event_id:
-                booking["google_calendar_event_id"] = event_id
+            # Update and log the transition
+            booking["Status"] = new_status
+            changes.append(("Status", current_status, new_status))
         
-        if now_cancelled:
-            if booking.get("google_calendar_event_id"):
-                self.calendar.DeleteEvent(booking["google_calendar_event_id"])
-                booking["google_calendar_event_id"] = None
-        
-        # Log changes
-        if changes:
-            self._save()
-            change_list = ", ".join(
-                f"{key}: '{old}' > '{new}'" for key, (old, new) in changes.items()
-            )
-            self.logger.info(f"Booking {booking_id} updated: {change_list}")
-        else:
-            self.logger.info(f"Booking {booking_id} checked for update — no changes.")
+            # Record history
+            booking.setdefault("StatusHistory", []).append({
+                "from": current_status,
+                "to": new_status,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            
+            if new_status == "Confirmed":
+                send_booking_confirmation(booking)
 
+                if "google_calendar_event_id" not in booking:
+                    event_id = self.calendar.AddEvent(booking)
+                    if event_id:
+                        booking["google_calendar_event_id"] = event_id
+            else:
+                if new_status == "Cancelled":
+                    if booking.get("google_calendar_event_id"):
+                        self.calendar.DeleteEvent(booking["google_calendar_event_id"])
+                        booking["google_calendar_event_id"] = None
+
+
+        # Apply other updates
+        for key, value in updates.items():
+            if key in allowed_fields and key != "Status":
+                if booking.get(key) != value:
+                    changes.append((key, booking.get(key), value))
+                    booking[key] = value
+                    
+        if changes:
+            self.logger.info(f"Updated booking {booking_id}: " + "; ".join(
+                f"{key}: {old} > {new}" for key, old, new in changes
+            ))
+                
+        self._save()
         return True
     
     def _save(self):
