@@ -21,7 +21,7 @@ logger.info("Starting")
 sheets = Sheets()
 sheet_bookings = sheets.Get()
 
-gc = GoogleCalendar(config.GOOGLE_CREDS, config.GOOGLE_CALENDAR_ID)
+gc = GoogleCalendar(config.SERVICE_ACCOUNT_FILE, config.CALENDAR_ID)
 
 bookings = Bookings(calendar=gc)
 bookings.Load(sheet_bookings)
@@ -33,8 +33,7 @@ bookings.Load(sheet_bookings)
 @app.route('/')
 @app.route('/bookings')
 def show_bookings():
-    status_options = bookings.GetStatusOptions()
-    return render_template('sheet.html', bookings=bookings.Get(), age=bookings.Age(), status_options=status_options)
+    return render_template('sheet.html', bookings=bookings.Get(), age=bookings.Age(), states=bookings.GetStates())
 
 @app.route("/pull")
 def pull_now():
