@@ -36,10 +36,22 @@ def all_bookings():
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
     booking = bookings.Get(booking_id)
+    
     if not booking:
-        abort(404)
-    return render_template("booking.html", booking=booking, booking_id=booking_id)
-
+        flash("Booking not found", "danger")
+        return redirect(url_for("all_bookings"))
+    
+    transitions = bookings.GetStates()["transitions"]
+    current_status = booking["Status"]
+    
+    return render_template(
+        "booking.html",
+        booking_id=booking_id,
+        booking=booking,
+        valid_transitions=transitions.get(current_status, [])
+    )
+    
+    
 @app.route("/booking/<action>/<booking_id>", methods=["POST"])
 def update_booking_status(action, booking_id):
     
@@ -63,10 +75,17 @@ def update_booking_status(action, booking_id):
         }
 
     elif action == "resurrect":
-         updated_fields = {
+        updated_fields = {
             "Status": "New",
             "Notes": "Resurrected"
         }
+    
+    elif action == "confirmed":
+        updated_fields = {
+            "Status": "Confirmed",
+            "Notes": "Confirmed"
+        }
+        
     else:
         flash(f"Unsupported action: {action}", "danger")
     
