@@ -242,6 +242,7 @@ class Bookings:
                             "Departing": int(end_dt.timestamp()),
                             "Number": sb["Number of people"],
                             "Status": "New",
+                            "Invoice": "No",
                             "Notes": ""
                         }
                     }
