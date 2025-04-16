@@ -29,8 +29,8 @@
             <p><strong>Status:</strong>
               <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
             </p>
-            <p><strong>Arriving:</strong> {{ booking.Arriving }}</p>
-            <p><strong>Departing:</strong> {{ booking.Departing }}</p>
+            <p><strong>Arriving:</strong> {{ booking.Arriving | pretty_date }}</p>
+            <p><strong>Departing:</strong> {{ booking.Departing | pretty_date }}</p>
           </div>
         </div>
         <hr>
