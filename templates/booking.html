@@ -2,54 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>📅 Riffhams Booking Details</title>
+  <title>Booking Details</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <div class="container mt-5">
+  <div class="container py-5">
     <h1 class="display-4 text-center mb-4">📅 Riffhams Bookings Manager</h1>
-        
-    <div class="container py-5">
-        <div class="mb-4 d-flex justify-content-between align-items-center">
-        <h2 class="mb-0">Booking Details</h2>
-        <a href="{{ url_for('all_bookings') }}" class="btn btn-outline-secondary">← Back to All Bookings</a>
-        </div>
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+      <h2 class="mb-0">Booking Details</h2>
+      <a href="{{ url_for('all_bookings') }}" class="btn btn-outline-secondary">← Back to All Bookings</a>
+    </div>
 
-        <div class="card shadow-sm rounded-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
+    <div class="card shadow-sm rounded-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
+      </div>
+      <div class="card-body">
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <p><strong>Group:</strong> {{ booking.Group }}</p>
+            <p><strong>Leader:</strong> {{ booking.Leader }}</p>
+            <p><strong>Number of People:</strong> {{ booking.Number }}</p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>Status:</strong>
+              <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
+            </p>
+            <p><strong>Arriving:</strong> {{ booking.Arriving }}</p>
+            <p><strong>Departing:</strong> {{ booking.Departing }}</p>
+          </div>
         </div>
-        <div class="card-body">
-            <div class="row mb-3">
-            <div class="col-md-6">
-                <p><strong>Group:</strong> {{ booking.Group }}</p>
-                <p><strong>Leader:</strong> {{ booking.Leader }}</p>
-                <p><strong>Number of People:</strong> {{ booking.Number }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Status:</strong>
-                <span class="badge bg-secondary">{{ booking.Status }}</span>
-                </p>
-                <p><strong>Arriving:</strong> {{ booking.Arriving }}</p>
-                <p><strong>Departing:</strong> {{ booking.Departing }}</p>
-            </div>
-            </div>
-            <hr>
-            <h6 class="text-muted">Original Submission</h6>
-            <div class="row">
-            <div class="col-md-6">
-                <p><strong>Email:</strong> {{ booking.original_sheet_data["Email address"] }}</p>
-                <p><strong>Mobile:</strong> {{ booking.original_sheet_data["Mobile Number for Lead Person"] }}</p>
-                <p><strong>Scout Group:</strong> {{ booking.original_sheet_data["Chelmsford Scout Group"] }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data["Arrival Date / Time"] }}</p>
-                <p><strong>Departure Time:</strong> {{ booking.original_sheet_data["Departure Time"] }}</p>
-                <p><strong>Campsite:</strong> {{ booking.original_sheet_data["Campsite"] }}</p>
-            </div>
-            </div>
+        <hr>
+        <h6 class="text-muted">Original Submission</h6>
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>Email:</strong> {{ booking.original_sheet_data["Email address"] }}</p>
+            <p><strong>Mobile:</strong> {{ booking.original_sheet_data["Mobile Number for Lead Person"] }}</p>
+            <p><strong>Scout Group:</strong> {{ booking.original_sheet_data["Chelmsford Scout Group"] }}</p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data["Arrival Date / Time"] }}</p>
+            <p><strong>Departure Time:</strong> {{ booking.original_sheet_data["Departure Time"] }}</p>
+            <p><strong>Campsite:</strong> {{ booking.original_sheet_data["Campsite"] }}</p>
+          </div>
         </div>
-        </div>
+      </div>
     </div>
   </div>
 </body>
