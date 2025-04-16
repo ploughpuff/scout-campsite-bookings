@@ -22,7 +22,7 @@ status_transitions = {
     "Confirmed": [                    "Invoice", "Completed", "Cancelled"],
     "Invoice":   [                               "Completed",            ],
     "Completed": [                                                       ],
-    "Cancelled": [                                                       ]
+    "Cancelled": [ "New"                                                 ]
 }
 
 class Bookings:
