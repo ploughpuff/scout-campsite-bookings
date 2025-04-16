@@ -20,3 +20,24 @@
     background-color: #6c757d; /* Secondary */
   }
   
+
+  .alert-success {
+    background-color: #198754;
+    color: #fff;
+  }
+  
+  .alert-warning {
+    background-color: #ffc107;
+    color: #212529;
+  }
+  
+  .alert-danger {
+    background-color: #dc3545;
+    color: #fff;
+  }
+  
+  .alert-info {
+    background-color: #0dcaf0;
+    color: #212529;
+  }
+  

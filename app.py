@@ -30,7 +30,7 @@ bookings.AddNewData(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 @app.route('/')
 @app.route('/bookings')
 def all_bookings():
-    return render_template('all_bookings.html', bookings=bookings.Get())
+    return render_template('all_bookings.html', bookings=bookings.Get(), age=bookings.Age())
     #return render_template('sheets.html', bookings=bookings.Get(), age=bookings.Age(), states=bookings.GetStates())
 
 @app.route("/booking/<booking_id>")
@@ -50,7 +50,7 @@ def test_flash():
 @app.route("/pull")
 def pull_now():
     added = bookings.AddNewData(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
-    flash(f"Bookings added: {added}")
+    flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
 @app.route('/update/<booking_id>', methods=['POST'])
