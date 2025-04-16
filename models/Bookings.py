@@ -9,6 +9,11 @@ from datetime import datetime
 from utils import secs_to_hr
 from config import CACHE_DIR
 from models.Mailer import send_booking_confirmation
+from models.booking_types import BookingType, generate_next_booking_id
+
+import re
+from datetime import datetime
+import config
 
 status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
@@ -173,9 +178,18 @@ class Bookings:
         encoded = json.dumps(data, sort_keys=True).encode()
         return hashlib.md5(encoded).hexdigest()
 
+
+    def _find_booking_by_md5(self, target_md5):
+        for booking_id, booking in self.data["bookings"].items():
+            if booking.get("original_sheet_md5") == target_md5:
+                return booking_id, booking
+        return None, None
+
+
+
     #
     ## Function to load a sheet of data in dict format into our booking structure
-    def Load(self, sheet_bookings):
+    def AddNewData(self, sheet_bookings, booking_type):
         
         bookings_added = 0
         
@@ -187,9 +201,12 @@ class Bookings:
             ## Need to normalise the new data from Sheet to our structure
             for sb in sheet_bookings["sheet_data"]:
                 
-                booking_id = self._md5_of_dict(sb)
+                #
+                ## Create MD5 of sheet line item so we can track if its new or seen before
+                new_booking_md5 = self._md5_of_dict(sb)
+                booking_id, booking = self._find_booking_by_md5(new_booking_md5)
                 
-                if booking_id not in self.data["bookings"]:
+                if not booking:
                     
                     start_dt = datetime.strptime(sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S")
                     
@@ -197,8 +214,12 @@ class Bookings:
                     dep_time = datetime.strptime(sb["Departure Time"], "%H:%M:%S").time()
                     end_dt = start_dt.replace(hour=dep_time.hour, minute=dep_time.minute, second=0)
                     
+                    existing_ids = list(self.data["bookings"].keys())
+                    new_booking_id = generate_next_booking_id(existing_ids, booking_type, start_dt.year)
+                    
                     new_booking = {
-                        booking_id: {
+                        new_booking_id: {
+                            "original_sheet_md5": new_booking_md5,
                             "original_sheet_data": sb,
                             "Group": sb["Chelmsford Scout Group"],
                             "Leader": sb["Name of Lead Person"],
@@ -209,6 +230,7 @@ class Bookings:
                         }
                     }
                     
+
                     self.data["bookings"].update(new_booking)
                     bookings_added += 1
 

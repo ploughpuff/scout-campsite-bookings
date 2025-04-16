@@ -7,7 +7,7 @@ import time
 from markupsafe import Markup
 from datetime import datetime
 from markupsafe import Markup
-
+from models.booking_types import BookingType
 import config
 
 
@@ -24,10 +24,7 @@ sheet_bookings = sheets.Get()
 gc = GoogleCalendar(config.SERVICE_ACCOUNT_FILE, config.CALENDAR_ID)
 
 bookings = Bookings(calendar=gc)
-bookings.Load(sheet_bookings)
-
-
-
+bookings.AddNewData(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 
 
 @app.route('/')
@@ -37,7 +34,7 @@ def show_bookings():
 
 @app.route("/pull")
 def pull_now():
-    added = bookings.Load(sheets.Get(pull_new=True))
+    added = bookings.AddNewData(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
     flash(f"Bookings added: {added}")
     return redirect(url_for("show_bookings"))
 
