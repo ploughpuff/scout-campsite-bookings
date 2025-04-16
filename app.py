@@ -40,6 +40,12 @@ def booking_detail(booking_id):
         abort(404)
     return render_template("booking.html", booking=booking, booking_id=booking_id)
 
+@app.route("/test-flash")
+def test_flash():
+    flash("This is a success message!", "success")
+    flash("This is a warning message.", "warning")
+    flash("Something went wrong!", "danger")
+    return redirect(url_for("all_bookings"))  # Or your actual view name
 
 @app.route("/pull")
 def pull_now():
