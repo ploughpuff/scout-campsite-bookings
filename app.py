@@ -29,14 +29,23 @@ bookings.AddNewData(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 
 @app.route('/')
 @app.route('/bookings')
-def show_bookings():
-    return render_template('sheet.html', bookings=bookings.Get(), age=bookings.Age(), states=bookings.GetStates())
+def all_bookings():
+    return render_template('all_bookings.html', bookings=bookings.Get())
+    #return render_template('sheets.html', bookings=bookings.Get(), age=bookings.Age(), states=bookings.GetStates())
+
+@app.route("/booking/<booking_id>")
+def booking_detail(booking_id):
+    booking = bookings.Get(booking_id)
+    if not booking:
+        abort(404)
+    return render_template("booking.html", booking=booking, booking_id=booking_id)
+
 
 @app.route("/pull")
 def pull_now():
     added = bookings.AddNewData(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
     flash(f"Bookings added: {added}")
-    return redirect(url_for("show_bookings"))
+    return redirect(url_for("all_bookings"))
 
 @app.route('/update/<booking_id>', methods=['POST'])
 def update(booking_id):
@@ -59,7 +68,7 @@ def update(booking_id):
     if not success:
         flash("Booking not found", "danger")
 
-    return redirect(url_for('show_bookings'))
+    return redirect(url_for('all_bookings'))
 
 @app.template_filter("pretty_date")
 def pretty_date(value):
