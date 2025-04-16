@@ -8,18 +8,18 @@
 </head>
 <body>
   <div class="container py-5">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        <div class="mb-4">
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show w-100" role="alert" style="border-radius: 0;">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-    {% endwith %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="mb-4">
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show w-100" role="alert" style="border-radius: 0;">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+    </div>
+  {% endif %}
+  {% endwith %}
 
     <h1 class="display-4 text-center mb-4">📅 Riffhams Bookings Manager</h1>
     <div class="mb-4 d-flex justify-content-between align-items-center">
@@ -29,40 +29,71 @@
 
     <div class="card shadow-sm rounded-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
+      <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
+    </div>
+
+    <div class="card-body">
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <p><strong>Group:</strong> {{ booking.Group }}</p>
+          <p><strong>Leader:</strong> {{ booking.Leader }}</p>
+          <p><strong>Number of People:</strong> {{ booking.Number }}</p>
+          <p><strong>Booking Type:</strong> {{ booking.booking_type }}</p>
+        </div>
+        <div class="col-md-6">
+          <p><strong>Status:</strong><span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span></p>
+          <p><strong>Arriving:</strong> {{ booking.Arriving | pretty_date }}</p>
+          <p><strong>Departing:</strong> {{ booking.Departing | pretty_date }}</p>
+        </div>
       </div>
-      <div class="card-body">
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <p><strong>Group:</strong> {{ booking.Group }}</p>
-            <p><strong>Leader:</strong> {{ booking.Leader }}</p>
-            <p><strong>Number of People:</strong> {{ booking.Number }}</p>
-          </div>
-          <div class="col-md-6">
-            <p><strong>Status:</strong>
-              <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
-            </p>
-            <p><strong>Arriving:</strong> {{ booking.Arriving | pretty_date }}</p>
-            <p><strong>Departing:</strong> {{ booking.Departing | pretty_date }}</p>
-          </div>
+      <hr>
+      <h6 class="text-muted">Original Submission</h6>
+      <div class="row">
+        <div class="col-md-6">
+          <p><strong>Email:</strong> {{ booking.original_sheet_data["Email address"] }}</p>
+          <p><strong>Mobile:</strong> {{ booking.original_sheet_data["Mobile Number for Lead Person"] }}</p>
+          <p><strong>Scout Group:</strong> {{ booking.original_sheet_data["Chelmsford Scout Group"] }}</p>
         </div>
-        <hr>
-        <h6 class="text-muted">Original Submission</h6>
-        <div class="row">
-          <div class="col-md-6">
-            <p><strong>Email:</strong> {{ booking.original_sheet_data["Email address"] }}</p>
-            <p><strong>Mobile:</strong> {{ booking.original_sheet_data["Mobile Number for Lead Person"] }}</p>
-            <p><strong>Scout Group:</strong> {{ booking.original_sheet_data["Chelmsford Scout Group"] }}</p>
-          </div>
-          <div class="col-md-6">
-            <p><strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data["Arrival Date / Time"] }}</p>
-            <p><strong>Departure Time:</strong> {{ booking.original_sheet_data["Departure Time"] }}</p>
-            <p><strong>Campsite:</strong> {{ booking.original_sheet_data["Campsite"] }}</p>
-          </div>
+        <div class="col-md-6">
+          <p><strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data["Arrival Date / Time"] }}</p>
+          <p><strong>Departure Time:</strong> {{ booking.original_sheet_data["Departure Time"] }}</p>
+          <p><strong>Campsite:</strong> {{ booking.original_sheet_data["Campsite"] }}</p>
         </div>
+      </div>
+      <div class="text-end mt-4">
+        <a href="{{ url_for('update', booking_id=booking_id) }}" class="btn btn-success">
+          📆 Add to Google Calendar
+        </a>
+        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
+            ❌ Cancel Booking
+          </button>
       </div>
     </div>
   </div>
+
+  <!-- Cancel Booking Modal -->
+  <div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <form method="POST" action="{{ url_for('cancel_booking', booking_id=booking_id) }}">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="cancelModalLabel">Cancel Booking</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <label for="cancelReason" class="form-label">Reason for cancellation:</label>
+            <textarea class="form-control" name="reason" id="cancelReason" rows="3" required></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" class="btn btn-danger">Confirm Cancel</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  
   <!-- Bootstrap Bundle with Popper (needed for alerts, modals, etc.) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='scripts.js') }}"></script>
