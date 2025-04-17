@@ -62,7 +62,7 @@ def update_booking_status(action, booking_id):
         flash(f"Booking {booking_id} not found.", "danger")
     
     elif action == "cancel":
-        # The cancel modal prompt the user for some reason text
+        # The cancel modal prompts the user for some reason text which we store in Notes
         reason = request.form.get("reason")
         
         if not reason:
