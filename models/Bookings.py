@@ -21,9 +21,9 @@ status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
 ## Valid transitions to control buttons on html, and filter user input
 status_transitions = {
     "New":       [       "Confirmed",                         "Cancelled"],
-    "Confirmed": [                               "Completed", "Cancelled"], # Confirmed > Invoice hppens automatically
+    "Confirmed": [                                            "Cancelled"], # Confirmed > Invoice: auto transition
     "Invoice":   [                               "Completed",            ],
-    "Completed": [                                                       ],
+    "Completed": [                                                       ], # Final state, for now!
     "Cancelled": [ "New"                                                 ]
 }
 
@@ -120,7 +120,7 @@ class Bookings:
                 if not self._can_transition(old_value, new_value):
                     msg = f"Invalid transition for {booking_id}: {old_value} > {new_value}"
                     flash(msg, "danger")
-                    flself.logger.warning(msg, "danger")
+                    self.logger.warning(msg, "danger")
                     return False
             
                 self._apply_status_change(booking, old_value, new_value)
