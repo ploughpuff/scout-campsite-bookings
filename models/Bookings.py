@@ -117,13 +117,7 @@ class Bookings:
                 continue  # No change, skip
             
             if field == "Status":
-                if not self._can_transition(old_value, new_value):
-                    msg = f"Invalid transition for {booking_id}: {old_value} > {new_value}"
-                    flash(msg, "danger")
-                    self.logger.warning(msg, "danger")
-                    return False
-            
-                self._apply_status_change(booking, old_value, new_value)
+                self._apply_status_change(booking, booking_id, old_value, new_value)
             
             elif field == "Notes":
                 self._append_to_notes(booking, new_value)
@@ -135,8 +129,21 @@ class Bookings:
         self._save()
         return True
 
-    def _apply_status_change(self, booking, from_status, to_status):
-        
+
+    def _apply_status_change(self, booking, booking_id, from_status, to_status):
+
+        if not self._can_transition(from_status, to_status):
+            msg = f"Invalid transition for {booking_id}: {from_status} > {to_status}"
+            flash(msg, "danger")
+            self.logger.warning(msg)
+            return False
+
+        if from_status == "Cancelled" and to_status == "New":
+            arriving = booking.get("Arriving")
+            if arriving is not None and arriving < int(start_dt.timestamp()):
+                flash(f"Unable to resurrect booking {booking_id}: arrival date is in the past!", "warning")
+                return False
+
         booking["Status"] = to_status
 
         if to_status == "Confirmed":
@@ -152,6 +159,9 @@ class Bookings:
             if event_id:
                 self.calendar.DeleteEvent(event_id)
                 booking["google_calendar_event_id"] = None
+
+        return True
+
 
         
     def _append_to_notes(self, booking, new_note):
