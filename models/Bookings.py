@@ -5,7 +5,7 @@ import logging
 import hashlib
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from utils import secs_to_hr
 from config import CACHE_DIR
 from models.Mailer import send_booking_confirmation
@@ -95,65 +95,66 @@ class Bookings:
         Returns:
             bool: True if update was successful, False if booking not found.
         """
-        allowed_fields = {"Group", "Leader", "Number", "Status", "Arriving", "Departing", "Notes"}
+        editable_fields = {"Number", "Arriving", "Departing", "Status", "Notes"}
 
         self._load()  # Ensure fresh data
 
-        if booking_id not in self.data["bookings"]:
-            flash(f"Cannot update booking as ID not found {booking_id}", "danger")
-            return False  # Booking not found
-
-        booking = self.data["bookings"][booking_id]
-        changes = []
+        booking = self.data.get("bookings", {}).get(booking_id)
+        if not booking:
+            flash(f"Cannot update booking {booking_id} as not found in database.", "danger")
+            return False
         
-        new_status = updates.get("Status")
-        current_status = booking.get("Status")
-        
-        if new_status and new_status != current_status:
-            if not self._can_transition(current_status, new_status):
-                self.logger.warning(f"Invalid status transition: {booking_id}: {current_status} > {new_status}")
-                flash(f"Invalid state transition: {booking_id}: {current_status} > {new_status}", "danger")
-                return False
+        for field, new_value in updates.items():
+            if field not in editable_fields:
+                self.logger.warning(f"Bookings/Update tried to edit field {field} which is not in my list: {booking_id}")
+                continue
             
-            # Update and log the transition
-            booking["Status"] = new_status
-            changes.append(("Status", current_status, new_status))
-        
-            # Record history
-            booking.setdefault("StatusHistory", []).append({
-                "from": current_status,
-                "to": new_status,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            old_value = booking.get(field)
             
-            if new_status == "Confirmed":
-                send_booking_confirmation(booking)
-
-                if "google_calendar_event_id" not in booking:
-                    event_id = self.calendar.AddEvent(booking)
-                    if event_id:
-                        booking["google_calendar_event_id"] = event_id
-            else:
-                if new_status == "Cancelled":
-                    if booking.get("google_calendar_event_id"):
-                        self.calendar.DeleteEvent(booking["google_calendar_event_id"])
-                        booking["google_calendar_event_id"] = None
-
-
-        # Apply other updates
-        for key, value in updates.items():
-            if key in allowed_fields and key != "Status":
-                if booking.get(key) != value:
-                    changes.append((key, booking.get(key), value))
-                    booking[key] = value
-                    
-        if changes:
-            self.logger.info(f"Updated booking {booking_id}: " + "; ".join(
-                f"{key}: {old} > {new}" for key, old, new in changes
-            ))
+            if old_value == new_value:
+                continue  # No change, skip
+            
+            if field == "Status":
+                if not self._can_transition(old_value, new_value):
+                    msg = f"Invalid transition for {booking_id}: {old_value} > {new_value}"
+                    flash(msg, "danger")
+                    flself.logger.warning(msg, "danger")
+                    return False
+            
+                self._apply_status_change(booking, old_value, new_value)
+            
+            elif field == "Notes":
+                timestamp = datetime.now(timezone.utc).strftime("[%Y-%m-%d %H:%M:%S]")
+                note_entry = f"{timestamp}: {new_value}"
+                booking[field] = (old_value + "\n" if old_value else "") + note_entry
                 
+            else:
+                # Standard field update
+                booking[field] = new_value
+        
         self._save()
         return True
+
+    def _apply_status_change(self, booking, from_status, to_status):
+        
+        booking["Status"] = to_status
+
+        if to_status == "Confirmed":
+            send_booking_confirmation(booking)
+
+            if not booking.get("google_calendar_event_id"):
+                event_id = self.calendar.AddEvent(booking)
+                if event_id:
+                    booking["google_calendar_event_id"] = event_id
+
+        elif to_status == "Cancelled":
+            event_id = booking.get("google_calendar_event_id")
+            if event_id:
+                self.calendar.DeleteEvent(event_id)
+                booking["google_calendar_event_id"] = None
+
+        
+
     
     def _save(self):
         # Searilise the BookingType ENUM to string before saving
@@ -179,6 +180,9 @@ class Bookings:
                         booking["booking_type"] = BookingType[bt_raw]
                     except (KeyError, TypeError):
                         self.logger.warning(f"Unknown or missing booking_type: {bt_raw}")
+                
+                self._auto_update_statuses()
+
     
         else:
             self.data = {
@@ -186,6 +190,29 @@ class Bookings:
                 "bookings": {}
             }
     
+    def _auto_update_statuses(self):
+        now = int(time.time())
+
+        for booking_id, booking in self.data.get("bookings", {}).items():
+            status = booking.get("Status")
+            departing = booking.get("Departing")
+            invoice = booking.get("invoice")
+
+            if status == "Confirmed" and departing and departing < now:
+                new_status = "Completed" if invoice else "Invoice"
+                
+                departed_str = datetime.utcfromtimestamp(departing).strftime("%Y-%m-%d %H:%M:%S")
+                now_str = datetime.utcfromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")
+                
+                self.logger.info(
+                    f"Auto-updating booking {booking_id}: {status} → {new_status} "
+                    f"(departed: {departed_str}, now: {now_str})"
+                )
+                            
+                booking["Status"] = new_status
+
+
+
     def _md5_of_dict(self, data):
         # Ensure consistent ordering to get a consistent hash
         # Convert dict into a string of bytes for use with hashlib
@@ -242,7 +269,9 @@ class Bookings:
                             "Departing": int(end_dt.timestamp()),
                             "Number": sb["Number of people"],
                             "Status": "New",
-                            "Invoice": "No",
+                            "invoice": False,
+                            "confirmation_email_sent": False,
+                            "google_calendar_id": None,
                             "Notes": ""
                         }
                     }
