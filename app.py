@@ -85,6 +85,13 @@ def update_booking_status(action, booking_id):
             "Status": "Confirmed",
             "Notes": "Confirmed"
         }
+    
+    elif action == "update":
+        updated_fields = {
+            "Number": request.form.get("Number"),
+            "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
+            "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
+        }
         
     else:
         flash(f"Unsupported action: {action}", "danger")
@@ -95,7 +102,7 @@ def update_booking_status(action, booking_id):
         else:
             flash(f"Booking {booking_id} with action {action} unsuccessful.", "danger")
     
-    return redirect(url_for("all_bookings"))
+    return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
 @app.route("/test-flash")
@@ -157,14 +164,17 @@ def pretty_date(value):
     return Markup(f"{date_str}<br>{time_part}")
 
 @app.template_filter("html_datetime")
-def html_datetime(value):
+def html_datetime(epoch_time):
     """Convert an epoch timestamp to HTML datetime-local format (YYYY-MM-DDTHH:MM)."""
+    if not epoch_time:
+        return ""
+    
     try:
-        dt = datetime.fromtimestamp(int(value))
+        dt = datetime.fromtimestamp(int(epoch_time))
         return dt.strftime("%Y-%m-%dT%H:%M")
     except (ValueError, TypeError):
         return ""
-
+    
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

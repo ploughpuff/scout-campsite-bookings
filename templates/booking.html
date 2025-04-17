@@ -33,19 +33,54 @@
     </div>
 
     <div class="card-body">
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <p><strong>Group:</strong> {{ booking.Group }}</p>
-          <p><strong>Leader:</strong> {{ booking.Leader }}</p>
-          <p><strong>Number of People:</strong> {{ booking.Number }}</p>
-          <p><strong>Booking Type:</strong> {{ booking.booking_type }}</p>
+      
+      <form method="POST" action="{{ url_for('update_booking_status', action='update', booking_id=booking_id) }}">
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <p><strong>Group:</strong> {{ booking.Group }}</p>
+            <p><strong>Leader:</strong> {{ booking.Leader }}</p>
+      
+            <p><strong>Number of People:</strong></p>
+            {% if booking.Status in ["New", "Confirmed"] %}
+              <input type="number" name="Number" class="form-control mb-2" value="{{ booking.Number }}" min="1" required>
+            {% else %}
+              <p>{{ booking.Number }}</p>
+            {% endif %}
+      
+            <p><strong>Booking Type:</strong> {{ booking.booking_type }}</p>
+          </div>
+      
+          <div class="col-md-6">
+            <p><strong>Status:</strong>
+              <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
+            </p>
+      
+            <p><strong>Arriving:</strong></p>
+            {% if booking.Status in ["New", "Confirmed"] %}
+              <input type="datetime-local" name="Arriving" class="form-control mb-2"
+                     value="{{ booking.Arriving | html_datetime }}">
+            {% else %}
+              <p>{{ booking.Arriving | pretty_date }}</p>
+            {% endif %}
+      
+            <p><strong>Departing:</strong></p>
+            {% if booking.Status in ["New", "Confirmed"] %}
+              <input type="datetime-local" name="Departing" class="form-control mb-2"
+                     value="{{ booking.Departing | html_datetime }}">
+            {% else %}
+              <p>{{ booking.Departing | pretty_date }}</p>
+            {% endif %}
+          </div>
         </div>
-        <div class="col-md-6">
-          <p><strong>Status:</strong><span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span></p>
-          <p><strong>Arriving:</strong> {{ booking.Arriving | pretty_date }}</p>
-          <p><strong>Departing:</strong> {{ booking.Departing | pretty_date }}</p>
-        </div>
-      </div>
+      
+        {% if booking.Status in ["New", "Confirmed"] %}
+          <div class="text-end">
+            <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+          </div>
+        {% endif %}
+      </form>
+      
+      
       <hr>
       <h6 class="text-muted">Original Submission</h6>
       <div class="row">

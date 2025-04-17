@@ -125,6 +125,7 @@ class Bookings:
             else:
                 # Standard field update
                 booking[field] = new_value
+                self._append_to_notes(booking, f"{field} changed from [{old_value}] to [{new_value}]")
         
         self._save()
         return True
