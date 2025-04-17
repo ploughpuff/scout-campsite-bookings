@@ -31,7 +31,6 @@ bookings.AddNewData(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 @app.route('/bookings')
 def all_bookings():
     return render_template('all_bookings.html', bookings=bookings.Get(), age=bookings.Age())
-    #return render_template('sheets.html', bookings=bookings.Get(), age=bookings.Age(), states=bookings.GetStates())
 
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
