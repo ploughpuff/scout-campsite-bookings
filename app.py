@@ -71,7 +71,7 @@ def update_booking_status(action, booking_id):
     
         updated_fields = {
             "Status": "Cancelled",
-            "Notes": "Cancelled Reason: " + reason
+            "Notes": "Cancelled: " + reason
         }
 
     elif action == "resurrect":
