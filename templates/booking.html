@@ -63,34 +63,46 @@
 
       <div class="text-end mt-4">
         {% for next_status in valid_transitions %}
+      
+          {# Cancelled → New #}
           {% if next_status == "New" %}
-          <form method="POST" action="{{ url_for('update_booking_status', action='resurrect', booking_id=booking_id) }}" class="d-inline">
-            <button type="submit" class="btn btn-warning">
-              🔄 Resurrect Booking
-            </button>
-          </form>
+            <form method="POST" action="{{ url_for('update_booking_status', action='resurrect', booking_id=booking_id) }}" class="d-inline">
+              <button type="submit" class="btn btn-warning">
+                🔄 Resurrect Booking
+              </button>
+            </form>
+      
+          {# Invoice → Completed #}
           {% elif next_status == "Completed" and booking.Status == "Invoice" %}
-          <form method="POST" action="{{ url_for('update_booking_status', action=next_status|lower, booking_id=booking_id) }}" class="d-inline">
-            <button type="submit" class="btn btn-success">
-              ✔️ Set Complete Once Xero Invoice Raised
-            </button>
-          </form>
+            <form method="POST" action="{{ url_for('update_booking_status', action='completed', booking_id=booking_id) }}" class="d-inline">
+              <button type="submit" class="btn btn-success">
+                ✔️ Set Complete Once Xero Invoice Raised
+              </button>
+            </form>
+      
+          {# Confirmed → Completed #}
           {% elif next_status == "Completed" %}
-          <form method="POST" action="{{ url_for('update_booking_status', action=next_status|lower, booking_id=booking_id) }}" class="d-inline">
-            <button type="submit" class="btn btn-success">
-              ✔️ Complete Booking
-            </button>
-          </form>
+            <form method="POST" action="{{ url_for('update_booking_status', action='completed', booking_id=booking_id) }}" class="d-inline">
+              <button type="submit" class="btn btn-success">
+                ✔️ Complete Booking
+              </button>
+            </form>
+      
+          {# New → Confirmed #}
           {% elif next_status == "Confirmed" %}
-          <form method="POST" action="{{ url_for('update_booking_status', action=next_status|lower, booking_id=booking_id) }}" class="d-inline">
-            <button type="submit" class="btn btn-success">
-              ✔️ Confirm Booking
-            </button>
-          </form>
+            <form method="POST" action="{{ url_for('update_booking_status', action='confirmed', booking_id=booking_id) }}" class="d-inline">
+              <button type="submit" class="btn btn-success">
+                ✔️ Confirm Booking
+              </button>
+            </form>
+      
+          {# Any → Cancelled (via modal) #}
           {% elif next_status == "Cancelled" %}
-          <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
-            ❌ Cancel Booking
-          </button>
+            <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
+              ❌ Cancel Booking
+            </button>
+      
+          {# Fallback: Generic transitions #}
           {% else %}
             <form method="POST" action="{{ url_for('update_booking_status', action=next_status|lower, booking_id=booking_id) }}" class="d-inline">
               <button type="submit" class="btn btn-outline-primary">
@@ -98,6 +110,7 @@
               </button>
             </form>
           {% endif %}
+      
         {% endfor %}
       </div>
       
