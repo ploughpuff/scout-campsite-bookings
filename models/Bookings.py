@@ -140,7 +140,7 @@ class Bookings:
 
         if from_status == "Cancelled" and to_status == "New":
             arriving = booking.get("Arriving")
-            if arriving is not None and arriving < int(start_dt.timestamp()):
+            if arriving is not None and arriving < int(time.time()):
                 flash(f"Unable to resurrect booking {booking_id}: arrival date is in the past!", "warning")
                 return False
 

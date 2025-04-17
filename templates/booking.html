@@ -64,13 +64,19 @@
       <div class="text-end mt-4">
         {% for next_status in valid_transitions %}
       
-          {# Cancelled → New #}
+          {# Cancelled → New only if booking in the future #}
           {% if next_status == "New" %}
-            <form method="POST" action="{{ url_for('update_booking_status', action='resurrect', booking_id=booking_id) }}" class="d-inline">
-              <button type="submit" class="btn btn-warning">
-                🔄 Resurrect Booking
+            {% if booking.Arriving > time_now %}
+              <form method="POST" action="{{ url_for('update_booking_status', action='resurrect', booking_id=booking_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-warning">
+                  🔄 Resurrect Booking
+                </button>
+              </form>
+            {% else %}
+              <button class="btn btn-danger" disabled>
+                ❌ Past Bookings Cannot Be Resurrected
               </button>
-            </form>
+            {% endif %}
       
           {# Invoice → Completed #}
           {% elif next_status == "Completed" and booking.Status == "Invoice" %}

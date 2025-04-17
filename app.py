@@ -48,7 +48,8 @@ def booking_detail(booking_id):
         "booking.html",
         booking_id=booking_id,
         booking=booking,
-        valid_transitions=transitions.get(current_status, [])
+        valid_transitions=transitions.get(current_status, []),
+        time_now=int(time.time())
     )
     
     
