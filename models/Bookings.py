@@ -17,9 +17,11 @@ import config
 
 status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
+#
+## Valid transitions to control buttons on html, and filter user input
 status_transitions = {
     "New":       [       "Confirmed",                         "Cancelled"],
-    "Confirmed": [                    "Invoice", "Completed", "Cancelled"],
+    "Confirmed": [                               "Completed", "Cancelled"], # Confirmed > Invoice hppens automatically
     "Invoice":   [                               "Completed",            ],
     "Completed": [                                                       ],
     "Cancelled": [ "New"                                                 ]
@@ -124,9 +126,7 @@ class Bookings:
                 self._apply_status_change(booking, old_value, new_value)
             
             elif field == "Notes":
-                timestamp = datetime.now(timezone.utc).strftime("[%Y-%m-%d %H:%M:%S]")
-                note_entry = f"{timestamp}: {new_value}"
-                booking[field] = (old_value + "\n" if old_value else "") + note_entry
+                self._append_to_notes(booking, new_value)
                 
             else:
                 # Standard field update
@@ -154,7 +154,14 @@ class Bookings:
                 booking["google_calendar_event_id"] = None
 
         
+    def _append_to_notes(self, booking, new_note):
+        timestamp = datetime.now(timezone.utc).strftime("[%Y-%m-%d %H:%M:%S]")
+        new_note_entry = f"{timestamp}: {new_note}"
 
+        old_value = booking.get("Notes", "")
+        booking["Notes"] = (old_value + "\n" if old_value else "") + new_note_entry
+
+    
     
     def _save(self):
         # Searilise the BookingType ENUM to string before saving
@@ -222,13 +229,16 @@ class Bookings:
 
     def _find_booking_by_md5(self, target_md5):
         for booking_id, booking in self.data["bookings"].items():
-            if booking.get("original_sheet_md5") == target_md5:
+            if isinstance(booking, dict) and booking.get("original_sheet_md5") == target_md5:
                 return booking_id, booking
+
+        self.logger.warning(f"No booking found with MD5: {target_md5}")
         return None, None
 
 
 
-    #
+
+    #z
     ## Function to load a sheet of data in dict format into our booking structure
     def AddNewData(self, sheet_bookings, booking_type):
         
@@ -276,7 +286,7 @@ class Bookings:
                         }
                     }
                     
-
+                    self._append_to_notes(new_booking.get(new_booking_id), "Pulled from sheets")
                     self.data["bookings"].update(new_booking)
                     bookings_added += 1
 
