@@ -5,14 +5,13 @@ import logging
 import hashlib
 import json
 import time
-from datetime import datetime, timezone
-from utils import secs_to_hr
+from datetime import datetime
+from utils import secs_to_hr, get_pretty_datetime_str
 from config import CACHE_DIR
 from models.Mailer import send_booking_confirmation
 from models.booking_types import BookingType, generate_next_booking_id
 
 import re
-from datetime import datetime
 import config
 
 status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
@@ -120,12 +119,21 @@ class Bookings:
                 self._apply_status_change(booking, booking_id, old_value, new_value)
             
             elif field == "Notes":
-                self._append_to_notes(booking, new_value)
+                self._add_to_notes(booking, new_value)
                 
             else:
                 # Standard field update
                 booking[field] = new_value
-                self._append_to_notes(booking, f"{field} changed from [{old_value}] to [{new_value}]")
+
+                if field in ("Arriving", "Departing"):
+                    old_value_str = get_pretty_datetime_str(old_value)
+                    new_value_str = get_pretty_datetime_str(new_value)
+                else:
+                    old_value_str = old_value
+                    new_value_str = new_value
+
+                self._add_to_notes(booking, f"{field} changed from [{old_value_str}] to [{new_value_str}]")
+
         
         self._save()
         return True
@@ -165,12 +173,13 @@ class Bookings:
 
 
         
-    def _append_to_notes(self, booking, new_note):
-        timestamp = datetime.now(timezone.utc).strftime("[%Y-%m-%d %H:%M:%S]")
-        new_note_entry = f"{timestamp}: {new_note}"
+    def _add_to_notes(self, booking, new_note):
+        
+        timestamp = get_pretty_datetime_str(include_seconds=True)
+        new_note_entry = f"[{timestamp}]: {new_note}"
 
         old_value = booking.get("Notes", "")
-        booking["Notes"] = (old_value + "\n" if old_value else "") + new_note_entry
+        booking["Notes"] = new_note_entry + ("\n" + old_value if old_value else "")
 
     
     
@@ -219,8 +228,8 @@ class Bookings:
             if status == "Confirmed" and departing and departing < now:
                 new_status = "Completed" if invoice else "Invoice"
                 
-                departed_str = datetime.utcfromtimestamp(departing).strftime("%Y-%m-%d %H:%M:%S")
-                now_str = datetime.utcfromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")
+                departed_str = get_pretty_datetime_str(departing)
+                now_str = get_pretty_datetime_str()
                 
                 self.logger.info(
                     f"Auto-updating booking {booking_id}: {status} → {new_status} "
@@ -297,7 +306,7 @@ class Bookings:
                         }
                     }
                     
-                    self._append_to_notes(new_booking.get(new_booking_id), "Pulled from sheets")
+                    self._add_to_notes(new_booking.get(new_booking_id), "Pulled from sheets")
                     self.data["bookings"].update(new_booking)
                     bookings_added += 1
 
