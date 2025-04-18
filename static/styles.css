@@ -5,6 +5,9 @@
   .badge-status.new {
     background-color: #dc3545; /* Danger */
   }
+  .badge-status.pending {
+    background-color: #e67111; /* Danger */
+  }
   .badge-status.confirmed {
     background-color: #198754; /* Success */
   }

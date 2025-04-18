@@ -8,22 +8,23 @@ import time
 from datetime import datetime
 from utils import secs_to_hr, get_pretty_datetime_str
 from config import CACHE_DIR
-from models.Mailer import send_booking_confirmation
+from models.Mailer import send_email_notification
 from models.booking_types import BookingType, generate_next_booking_id
 
 import re
 import config
 
-status_options = ["New", "Confirmed", "Invoice", "Completed", "Cancelled"]
+status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
 #
 ## Valid transitions to control buttons on html, and filter user input
 status_transitions = {
-    "New":       [       "Confirmed",                         "Cancelled"],
-    "Confirmed": [                                            "Cancelled"], # Confirmed > Invoice: auto transition
-    "Invoice":   [                               "Completed",            ],
-    "Completed": [                                                       ], # Final state, for now!
-    "Cancelled": [ "New"                                                 ]
+    "New":       [       "Pending", "Confirmed",                         "Cancelled"],
+    "Pending":   [                  "Confirmed",                         "Cancelled"],
+    "Confirmed": [                                                       "Cancelled"], # Confirmed > Invoice: auto transition
+    "Invoice":   [                                          "Completed",            ],
+    "Completed": [                                                                  ], # Final state, for now!
+    "Cancelled": [ "New"                                                            ]
 }
 
 class Bookings:
@@ -147,6 +148,9 @@ class Bookings:
             self.logger.warning(msg)
             return False
 
+        #
+        ## Before blindly transitioning to the new state, if its Cancel>New check the arrival time
+        ## is still in the future.  We don't want to resurrest past bookings
         if from_status == "Cancelled" and to_status == "New":
             arriving = booking.get("Arriving")
             if arriving is not None and arriving < int(time.time()):
@@ -155,20 +159,12 @@ class Bookings:
 
         booking["Status"] = to_status
 
-        if to_status == "Confirmed":
-            send_booking_confirmation(booking)
+        if to_status == "Pending" or to_status == "Confirmed" or to_status == "Cancelled":
+            if send_email_notification(booking_id, booking):
+                booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
 
-            if not booking.get("google_calendar_event_id"):
-                event_id = self.calendar.AddEvent(booking)
-                if event_id:
-                    booking["google_calendar_event_id"] = event_id
-
-        elif to_status == "Cancelled":
-            event_id = booking.get("google_calendar_event_id")
-            if event_id:
-                self.calendar.DeleteEvent(event_id)
-                booking["google_calendar_event_id"] = None
-
+            #booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
+                
         return True
 
 
@@ -197,7 +193,6 @@ class Bookings:
     def _load(self):
         if self.json_path.exists():
             with open(self.json_path, 'r') as f:
-                self.logger.info(f"Loading bookings data from file cache")
                 self.data = json.load(f)
                 
                 # Deseralise BookingType string back to ENUM
@@ -232,7 +227,7 @@ class Bookings:
                 now_str = get_pretty_datetime_str()
                 
                 self.logger.info(
-                    f"Auto-updating booking {booking_id}: {status} → {new_status} "
+                    f"Auto-updating booking {booking_id}: {status} > {new_status} "
                     f"(departed: {departed_str}, now: {now_str})"
                 )
                             

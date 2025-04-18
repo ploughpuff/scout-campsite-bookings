@@ -120,15 +120,7 @@
                 ✔️ Set Complete Once Xero Invoice Raised
               </button>
             </form>
-      
-          {# Confirmed → Completed #}
-          {% elif next_status == "Completed" %}
-            <form method="POST" action="{{ url_for('update_booking_status', action='completed', booking_id=booking_id) }}" class="d-inline">
-              <button type="submit" class="btn btn-success">
-                ✔️ Complete Booking
-              </button>
-            </form>
-      
+            
           {# New → Confirmed #}
           {% elif next_status == "Confirmed" %}
             <form method="POST" action="{{ url_for('update_booking_status', action='confirmed', booking_id=booking_id) }}" class="d-inline">
@@ -136,12 +128,18 @@
                 ✔️ Confirm Booking
               </button>
             </form>
-      
+          
+          {# New → Pending #}
+          {% elif next_status == "Pending" %}
+          <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#pendModal">
+            ❓ Send query about booking (and pend)
+          </button>
+
           {# Any → Cancelled (via modal) #}
           {% elif next_status == "Cancelled" %}
             <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
-              ❌ Cancel Booking
-            </button>
+            ❌ Cancel Booking
+          </button>
       
           {# Fallback: Generic transitions #}
           {% else %}
@@ -164,6 +162,28 @@
     </div>
   </div>
 
+  <!-- Pend Booking Modal -->
+  <div class="modal fade" id="pendModal" tabindex="-1" aria-labelledby="pendModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <form method="POST" action="{{ url_for('update_booking_status', action='pend', booking_id=booking_id) }}">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="pendModalLabel">Query and Pend Booking</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <label for="pendquestion" class="form-label">Question to requester:</label>
+            <textarea class="form-control" name="question" id="pendquestion" rows="3" required></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel This Popup</button>
+            <button type="submit" class="btn btn-danger">Submit Query to Booking Requester</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  
   <!-- Cancel Booking Modal -->
   <div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
     <div class="modal-dialog">

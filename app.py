@@ -74,6 +74,19 @@ def update_booking_status(action, booking_id):
             "Notes": "Cancelled: " + reason
         }
 
+    elif action == "pend":
+        # The pend modal prompts for a question to ask the booking requester
+        question = request.form.get("question")
+        
+        if not question:
+            flash("Pend question is required.", "danger")
+            return redirect(url_for("booking_detail", booking_id=booking_id))
+    
+        updated_fields = {
+            "Status": "Pending",
+            "Notes": "Pending: " + question
+        }
+        
     elif action == "resurrect":
         updated_fields = {
             "Status": "New",
@@ -92,8 +105,15 @@ def update_booking_status(action, booking_id):
             "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
             "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
         }
+    
+    elif action == "completed":
+         updated_fields = {
+            "Status": "Completed",
+            "Notes": "Xero invoice raised so completing booking"
+        }
         
     else:
+        logger.warning(f"Unsupported action: {action}")
         flash(f"Unsupported action: {action}", "danger")
     
     if updated_fields:
@@ -140,6 +160,13 @@ def update(booking_id):
         flash("Booking not found", "danger")
 
     return redirect(url_for('all_bookings'))
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.exception(f"Unhandled exception: {type(e).__name__}: {e}")
+    return render_template("500.html"), 500
+
 
 @app.template_filter("pretty_date")
 def pretty_date(value):
