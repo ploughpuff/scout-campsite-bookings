@@ -24,3 +24,24 @@ def secs_to_hr(seconds):
 
     return " ".join(parts)
 
+
+
+import time
+from datetime import datetime
+from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
+
+def get_pretty_datetime_str(epoch_time=None, include_seconds=False):
+
+    if epoch_time is None:
+        epoch_time = int(time.time())
+            
+    if epoch_time and isinstance(epoch_time, (int, float)) and epoch_time < 1_000_000_000:
+        # Not a valid epoch time, return as-is
+        return str(epoch_time)
+
+    try:
+        dt = datetime.fromtimestamp(epoch_time, UK_TZ)
+        fmt = DATE_FORMAT_WITH_SECONDS if include_seconds else DATE_FORMAT
+        return dt.strftime(fmt)
+    except Exception:
+        return str(epoch_time)
