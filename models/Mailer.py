@@ -68,6 +68,7 @@ def send_email_notification(booking_id, booking):
         #    server.starttls()
         #    server.login(config.EMAIL_USER, config.EMAIL_PASS)
         #    server.send_message(msg)
+        #booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
         return True
     except Exception as e:
         logger.error(f"Failed to send email to {recipient}: {e}")
