@@ -34,14 +34,14 @@
 
     <div class="card-body">
       
-      <form method="POST" action="{{ url_for('update_booking_status', action='update', booking_id=booking_id) }}">
+      <form method="POST" action="{{ url_for('modify_fields', booking_id=booking_id) }}">
         <div class="row mb-3">
           <div class="col-md-6">
             <p><strong>Group:</strong> {{ booking.Group }}</p>
             <p><strong>Leader:</strong> {{ booking.Leader }}</p>
       
             <p><strong>Number of People:</strong></p>
-            {% if booking.Status in ["New", "Confirmed"] %}
+            {% if booking.Status in ["New", "Pending", "Confirmed"] %}
               <input type="number" name="Number" class="form-control mb-2" value="{{ booking.Number }}" min="1" required>
             {% else %}
               <p>{{ booking.Number }}</p>
@@ -53,10 +53,13 @@
           <div class="col-md-6">
             <p><strong>Status:</strong>
               <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
+              {% if booking.Status == "Pending" %}
+              <p>Question: {{ booking["Pend Question"] }}</p>
+              {% endif %}
             </p>
       
             <p><strong>Arriving:</strong></p>
-            {% if booking.Status in ["New", "Confirmed"] %}
+            {% if booking.Status in ["New", "Pending", "Confirmed"] %}
               <input type="datetime-local" name="Arriving" class="form-control mb-2"
                      value="{{ booking.Arriving | html_datetime }}">
             {% else %}
@@ -64,7 +67,7 @@
             {% endif %}
       
             <p><strong>Departing:</strong></p>
-            {% if booking.Status in ["New", "Confirmed"] %}
+            {% if booking.Status in ["New", "Pending", "Confirmed"] %}
               <input type="datetime-local" name="Departing" class="form-control mb-2"
                      value="{{ booking.Departing | html_datetime }}">
             {% else %}
@@ -73,7 +76,7 @@
           </div>
         </div>
       
-        {% if booking.Status in ["New", "Confirmed"] %}
+        {% if booking.Status in ["New", "Pending", "Confirmed"] %}
           <div class="text-end">
             <button type="submit" class="btn btn-primary">💾 Save Changes</button>
           </div>
@@ -102,7 +105,7 @@
           {# Cancelled → New only if booking in the future #}
           {% if next_status == "New" %}
             {% if booking.Arriving > time_now %}
-              <form method="POST" action="{{ url_for('update_booking_status', action='resurrect', booking_id=booking_id) }}" class="d-inline">
+              <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=booking_id) }}" class="d-inline">
                 <button type="submit" class="btn btn-warning">
                   🔄 Resurrect Booking
                 </button>
@@ -115,7 +118,7 @@
       
           {# Invoice → Completed #}
           {% elif next_status == "Completed" and booking.Status == "Invoice" %}
-            <form method="POST" action="{{ url_for('update_booking_status', action='completed', booking_id=booking_id) }}" class="d-inline">
+            <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=booking_id) }}" class="d-inline">
               <button type="submit" class="btn btn-success">
                 ✔️ Set Complete Once Xero Invoice Raised
               </button>
@@ -123,7 +126,7 @@
             
           {# New → Confirmed #}
           {% elif next_status == "Confirmed" %}
-            <form method="POST" action="{{ url_for('update_booking_status', action='confirmed', booking_id=booking_id) }}" class="d-inline">
+            <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=booking_id) }}" class="d-inline">
               <button type="submit" class="btn btn-success">
                 ✔️ Confirm Booking
               </button>
@@ -143,7 +146,7 @@
       
           {# Fallback: Generic transitions #}
           {% else %}
-            <form method="POST" action="{{ url_for('update_booking_status', action=next_status|lower, booking_id=booking_id) }}" class="d-inline">
+            <form method="POST" action="{{ url_for('change_status', new_status=next_status|lower, booking_id=booking_id) }}" class="d-inline">
               <button type="submit" class="btn btn-outline-primary">
                 ▶ {{ next_status }}
               </button>
@@ -165,7 +168,7 @@
   <!-- Pend Booking Modal -->
   <div class="modal fade" id="pendModal" tabindex="-1" aria-labelledby="pendModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-      <form method="POST" action="{{ url_for('update_booking_status', action='pend', booking_id=booking_id) }}">
+      <form method="POST" action="{{ url_for('change_status', new_status='Pending', booking_id=booking_id) }}">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="pendModalLabel">Query and Pend Booking</h5>
@@ -173,7 +176,7 @@
           </div>
           <div class="modal-body">
             <label for="pendquestion" class="form-label">Question to requester:</label>
-            <textarea class="form-control" name="question" id="pendquestion" rows="3" required></textarea>
+            <textarea class="form-control" name="description" id="pendquestion" rows="3" required></textarea>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel This Popup</button>
@@ -187,7 +190,7 @@
   <!-- Cancel Booking Modal -->
   <div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-      <form method="POST" action="{{ url_for('update_booking_status', action='cancel', booking_id=booking_id) }}">
+      <form method="POST" action="{{ url_for('change_status', new_status='Cancelled', booking_id=booking_id) }}">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="cancelModalLabel">Cancel Booking</h5>
@@ -195,7 +198,7 @@
           </div>
           <div class="modal-body">
             <label for="cancelReason" class="form-label">Reason for cancellation:</label>
-            <textarea class="form-control" name="reason" id="cancelReason" rows="3" required></textarea>
+            <textarea class="form-control" name="description" id="cancelReason" rows="3" required></textarea>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Do Not Cancel Booking</button>

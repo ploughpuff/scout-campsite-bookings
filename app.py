@@ -52,76 +52,24 @@ def booking_detail(booking_id):
     )
     
     
-@app.route("/booking/<action>/<booking_id>", methods=["POST"])
-def update_booking_status(action, booking_id):
+@app.route("/booking/<new_status>/<booking_id>", methods=["POST"])
+def change_status(new_status, booking_id):
     
-    booking = bookings.Get(booking_id)
-    updated_fields = {}
-    
-    if not booking:
-        flash(f"Booking {booking_id} not found.", "danger")
-    
-    elif action == "cancel":
-        # The cancel modal prompts the user for some reason text which we store in Notes
-        reason = request.form.get("reason")
-        
-        if not reason:
-            flash("Cancellation reason is required.", "danger")
-            return redirect(url_for("booking_detail", booking_id=booking_id))
-    
-        updated_fields = {
-            "Status": "Cancelled",
-            "Notes": "Cancelled: " + reason
-        }
+    description = request.form.get("description")
+    bookings.ChangeStatus(booking_id, new_status, description)
+    return redirect(url_for("booking_detail", booking_id=booking_id))
 
-    elif action == "pend":
-        # The pend modal prompts for a question to ask the booking requester
-        question = request.form.get("question")
+
+@app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
+def modify_fields(booking_id):
         
-        if not question:
-            flash("Pend question is required.", "danger")
-            return redirect(url_for("booking_detail", booking_id=booking_id))
+    updated_fields = {
+        "Number": request.form.get("Number"),
+        "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
+        "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
+    }
     
-        updated_fields = {
-            "Status": "Pending",
-            "Notes": "Pending: " + question
-        }
-        
-    elif action == "resurrect":
-        updated_fields = {
-            "Status": "New",
-            "Notes": "Resurrected"
-        }
-    
-    elif action == "confirmed":
-        updated_fields = {
-            "Status": "Confirmed",
-            "Notes": "Confirmed"
-        }
-    
-    elif action == "update":
-        updated_fields = {
-            "Number": request.form.get("Number"),
-            "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
-            "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
-        }
-    
-    elif action == "completed":
-         updated_fields = {
-            "Status": "Completed",
-            "Notes": "Xero invoice raised so completing booking"
-        }
-        
-    else:
-        logger.warning(f"Unsupported action: {action}")
-        flash(f"Unsupported action: {action}", "danger")
-    
-    if updated_fields:
-        if bookings.Update(booking_id, updated_fields):
-            flash(f"Booking {booking_id} has been {action}.", "success")
-        else:
-            flash(f"Booking {booking_id} with action {action} unsuccessful.", "danger")
-    
+    bookings.ModifyFields(booking_id, updated_fields)
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 

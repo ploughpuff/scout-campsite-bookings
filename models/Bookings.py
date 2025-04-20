@@ -84,20 +84,40 @@ class Bookings:
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
 
+    def ChangeStatus(self, booking_id, new_status, description=None):
+        
+        booking = self.data.get("bookings", {}).get(booking_id)
+        
+        if new_status in ("Cancelled", "Pending"):
+            if not description:
+                msg = (
+                    "Cancellation reason is required." if new_status == "Cancelled"
+                    else "Reason for pending or question to requester is required."
+                )
+                flash(msg, "danger")
+                return False
 
-    def Update(self, booking_id, updates: dict) -> bool:
-        """
-        Update a booking in self.data. Only allowed fields are updated.
-        Changes are logged only if a value is actually modified.
+            field = "Cancel Reason" if new_status == "Cancelled" else "Pend Question"
+            self._add_to_notes(booking, f"{field}: {description}")
+            booking[field] = description
 
-        Args:
-            booking_id (str): The ID of the booking to update.
-            updates (dict): The fields to update.
+        elif description:
+            self.logger.warning(f"Unexpected description for state {new_status} (booking {booking_id}): {description}")
+            return False
+        
+        old_status = booking.get("Status")
+        
+        if self._apply_status_change(booking_id, new_status):
+            send_email_notification(booking_id, booking)
+            #handle_calendar_entry(booking_id, booking)
+            self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
+            
+            self._save()
+        
+        
+    def ModifyFields(self, booking_id, updates: dict) -> bool:
 
-        Returns:
-            bool: True if update was successful, False if booking not found.
-        """
-        editable_fields = {"Number", "Arriving", "Departing", "Status", "Notes"}
+        editable_fields = {"Number", "Arriving", "Departing"}
 
         self._load()  # Ensure fresh data
 
@@ -115,32 +135,30 @@ class Bookings:
             
             if old_value == new_value:
                 continue  # No change, skip
-            
-            if field == "Status":
-                self._apply_status_change(booking, booking_id, old_value, new_value)
-            
-            elif field == "Notes":
-                self._add_to_notes(booking, new_value)
-                
-            else:
-                # Standard field update
-                booking[field] = new_value
-
-                if field in ("Arriving", "Departing"):
-                    old_value_str = get_pretty_datetime_str(old_value)
-                    new_value_str = get_pretty_datetime_str(new_value)
-                else:
-                    old_value_str = old_value
-                    new_value_str = new_value
-
-                self._add_to_notes(booking, f"{field} changed from [{old_value_str}] to [{new_value_str}]")
-
         
+            booking[field] = new_value
+
+            if field in ("Arriving", "Departing"):
+                old_value_str = get_pretty_datetime_str(old_value)
+                new_value_str = get_pretty_datetime_str(new_value)
+            else:
+                old_value_str = old_value
+                new_value_str = new_value
+
+            self._add_to_notes(booking, f"{field} changed from [{old_value_str}] to [{new_value_str}]")
+    
         self._save()
-        return True
 
 
-    def _apply_status_change(self, booking, booking_id, from_status, to_status):
+    def _apply_status_change(self, booking_id, to_status):
+        
+        booking = self.data.get("bookings", {}).get(booking_id)
+        
+        if not booking:
+            flash(f"Cannot update booking {booking_id} as not found in database.", "danger")
+            return False
+        
+        from_status = booking.get("Status")
 
         if not self._can_transition(from_status, to_status):
             msg = f"Invalid transition for {booking_id}: {from_status} > {to_status}"
@@ -158,13 +176,8 @@ class Bookings:
                 return False
 
         booking["Status"] = to_status
-
-        if to_status == "Pending" or to_status == "Confirmed" or to_status == "Cancelled":
-            if send_email_notification(booking_id, booking):
-                booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
-
-            #booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
                 
+        self._save()
         return True
 
 
@@ -176,6 +189,7 @@ class Bookings:
 
         old_value = booking.get("Notes", "")
         booking["Notes"] = new_note_entry + ("\n" + old_value if old_value else "")
+        self._save()
 
     
     
@@ -186,7 +200,7 @@ class Bookings:
                 booking["booking_type"] = booking["booking_type"].name  # Or .label if you prefer
 
         with open(self.json_path, 'w') as f:
-            self.logger.info(f"Saving bookings data to file")
+            #self.logger.info(f"Saving bookings data to file")
             json.dump(self.data, f, indent=2)
             
             
@@ -204,7 +218,6 @@ class Bookings:
                         self.logger.warning(f"Unknown or missing booking_type: {bt_raw}")
                 
                 self._auto_update_statuses()
-
     
         else:
             self.data = {
@@ -222,17 +235,9 @@ class Bookings:
 
             if status == "Confirmed" and departing and departing < now:
                 new_status = "Completed" if invoice else "Invoice"
-                
-                departed_str = get_pretty_datetime_str(departing)
-                now_str = get_pretty_datetime_str()
-                
-                self.logger.info(
-                    f"Auto-updating booking {booking_id}: {status} > {new_status} "
-                    f"(departed: {departed_str}, now: {now_str})"
-                )
-                            
+                self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
                 booking["Status"] = new_status
-
+                self._save()
 
 
     def _md5_of_dict(self, data):
