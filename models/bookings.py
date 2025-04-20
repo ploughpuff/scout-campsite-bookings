@@ -70,7 +70,6 @@ class Bookings:
             dict: Dictionary of values for display purposes.
         """
 
-        # ToDo - Only added during dev. Force loading of JSON each time to allow me to edit data
         self._load()
 
         # If booking_id is provided, return only that booking

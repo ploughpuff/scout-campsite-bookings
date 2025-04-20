@@ -44,12 +44,13 @@ class Sheets:
             self.logger.info("User forced update of sheet data from provider")
 
             #
-            ## ToDo - Use Google API to pull sheet data
+            ## Use Google API to pull sheet data
             ## We have internal and external types of data but just do internal for now
-            #new_data = self._fetch_google_sheets_data()
+            ## new_data = self._fetch_google_sheets_data()
             new_data = self._ti_create_test_data(count=2)
 
-            # ToDo - For testing append new data, not replace it
+            #
+            ## For testing append new data, not replace it
             if self.data.get("sheet_data"):
                 sheet_data = self.data["sheet_data"] + new_data
             else:
@@ -79,6 +80,13 @@ class Sheets:
                 self.data = json.load(f)
         else:
             self.data = {}
+
+    def clear_cache(self):
+        """ Delete the sheets file cache
+        """
+        if self.json_path.exists():
+            self.json_path.unlink()
+
 
     def _fetch_google_sheets_data(self):
         """Fetch the data from Google Sheets API."""
