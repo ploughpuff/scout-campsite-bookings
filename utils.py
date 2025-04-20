@@ -1,3 +1,10 @@
+"""
+utils.py - Utility functions for use in Scout Campsite Booking.
+"""
+import time
+import logging
+from datetime import datetime
+from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
 
 def secs_to_hr(seconds):
     """
@@ -25,16 +32,21 @@ def secs_to_hr(seconds):
     return " ".join(parts)
 
 
-
-import time
-from datetime import datetime
-from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
-
 def get_pretty_datetime_str(epoch_time=None, include_seconds=False):
+    """
+    Create a pretty date string from epoch int.
+    
+    If not epoch given, uses current time.
+    Default is Hours:Mins, but Secs can be added if required.
+    
+    Returns:
+        str: A pretty date string following the format defined in config.
+     
+     """
 
     if epoch_time is None:
         epoch_time = int(time.time())
-            
+
     if epoch_time and isinstance(epoch_time, (int, float)) and epoch_time < 1_000_000_000:
         # Not a valid epoch time, return as-is
         return str(epoch_time)
@@ -43,5 +55,7 @@ def get_pretty_datetime_str(epoch_time=None, include_seconds=False):
         dt = datetime.fromtimestamp(epoch_time, UK_TZ)
         fmt = DATE_FORMAT_WITH_SECONDS if include_seconds else DATE_FORMAT
         return dt.strftime(fmt)
-    except Exception:
+    except (TypeError, ValueError) as e:
+        logger = logging.getLogger("app_logger")
+        logger.warning("Failed to format epoch timestamp: %s", e)
         return str(epoch_time)
