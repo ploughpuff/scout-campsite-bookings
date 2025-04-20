@@ -1,6 +1,7 @@
 """
 Bookings.py - Manage the bookings data file and provide access functions.
 """
+
 import time
 import hashlib
 import json
@@ -16,23 +17,25 @@ from models.mailer import send_email_notification
 from models.booking_types import BookingType, gen_next_booking_id
 
 
-
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
 #
 ## Valid transitions to control buttons on html, and filter user input
 status_transitions = {
-    "New":       [       "Pending", "Confirmed",                         "Cancelled"],
-    "Pending":   [                  "Confirmed",                         "Cancelled"],
-    "Confirmed": [                                                       "Cancelled"],
-    "Invoice":   [                                          "Completed",            ],
-    "Completed": [                                                                  ],
-    "Cancelled": [ "New"                                                            ]
+    "New": ["Pending", "Confirmed", "Cancelled"],
+    "Pending": ["Confirmed", "Cancelled"],
+    "Confirmed": ["Cancelled"],
+    "Invoice": [
+        "Completed",
+    ],
+    "Completed": [],
+    "Cancelled": ["New"],
 }
 
+
 class Bookings:
-    """Class for managing the booking data
-    """
+    """Class for managing the booking data"""
+
     def __init__(self, calendar=None):
         self.calendar = calendar  # GoogleCalendar instance
         self.logger = logging.getLogger("app_logger")
@@ -89,7 +92,7 @@ class Bookings:
                 "Arriving": b.get("Arriving"),
                 "Departing": b.get("Departing"),
                 "Number": b.get("Number"),
-                "Status": b.get("Status")
+                "Status": b.get("Status"),
             }
             bookings.append(simplified)
 
@@ -118,7 +121,8 @@ class Bookings:
         if new_status in ("Cancelled", "Pending"):
             if not description:
                 msg = (
-                    "Cancellation reason is required." if new_status == "Cancelled"
+                    "Cancellation reason is required."
+                    if new_status == "Cancelled"
                     else "Reason for pending or question to requester is required."
                 )
                 flash(msg, "danger")
@@ -131,21 +135,25 @@ class Bookings:
         elif description:
             self.logger.warning(
                 "Unexpected description for state %s (%s): %s",
-                new_status, booking_id, description)
+                new_status,
+                booking_id,
+                description,
+            )
             return False
 
         old_status = booking.get("Status")
 
         if self._apply_status_change(booking_id, new_status):
             send_email_notification(booking_id, booking)
-            #handle_calendar_entry(booking_id, booking)
-            self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
+            # handle_calendar_entry(booking_id, booking)
+            self._add_to_notes(
+                booking, f"Status changed [{old_status}] > [{new_status}]"
+            )
 
             self._save()
             return True
 
         return False
-
 
     def modify_fields(self, booking_id, updates: dict) -> bool:
         """Modify fields in the booking from the html page.
@@ -164,14 +172,19 @@ class Bookings:
 
         booking = self.data.get("bookings", {}).get(booking_id)
         if not booking:
-            flash(f"Cannot update booking {booking_id} as not found in database.", "danger")
+            flash(
+                f"Cannot update booking {booking_id} as not found in database.",
+                "danger",
+            )
             return False
 
         for field, new_value in updates.items():
             if field not in editable_fields:
                 self.logger.warning(
                     "Bookings/Update tried to edit field %s which is not in my list: %s",
-                    field, booking_id)
+                    field,
+                    booking_id,
+                )
                 continue
 
             old_value = booking.get(field)
@@ -189,19 +202,21 @@ class Bookings:
                 new_value_str = new_value
 
             self._add_to_notes(
-                booking,
-                f"{field} changed from [{old_value_str}] to [{new_value_str}]")
+                booking, f"{field} changed from [{old_value_str}] to [{new_value_str}]"
+            )
 
         self._save()
         return True
-
 
     def _apply_status_change(self, booking_id, to_status):
 
         booking = self.data.get("bookings", {}).get(booking_id)
 
         if not booking:
-            flash(f"Cannot update booking {booking_id} as not found in database.", "danger")
+            flash(
+                f"Cannot update booking {booking_id} as not found in database.",
+                "danger",
+            )
             return False
 
         from_status = booking.get("Status")
@@ -227,8 +242,6 @@ class Bookings:
         self._save()
         return True
 
-
-
     def _add_to_notes(self, booking, new_note):
 
         timestamp = get_pretty_datetime_str(include_seconds=True)
@@ -238,22 +251,21 @@ class Bookings:
         booking["Notes"] = new_note_entry + ("\n" + old_value if old_value else "")
         self._save()
 
-
-
     def _save(self):
         # Searilise the BookingType ENUM to string before saving
         for booking in self.data.get("bookings", {}).values():
             if isinstance(booking.get("booking_type"), BookingType):
-                booking["booking_type"] = booking["booking_type"].name  # Or .label if you prefer
+                booking["booking_type"] = booking[
+                    "booking_type"
+                ].name  # Or .label if you prefer
 
-        with open(self.json_path, 'w', encoding="utf-8") as f:
-            #self.logger.info(f"Saving bookings data to file")
+        with open(self.json_path, "w", encoding="utf-8") as f:
+            # self.logger.info(f"Saving bookings data to file")
             json.dump(self.data, f, indent=2)
-
 
     def _load(self):
         if self.json_path.exists():
-            with open(self.json_path, 'r', encoding="utf-8") as f:
+            with open(self.json_path, "r", encoding="utf-8") as f:
                 self.data = json.load(f)
 
                 # Deseralise BookingType string back to ENUM
@@ -262,15 +274,14 @@ class Bookings:
                     try:
                         booking["booking_type"] = BookingType[bt_raw]
                     except (KeyError, TypeError):
-                        self.logger.warning("Unknown or missing booking_type: %s", bt_raw)
+                        self.logger.warning(
+                            "Unknown or missing booking_type: %s", bt_raw
+                        )
 
                 self._auto_update_statuses()
 
         else:
-            self.data = {
-                "timestamp": int(time.time()),
-                "bookings": {}
-            }
+            self.data = {"timestamp": int(time.time()), "bookings": {}}
 
     def _auto_update_statuses(self):
         now = int(time.time())
@@ -282,10 +293,11 @@ class Bookings:
 
             if status == "Confirmed" and departing and departing < now:
                 new_status = "Completed" if invoice else "Invoice"
-                self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
+                self._add_to_notes(
+                    booking, f"Auto Status Change: [{status}] > [{new_status}]"
+                )
                 booking["Status"] = new_status
                 self._save()
-
 
     def _md5_of_dict(self, data):
         # Ensure consistent ordering to get a consistent hash
@@ -293,15 +305,16 @@ class Bookings:
         encoded = json.dumps(data, sort_keys=True).encode()
         return hashlib.md5(encoded).hexdigest()
 
-
     def _find_booking_by_md5(self, target_md5):
         for booking_id, booking in self.data["bookings"].items():
-            if isinstance(booking, dict) and booking.get("original_sheet_md5") == target_md5:
+            if (
+                isinstance(booking, dict)
+                and booking.get("original_sheet_md5") == target_md5
+            ):
                 return booking_id, booking
 
         self.logger.warning("No booking found with MD5: %s", target_md5)
         return None, None
-
 
     def add_new_data(self, sheet_bookings, booking_type):
         """Function to load a sheet of data in dict format into our booking structure
@@ -331,14 +344,22 @@ class Bookings:
 
                 if not booking:
 
-                    start_dt = datetime.strptime(sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S")
+                    start_dt = datetime.strptime(
+                        sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S"
+                    )
 
                     # Parse the departure time and replace the time part of arrival
-                    dep_time = datetime.strptime(sb["Departure Time"], "%H:%M:%S").time()
-                    end_dt = start_dt.replace(hour=dep_time.hour, minute=dep_time.minute, second=0)
+                    dep_time = datetime.strptime(
+                        sb["Departure Time"], "%H:%M:%S"
+                    ).time()
+                    end_dt = start_dt.replace(
+                        hour=dep_time.hour, minute=dep_time.minute, second=0
+                    )
 
                     existing_ids = list(self.data["bookings"].keys())
-                    new_booking_id = gen_next_booking_id(existing_ids, booking_type, start_dt.year)
+                    new_booking_id = gen_next_booking_id(
+                        existing_ids, booking_type, start_dt.year
+                    )
 
                     new_booking = {
                         new_booking_id: {
@@ -354,11 +375,13 @@ class Bookings:
                             "invoice": False,
                             "confirmation_email_sent": False,
                             "google_calendar_id": None,
-                            "Notes": ""
+                            "Notes": "",
                         }
                     }
 
-                    self._add_to_notes(new_booking.get(new_booking_id), "Pulled from sheets")
+                    self._add_to_notes(
+                        new_booking.get(new_booking_id), "Pulled from sheets"
+                    )
                     self.data["bookings"].update(new_booking)
                     bookings_added += 1
 

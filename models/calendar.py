@@ -1,6 +1,7 @@
 """
 calendar.py - Hanle all calendar related operations.
 """
+
 import datetime
 import logging
 
@@ -13,11 +14,12 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
-#booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
+# booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
+
 
 class GoogleCalendar:
-    """class for Google calendar inerfacing.
-    """
+    """class for Google calendar inerfacing."""
+
     def __init__(self, service_account_file, calendar_id, timezone="Europe/London"):
         self.service_account_file = service_account_file
         self.calendar_id = calendar_id
@@ -31,8 +33,7 @@ class GoogleCalendar:
         return build("calendar", "v3", credentials=creds)
 
     def add_event(self, booking):
-        """ Add a new calendar event.
-        """
+        """Add a new calendar event."""
         try:
             start = datetime.datetime.fromtimestamp(int(booking["Arriving"]))
             end = (
@@ -53,20 +54,20 @@ Status: {booking.get('Status', 'N/A')}
             }
 
             # pylint: disable=no-member
-            created_event = self.service.events().insert(
-                calendarId=self.calendar_id,
-                body=event
-            ).execute()
+            created_event = (
+                self.service.events()
+                .insert(calendarId=self.calendar_id, body=event)
+                .execute()
+            )
 
-            logger.info("Event created: %s", created_event.get('htmlLink'))
+            logger.info("Event created: %s", created_event.get("htmlLink"))
             return created_event["id"]
         except HttpError as e:
             logger.error("Failed to create event: %s", e)
             return None
 
     def update_event(self, event_id, booking):
-        """ Update existing calendar entry.
-        """
+        """Update existing calendar entry."""
         try:
             start = datetime.datetime.fromtimestamp(int(booking["Arriving"]))
             end = (
@@ -108,7 +109,9 @@ Status: {booking.get('Status', 'N/A')}
         """
         try:
             # pylint: disable=no-member
-            self.service.events().delete(calendarId=self.calendar_id, eventId=event_id).execute()
+            self.service.events().delete(
+                calendarId=self.calendar_id, eventId=event_id
+            ).execute()
             logger.info("Event deleted: %s", event_id)
             return True
         except HttpError as e:

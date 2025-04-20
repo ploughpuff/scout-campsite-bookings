@@ -2,15 +2,16 @@
 config.py - Contains configuration settings for Scout Campsite Bookings
 
 """
+
 import os
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 
-BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
-CACHE_DIR      = os.path.join(BASE_DIR, "cache")
-LOG_DIR        = os.path.join(BASE_DIR, "logs")
-DATA_DIR       = os.path.join(BASE_DIR, "data")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_DIR = os.path.join(BASE_DIR, "cache")
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+DATA_DIR = os.path.join(BASE_DIR, "data")
 EMAIL_TEMP_DIR = os.path.join(BASE_DIR, "email_templates")
 
 # Make sure these directories exist when config is loaded
@@ -26,8 +27,8 @@ CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_CREDS", "credentials.json")
 
 
-SPREADSHEET_ID = '16AC_WKCDpOVwEghtI9pxjkLgteezcfJWWV8-SzCzUcU'
-SPREADSHEET_IMPORT_RANGE = '2025!A:E'
+SPREADSHEET_ID = "16AC_WKCDpOVwEghtI9pxjkLgteezcfJWWV8-SzCzUcU"
+SPREADSHEET_IMPORT_RANGE = "2025!A:E"
 
 UK_TZ = ZoneInfo("Europe/London")
 DATE_FORMAT = "%Y-%m-%d %H:%M"

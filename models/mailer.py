@@ -1,6 +1,7 @@
 """
 mailer.py - Provide functions to send emails from the app.
 """
+
 import logging
 import smtplib
 
@@ -31,14 +32,16 @@ def send_email_notification(booking_id, booking):
     recipient = booking.get("original_sheet_data", {}).get("Email address")
 
     if not recipient:
-        logger.warning("No email address found for booking: %s: %s", booking_id, booking)
+        logger.warning(
+            "No email address found for booking: %s: %s", booking_id, booking
+        )
         return False
 
     context = {
         "leader": booking.get("Leader", "Leader"),
         "arriving": booking.get("Arriving", "a future date"),
         "campsite": booking.get("Campsite", "the campsite"),
-        "booking_id": booking_id
+        "booking_id": booking_id,
     }
 
     if booking["Status"] == "Confirmed":
@@ -54,7 +57,9 @@ def send_email_notification(booking_id, booking):
         html_template = env.get_template("booking_pending.html")
 
     else:
-        logger.warning("No email to be sent for status: %s: %s", booking.get("Status"), booking)
+        logger.warning(
+            "No email to be sent for status: %s: %s", booking.get("Status"), booking
+        )
         return False
 
     try:
@@ -78,7 +83,9 @@ def send_email_notification(booking_id, booking):
             server.starttls()
             server.login(config.EMAIL_USER, config.EMAIL_PASS)
             server.send_message(msg)
-        booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
+        booking["email_confirmation_sent"] = get_pretty_datetime_str(
+            include_seconds=True
+        )
         return True
     except smtplib.SMTPException as e:
         logger.error("Failed to send email to %s: %s", recipient, e)

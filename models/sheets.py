@@ -1,6 +1,7 @@
 """
 sheets.py - Handle pull operations to Google sheets.
 """
+
 import json
 
 from pathlib import Path
@@ -12,24 +13,27 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 
-from config import CACHE_DIR, SERVICE_ACCOUNT_FILE, SPREADSHEET_ID, SPREADSHEET_IMPORT_RANGE
+from config import (
+    CACHE_DIR,
+    SERVICE_ACCOUNT_FILE,
+    SPREADSHEET_ID,
+    SPREADSHEET_IMPORT_RANGE,
+)
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 
-
 class Sheets:
-    """ Provides a class Sheets to access and manage Google sheets.
-    """
+    """Provides a class Sheets to access and manage Google sheets."""
+
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
         self.json_path = Path(CACHE_DIR, "sheet_cache.json")
         self.data = {}
         self._load()
 
-
     def get_sheet_data(self, pull_new=False):
-        """ Read sheet data from Google.
+        """Read sheet data from Google.
 
         Args:
             pull_new (bool, optional): Force a re-read, not return file cache. Defaults to False.
@@ -56,10 +60,7 @@ class Sheets:
             else:
                 sheet_data = new_data
 
-            self.data = {
-                "timestamp": int(time.time()),
-                "sheet_data": sheet_data
-            }
+            self.data = {"timestamp": int(time.time()), "sheet_data": sheet_data}
 
             self._save()
         else:
@@ -69,31 +70,30 @@ class Sheets:
         return self.data
 
     def _save(self):
-        with open(self.json_path, 'w', encoding="utf-8") as f:
+        with open(self.json_path, "w", encoding="utf-8") as f:
             self.logger.info("Saving sheet data to file cache")
             json.dump(self.data, f, indent=2)
 
     def _load(self):
         if self.json_path.exists():
-            with open(self.json_path, 'r', encoding="utf-8") as f:
+            with open(self.json_path, "r", encoding="utf-8") as f:
                 self.logger.info("Loading sheet data from file cache")
                 self.data = json.load(f)
         else:
             self.data = {}
 
     def clear_cache(self):
-        """ Delete the sheets file cache
-        """
+        """Delete the sheets file cache"""
         if self.json_path.exists():
             self.json_path.unlink()
-
 
     def _fetch_google_sheets_data(self):
         """Fetch the data from Google Sheets API."""
         credentials = service_account.Credentials.from_service_account_file(
-            SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        )
 
-        service = build('sheets', 'v4', credentials=credentials)
+        service = build("sheets", "v4", credentials=credentials)
 
         # pylint: disable=no-member
         sheet = service.spreadsheets()
@@ -104,7 +104,7 @@ class Sheets:
             .execute()
         )
 
-        values = result.get('values', [])
+        values = result.get("values", [])
 
         #
         ## Convert from lists of lists, to list of dict
@@ -130,7 +130,7 @@ class Sheets:
                 "Number of people": str(random.randint(10, 30)),
                 "Arrival Date / Time": "23/06/2025 18:00:00",
                 "Departure Time": "21:00:00",
-                "Campsite": random.choice(facilities)
+                "Campsite": random.choice(facilities),
             }
 
             test_data.append(data)

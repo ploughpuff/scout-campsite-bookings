@@ -2,14 +2,15 @@
 booking_types.py - Contains the class BookingType.
 
 """
+
 import re
 from enum import Enum
 from datetime import datetime
 
 
 class BookingType(Enum):
-    """ Class BookingType for functions to generate next booking ID.
-    """
+    """Class BookingType for functions to generate next booking ID."""
+
     DISTRICT_DAY_VISIT = ("district_day_visit", "CDS")
     SCHOOL = ("school", "SCH")
 
@@ -34,9 +35,7 @@ def gen_next_booking_id(existing_ids, booking_type: BookingType, year=None):
     pattern = rf"{prefix}-{year}-(\d+)"
 
     nums = [
-        int(match.group(1))
-        for bid in existing_ids
-        if (match := re.match(pattern, bid))
+        int(match.group(1)) for bid in existing_ids if (match := re.match(pattern, bid))
     ]
 
     next_number = max(nums, default=0) + 1

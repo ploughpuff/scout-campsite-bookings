@@ -3,6 +3,7 @@ app.py - Main Flask application entry point for Scout Campsite Booking.
 
 Handles routing, app initialization, and integrates with the Bookings class.
 """
+
 import time
 from datetime import datetime
 
@@ -19,7 +20,7 @@ import config
 
 
 app = Flask(__name__)
-app.secret_key = 'dev-key'
+app.secret_key = "dev-key"
 
 logger = setup_logger()
 logger.info("Starting")
@@ -33,11 +34,14 @@ bookings = Bookings(calendar=gc)
 bookings.add_new_data(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 
 
-@app.route('/')
-@app.route('/bookings')
+@app.route("/")
+@app.route("/bookings")
 def all_bookings():
     """Render the main bookings table page."""
-    return render_template('all_bookings.html', bookings=bookings.get_booking(), age=bookings.age())
+    return render_template(
+        "all_bookings.html", bookings=bookings.get_booking(), age=bookings.age()
+    )
+
 
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
@@ -56,7 +60,7 @@ def booking_detail(booking_id):
         booking_id=booking_id,
         booking=booking,
         valid_transitions=transitions.get(current_status, []),
-        time_now=int(time.time())
+        time_now=int(time.time()),
     )
 
 
@@ -73,8 +77,12 @@ def modify_fields(booking_id):
     """Handle modifying fields from details page."""
     updated_fields = {
         "Number": request.form.get("Number"),
-        "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
-        "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
+        "Arriving": int(
+            datetime.fromisoformat(request.form.get("Arriving")).timestamp()
+        ),
+        "Departing": int(
+            datetime.fromisoformat(request.form.get("Departing")).timestamp()
+        ),
     }
 
     bookings.modify_fields(booking_id, updated_fields)
@@ -85,8 +93,7 @@ def modify_fields(booking_id):
 def pull_now():
     """Pull new data from sheets and add to bookings."""
     added = bookings.add_new_data(
-        sheets.get_sheet_data(pull_new=True),
-        BookingType.DISTRICT_DAY_VISIT
+        sheets.get_sheet_data(pull_new=True), BookingType.DISTRICT_DAY_VISIT
     )
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
@@ -110,9 +117,11 @@ def pretty_date(value):
         return str(value)
 
     day = dt.day
-    suffix = 'th' if 11 <= day <= 13 else {1:'st', 2:'nd', 3:'rd'}.get(day % 10, 'th')
-    month = dt.strftime('%B')
-    time_part = dt.strftime('%H:%M')
+    suffix = (
+        "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    )
+    month = dt.strftime("%B")
+    time_part = dt.strftime("%H:%M")
     year = dt.year
     current_year = datetime.now().year
 
@@ -121,6 +130,7 @@ def pretty_date(value):
         date_str += f" {year}"
 
     return Markup(f"{date_str}<br>{time_part}")
+
 
 @app.template_filter("html_datetime")
 def html_datetime(epoch_time):
@@ -135,5 +145,5 @@ def html_datetime(epoch_time):
         return ""
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
