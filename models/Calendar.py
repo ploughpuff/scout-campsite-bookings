@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
+#booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
+
 class GoogleCalendar:
     def __init__(self, service_account_file, calendar_id, timezone="Europe/London"):
         self.service_account_file = service_account_file
