@@ -12,7 +12,7 @@ from flask import flash
 
 from utils import secs_to_hr, get_pretty_datetime_str
 from config import CACHE_DIR
-from models.Mailer import send_email_notification
+from models.mailer import send_email_notification
 from models.booking_types import BookingType, gen_next_booking_id
 
 
@@ -31,6 +31,8 @@ status_transitions = {
 }
 
 class Bookings:
+    """Class for managing the booking data
+    """
     def __init__(self, calendar=None):
         self.calendar = calendar  # GoogleCalendar instance
         self.logger = logging.getLogger("app_logger")
@@ -55,8 +57,8 @@ class Bookings:
         """
         if "timestamp" in self.data:
             return secs_to_hr(int(time.time()) - self.data["timestamp"])
-        else:
-            return "NEVER!"
+
+        return "NEVER!"
 
     def get_booking(self, booking_id=None):
         """Gets specificed booking or list of all of them.
@@ -100,7 +102,17 @@ class Bookings:
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
 
-    def ChangeStatus(self, booking_id, new_status, description=None):
+    def change_status(self, booking_id, new_status, description=None):
+        """Change the status of a single booking.
+
+        Args:
+            booking_id (str): The booking ID to modify
+            new_status (str): Proposed new status value
+            description (str, optional): Cancel reason or pending question text. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
 
         booking = self.data.get("bookings", {}).get(booking_id)
 
@@ -133,7 +145,16 @@ class Bookings:
             self._save()
 
 
-    def ModifyFields(self, booking_id, updates: dict) -> bool:
+    def modify_fields(self, booking_id, updates: dict) -> bool:
+        """Modify fields in the booking from the html page.
+
+        Args:
+            booking_id (str): The booking ID to modify fields on.
+            updates (dict): Dictionary of kv pair to modify.
+
+        Returns:
+            bool: True is successful
+        """
 
         editable_fields = {"Number", "Arriving", "Departing"}
 
@@ -251,7 +272,7 @@ class Bookings:
     def _auto_update_statuses(self):
         now = int(time.time())
 
-        for booking_id, booking in self.data.get("bookings", {}).items():
+        for _, booking in self.data.get("bookings", {}).items():
             status = booking.get("Status")
             departing = booking.get("Departing")
             invoice = booking.get("invoice")

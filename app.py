@@ -10,9 +10,9 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from markupsafe import Markup
 
 from models.bookings import Bookings
-from models.Calendar import GoogleCalendar
-from models.Logger import setup_logger
-from models.Sheets import Sheets
+from models.calendar import GoogleCalendar
+from models.logger import setup_logger
+from models.sheets import Sheets
 from models.booking_types import BookingType
 
 import config
@@ -64,7 +64,7 @@ def booking_detail(booking_id):
 def change_status(new_status, booking_id):
     """Handle status change triggered by button press."""
     description = request.form.get("description")
-    bookings.ChangeStatus(booking_id, new_status, description)
+    bookings.change_status(booking_id, new_status, description)
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
@@ -77,14 +77,14 @@ def modify_fields(booking_id):
         "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
     }
 
-    bookings.ModifyFields(booking_id, updated_fields)
+    bookings.modify_fields(booking_id, updated_fields)
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
 @app.route("/pull")
 def pull_now():
     """Pull new data from sheets and add to bookings."""
-    added = bookings.add_new_data(sheets.get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
+    added = bookings.add_new_data(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
