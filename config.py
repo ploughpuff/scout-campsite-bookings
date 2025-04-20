@@ -33,3 +33,7 @@ SPREADSHEET_IMPORT_RANGE = "2025!A:E"
 UK_TZ = ZoneInfo("Europe/London")
 DATE_FORMAT = "%Y-%m-%d %H:%M"
 DATE_FORMAT_WITH_SECONDS = "%Y-%m-%d %H:%M:%S"
+
+#
+## Anonymise bookings by removing personnel information once a completed is X days old
+ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS = 90
