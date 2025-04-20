@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash
 from markupsafe import Markup
 
-from models.Bookings import Bookings
+from models.bookings import Bookings
 from models.Calendar import GoogleCalendar
 from models.Logger import setup_logger
 from models.Sheets import Sheets
