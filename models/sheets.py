@@ -1,80 +1,103 @@
+"""
+sheets.py - Handle pull operations to Google sheets.
+"""
 import json
 
 from pathlib import Path
-from datetime import datetime, timedelta
 import random
 import logging
 import time
 
-from config import CACHE_DIR
-from config import DATA_DIR
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+
+from config import CACHE_DIR, SERVICE_ACCOUNT_FILE, SPREADSHEET_ID, SPREADSHEET_IMPORT_RANGE
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 
 
-    
 class Sheets:
+    """ Provides a class Sheets to access and manage Google sheets.
+    """
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
         self.json_path = Path(CACHE_DIR, "sheet_cache.json")
         self.data = {}
         self._load()
-    
-    
-    def Get(self,pull_new=False):
-        
+
+
+    def get_sheet_data(self, pull_new=False):
+        """ Read sheet data from Google.
+
+        Args:
+            pull_new (bool, optional): Force a re-read, not return file cache. Defaults to False.
+
+        Returns:
+            dict: Sheet data in a dictionary.
+        """
+
         #
         ## Force read of sheet data from service provider
         if pull_new is True:
-            self.logger.info(f"User forced update of sheet data from provider")
-            
+            self.logger.info("User forced update of sheet data from provider")
+
             #
             ## ToDo - Use Google API to pull sheet data
             ## We have internal and external types of data but just do internal for now
             #new_data = self._fetch_google_sheets_data()
             new_data = self._ti_create_test_data(count=2)
-            
+
             # ToDo - For testing append new data, not replace it
             if self.data.get("sheet_data"):
                 sheet_data = self.data["sheet_data"] + new_data
             else:
                 sheet_data = new_data
-                
+
             self.data = {
                 "timestamp": int(time.time()),
                 "sheet_data": sheet_data
             }
-            
+
             self._save()
         else:
-            self.logger.info(f"Read sheet data from file cache")
+            self.logger.info("Read sheet data from file cache")
             self._load()
-           
+
         return self.data
-    
+
     def _save(self):
-        with open(self.json_path, 'w') as f:
-            self.logger.info(f"Saving sheet data to file cache")
+        with open(self.json_path, 'w', encoding="utf-8") as f:
+            self.logger.info("Saving sheet data to file cache")
             json.dump(self.data, f, indent=2)
-    
+
     def _load(self):
         if self.json_path.exists():
-            with open(self.json_path, 'r') as f:
-                self.logger.info(f"Loading sheet data from file cache")
+            with open(self.json_path, 'r', encoding="utf-8") as f:
+                self.logger.info("Loading sheet data from file cache")
                 self.data = json.load(f)
         else:
             self.data = {}
-            
+
     def _fetch_google_sheets_data(self):
         """Fetch the data from Google Sheets API."""
         credentials = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-        
+
         service = build('sheets', 'v4', credentials=credentials)
+
+        # pylint: disable=no-member
         sheet = service.spreadsheets()
 
-        result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
+        result = (
+            sheet.values()
+            .get(spreadsheetId=SPREADSHEET_ID, range=SPREADSHEET_IMPORT_RANGE)
+            .execute()
+        )
+
         values = result.get('values', [])
-        
+
         #
         ## Convert from lists of lists, to list of dict
         dicts = [dict(zip(values[0], row)) for row in values[1:]]
@@ -82,30 +105,24 @@ class Sheets:
         return dicts
 
     def _ti_create_test_data(self, count=1):
-        
-        DISTRICT_GROUPS = ["1st Town", "2nd Village", "3rd City", "4th Smallville"]
-        FACILITIES = ["Top", "Bottom", "Trees", "Campfire", "Badgers"]
-        
+
+        district_groups = ["1st Town", "2nd Village", "3rd City", "4th Smallville"]
+        facilities = ["Top", "Bottom", "Trees", "Campfire", "Badgers"]
+
         test_data = []
-        now = datetime.now()
 
         for _ in range(count):
-
-            now = datetime.now()
-            arrival = now + timedelta(days=random.randint(5, 30))
-            departure_hour = arrival.hour + 3  # 3-hour event
-            departure_str = f"{departure_hour:02d}:{arrival.minute:02d}"
 
             data = {
                 "Timestamp": "03/04/2025 13:42:28",
                 "Email address": "me@here.com",
                 "Name of Lead Person": "Me You",
                 "Mobile Number for Lead Person": "0123456789",
-                "Chelmsford Scout Group": random.choice(DISTRICT_GROUPS),
+                "Chelmsford Scout Group": random.choice(district_groups),
                 "Number of people": str(random.randint(10, 30)),
                 "Arrival Date / Time": "23/06/2025 18:00:00",
                 "Departure Time": "21:00:00",
-                "Campsite": random.choice(FACILITIES)
+                "Campsite": random.choice(facilities)
             }
 
             test_data.append(data)

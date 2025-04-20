@@ -25,7 +25,7 @@ logger = setup_logger()
 logger.info("Starting")
 
 sheets = Sheets()
-sheet_bookings = sheets.Get()
+sheet_bookings = sheets.get_sheet_data()
 
 gc = GoogleCalendar(config.SERVICE_ACCOUNT_FILE, config.CALENDAR_ID)
 
@@ -84,7 +84,10 @@ def modify_fields(booking_id):
 @app.route("/pull")
 def pull_now():
     """Pull new data from sheets and add to bookings."""
-    added = bookings.add_new_data(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
+    added = bookings.add_new_data(
+        sheets.get_sheet_data(pull_new=True),
+        BookingType.DISTRICT_DAY_VISIT
+    )
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
