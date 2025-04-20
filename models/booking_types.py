@@ -1,8 +1,15 @@
+"""
+booking_types.py - Contains the class BookingType.
+
+"""
+import re
 from enum import Enum
 from datetime import datetime
-import re
+
 
 class BookingType(Enum):
+    """ Class BookingType for functions to generate next booking ID.
+    """
     DISTRICT_DAY_VISIT = ("district_day_visit", "CDS")
     SCHOOL = ("school", "SCH")
 

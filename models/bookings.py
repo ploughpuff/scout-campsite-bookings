@@ -82,9 +82,9 @@ class Bookings:
 
         # If no booking_id provided, return the full list of bookings
         bookings = []
-        for booking_id, b in self.data["bookings"].items():
+        for b_id, b in self.data["bookings"].items():
             simplified = {
-                "ID": booking_id,
+                "ID": b_id,
                 "Group": b.get("Group"),
                 "Leader": b.get("Leader"),
                 "Arriving": b.get("Arriving"),
@@ -111,7 +111,7 @@ class Bookings:
             description (str, optional): Cancel reason or pending question text. Defaults to None.
 
         Returns:
-            _type_: _description_
+            Boolean: True if change made, else False
         """
 
         booking = self.data.get("bookings", {}).get(booking_id)
@@ -143,6 +143,9 @@ class Bookings:
             self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
 
             self._save()
+            return True
+
+        return False
 
 
     def modify_fields(self, booking_id, updates: dict) -> bool:
@@ -191,6 +194,7 @@ class Bookings:
                 f"{field} changed from [{old_value_str}] to [{new_value_str}]")
 
         self._save()
+        return True
 
 
     def _apply_status_change(self, booking_id, to_status):
