@@ -44,7 +44,7 @@ def send_email_notification(booking_id, booking):
         html_template = env.get_template("booking_pending.html")
     
     else:
-        logger.warning(f"No email to be sent for status: {booking["Status"]} {booking}")
+        logger.warning(f"No email to be sent for status: {booking.get("Status")} {booking}")
         return False
     
     try:

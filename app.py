@@ -35,14 +35,14 @@ def all_bookings():
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
     booking = bookings.Get(booking_id)
-    
+
     if not booking:
         flash("Booking not found", "danger")
         return redirect(url_for("all_bookings"))
-    
+
     transitions = bookings.GetStates()["transitions"]
     current_status = booking["Status"]
-    
+
     return render_template(
         "booking.html",
         booking_id=booking_id,
@@ -50,11 +50,11 @@ def booking_detail(booking_id):
         valid_transitions=transitions.get(current_status, []),
         time_now=int(time.time())
     )
-    
-    
+
+
 @app.route("/booking/<new_status>/<booking_id>", methods=["POST"])
 def change_status(new_status, booking_id):
-    
+
     description = request.form.get("description")
     bookings.ChangeStatus(booking_id, new_status, description)
     return redirect(url_for("booking_detail", booking_id=booking_id))
@@ -62,13 +62,13 @@ def change_status(new_status, booking_id):
 
 @app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
 def modify_fields(booking_id):
-        
+
     updated_fields = {
         "Number": request.form.get("Number"),
         "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
         "Departing": int(datetime.fromisoformat(request.form.get("Departing")).timestamp())
     }
-    
+
     bookings.ModifyFields(booking_id, updated_fields)
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
@@ -89,7 +89,7 @@ def pull_now():
 @app.route('/update/<booking_id>', methods=['POST'])
 def update(booking_id):
     updates = request.form.to_dict()
-    
+
     # Convert date strings to epoch if they exist
     for field in ["Arriving", "Departing"]:
         if updates.get(field):
@@ -99,9 +99,9 @@ def update(booking_id):
             except ValueError:
                 flash(f"Invalid {field} datetime format.", "danger")
                 updates[field] = None
-    
+
     print(updates)
-    
+
     success = bookings.Update(booking_id, updates)
 
     if not success:
@@ -143,13 +143,13 @@ def html_datetime(epoch_time):
     """Convert an epoch timestamp to HTML datetime-local format (YYYY-MM-DDTHH:MM)."""
     if not epoch_time:
         return ""
-    
+
     try:
         dt = datetime.fromtimestamp(int(epoch_time))
         return dt.strftime("%Y-%m-%dT%H:%M")
     except (ValueError, TypeError):
         return ""
-    
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
