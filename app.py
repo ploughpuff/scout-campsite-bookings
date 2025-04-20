@@ -1,15 +1,21 @@
+"""
+app.py - Main Flask application entry point for Scout Campsite Booking.
+
+Handles routing, app initialization, and integrates with the Bookings class.
+"""
+import time
+from datetime import datetime
+
 from flask import Flask, render_template, request, redirect, url_for, flash
-from models.Logger import setup_logger
-from models.Sheets import Sheets
+from markupsafe import Markup
+
 from models.Bookings import Bookings
 from models.Calendar import GoogleCalendar
-import time
-from markupsafe import Markup
-from datetime import datetime
-from markupsafe import Markup
+from models.Logger import setup_logger
+from models.Sheets import Sheets
 from models.booking_types import BookingType
-import config
 
+import config
 
 
 app = Flask(__name__)
@@ -30,10 +36,12 @@ bookings.AddNewData(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 @app.route('/')
 @app.route('/bookings')
 def all_bookings():
+    """Render the main bookings table page."""
     return render_template('all_bookings.html', bookings=bookings.Get(), age=bookings.Age())
 
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
+    """Render the booking detail page for a specific booking ID."""
     booking = bookings.Get(booking_id)
 
     if not booking:
@@ -54,7 +62,7 @@ def booking_detail(booking_id):
 
 @app.route("/booking/<new_status>/<booking_id>", methods=["POST"])
 def change_status(new_status, booking_id):
-
+    """Handle status change triggered by button press."""
     description = request.form.get("description")
     bookings.ChangeStatus(booking_id, new_status, description)
     return redirect(url_for("booking_detail", booking_id=booking_id))
@@ -62,7 +70,7 @@ def change_status(new_status, booking_id):
 
 @app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
 def modify_fields(booking_id):
-
+    """Handle modifying fields from details page."""
     updated_fields = {
         "Number": request.form.get("Number"),
         "Arriving": int(datetime.fromisoformat(request.form.get("Arriving")).timestamp()),
@@ -73,51 +81,24 @@ def modify_fields(booking_id):
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
-@app.route("/test-flash")
-def test_flash():
-    flash("This is a success message!", "success")
-    flash("This is a warning message.", "warning")
-    flash("Something went wrong!", "danger")
-    return redirect(url_for("all_bookings"))  # Or your actual view name
-
 @app.route("/pull")
 def pull_now():
+    """Pull new data from sheets and add to bookings."""
     added = bookings.AddNewData(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
-@app.route('/update/<booking_id>', methods=['POST'])
-def update(booking_id):
-    updates = request.form.to_dict()
-
-    # Convert date strings to epoch if they exist
-    for field in ["Arriving", "Departing"]:
-        if updates.get(field):
-            try:
-                dt = datetime.fromisoformat(updates[field])
-                updates[field] = int(dt.timestamp())
-            except ValueError:
-                flash(f"Invalid {field} datetime format.", "danger")
-                updates[field] = None
-
-    print(updates)
-
-    success = bookings.Update(booking_id, updates)
-
-    if not success:
-        flash("Booking not found", "danger")
-
-    return redirect(url_for('all_bookings'))
-
 
 @app.errorhandler(Exception)
 def handle_exception(e):
-    logger.exception(f"Unhandled exception: {type(e).__name__}: {e}")
+    """Trap all exception so they can be recorded in the app log."""
+    logger.exception("Unhandled exception: %s: %s", type(e).__name__, e)
     return render_template("500.html"), 500
 
 
 @app.template_filter("pretty_date")
 def pretty_date(value):
+    """Create a pretty date string from an poch int."""
     if isinstance(value, (int, float)):
         dt = datetime.fromtimestamp(value)
     elif isinstance(value, datetime):
