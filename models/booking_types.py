@@ -14,7 +14,7 @@ class BookingType(Enum):
         return self.label
 
 
-def generate_next_booking_id(existing_ids, booking_type: BookingType, year=None):
+def gen_next_booking_id(existing_ids, booking_type: BookingType, year=None):
     """
     Generate the next available booking ID for a given booking type and year.
     IDs are in the format: PREFIX-YYYY-XXXX (e.g. SCH-2025-0003)

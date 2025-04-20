@@ -1,18 +1,21 @@
-from flask import flash, jsonify
-import json
-from pathlib import Path
-import logging
+"""
+Bookings.py - Manage the bookings data file and provide access functions.
+"""
+import time
 import hashlib
 import json
-import time
+import logging
 from datetime import datetime
+from pathlib import Path
+
+from flask import flash
+
 from utils import secs_to_hr, get_pretty_datetime_str
 from config import CACHE_DIR
 from models.Mailer import send_email_notification
-from models.booking_types import BookingType, generate_next_booking_id
+from models.booking_types import BookingType, gen_next_booking_id
 
-import re
-import config
+
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
 
@@ -21,9 +24,9 @@ status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancel
 status_transitions = {
     "New":       [       "Pending", "Confirmed",                         "Cancelled"],
     "Pending":   [                  "Confirmed",                         "Cancelled"],
-    "Confirmed": [                                                       "Cancelled"], # Confirmed > Invoice: auto transition
+    "Confirmed": [                                                       "Cancelled"],
     "Invoice":   [                                          "Completed",            ],
-    "Completed": [                                                                  ], # Final state, for now!
+    "Completed": [                                                                  ],
     "Cancelled": [ "New"                                                            ]
 }
 
@@ -35,10 +38,15 @@ class Bookings:
         self.data = {}
         self._load()
 
-    def GetStates(self):
+    def get_states(self):
+        """Reveal the various status names and their valid transitions.
+
+        Returns:
+            dict: "name" of states, and "transition" list of valid transitions.
+        """
         return {"names": status_options, "transitions": status_transitions}
 
-    def Age(self):
+    def age(self):
         """
         String showing the age of the bookings or when they were last retrieved from sheets
 
@@ -50,7 +58,15 @@ class Bookings:
         else:
             return "NEVER!"
 
-    def Get(self, booking_id=None):
+    def get_booking(self, booking_id=None):
+        """Gets specificed booking or list of all of them.
+
+        Args:
+            booking_id (str, optional): The bookinging ID to return. Defaults to None.
+
+        Returns:
+            dict: Dictionary of values for display purposes.
+        """
 
         # ToDo - Only added during dev. Force loading of JSON each time to allow me to edit data
         self._load()
@@ -102,7 +118,9 @@ class Bookings:
             booking[field] = description
 
         elif description:
-            self.logger.warning(f"Unexpected description for state {new_status} (booking {booking_id}): {description}")
+            self.logger.warning(
+                "Unexpected description for state %s (%s): %s",
+                new_status, booking_id, description)
             return False
 
         old_status = booking.get("Status")
@@ -128,7 +146,9 @@ class Bookings:
 
         for field, new_value in updates.items():
             if field not in editable_fields:
-                self.logger.warning(f"Bookings/Update tried to edit field {field} which is not in my list: {booking_id}")
+                self.logger.warning(
+                    "Bookings/Update tried to edit field %s which is not in my list: %s",
+                    field, booking_id)
                 continue
 
             old_value = booking.get(field)
@@ -145,7 +165,9 @@ class Bookings:
                 old_value_str = old_value
                 new_value_str = new_value
 
-            self._add_to_notes(booking, f"{field} changed from [{old_value_str}] to [{new_value_str}]")
+            self._add_to_notes(
+                booking,
+                f"{field} changed from [{old_value_str}] to [{new_value_str}]")
 
         self._save()
 
@@ -172,7 +194,8 @@ class Bookings:
         if from_status == "Cancelled" and to_status == "New":
             arriving = booking.get("Arriving")
             if arriving is not None and arriving < int(time.time()):
-                flash(f"Unable to resurrect booking {booking_id}: arrival date is in the past!", "warning")
+                msg = f"Unable to resurrect booking {booking_id}: arrival date is in the past!"
+                flash(msg, "warning")
                 return False
 
         booking["Status"] = to_status
@@ -199,14 +222,14 @@ class Bookings:
             if isinstance(booking.get("booking_type"), BookingType):
                 booking["booking_type"] = booking["booking_type"].name  # Or .label if you prefer
 
-        with open(self.json_path, 'w') as f:
+        with open(self.json_path, 'w', encoding="utf-8") as f:
             #self.logger.info(f"Saving bookings data to file")
             json.dump(self.data, f, indent=2)
 
 
     def _load(self):
         if self.json_path.exists():
-            with open(self.json_path, 'r') as f:
+            with open(self.json_path, 'r', encoding="utf-8") as f:
                 self.data = json.load(f)
 
                 # Deseralise BookingType string back to ENUM
@@ -215,7 +238,7 @@ class Bookings:
                     try:
                         booking["booking_type"] = BookingType[bt_raw]
                     except (KeyError, TypeError):
-                        self.logger.warning(f"Unknown or missing booking_type: {bt_raw}")
+                        self.logger.warning("Unknown or missing booking_type: %s", bt_raw)
 
                 self._auto_update_statuses()
 
@@ -252,15 +275,20 @@ class Bookings:
             if isinstance(booking, dict) and booking.get("original_sheet_md5") == target_md5:
                 return booking_id, booking
 
-        self.logger.warning(f"No booking found with MD5: {target_md5}")
+        self.logger.warning("No booking found with MD5: %s", target_md5)
         return None, None
 
 
+    def add_new_data(self, sheet_bookings, booking_type):
+        """Function to load a sheet of data in dict format into our booking structure
 
+        Args:
+            sheet_bookings (list): list of dict from sheets
+            booking_type (class BookingType ENUM): What the booking type is
 
-    #z
-    ## Function to load a sheet of data in dict format into our booking structure
-    def AddNewData(self, sheet_bookings, booking_type):
+        Returns:
+            int: number of bookings added
+        """
 
         bookings_added = 0
 
@@ -275,7 +303,7 @@ class Bookings:
                 #
                 ## Create MD5 of sheet line item so we can track if its new or seen before
                 new_booking_md5 = self._md5_of_dict(sb)
-                booking_id, booking = self._find_booking_by_md5(new_booking_md5)
+                booking = self._find_booking_by_md5(new_booking_md5)
 
                 if not booking:
 
@@ -286,7 +314,7 @@ class Bookings:
                     end_dt = start_dt.replace(hour=dep_time.hour, minute=dep_time.minute, second=0)
 
                     existing_ids = list(self.data["bookings"].keys())
-                    new_booking_id = generate_next_booking_id(existing_ids, booking_type, start_dt.year)
+                    new_booking_id = gen_next_booking_id(existing_ids, booking_type, start_dt.year)
 
                     new_booking = {
                         new_booking_id: {

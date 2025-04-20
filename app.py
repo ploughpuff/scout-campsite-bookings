@@ -30,25 +30,25 @@ sheet_bookings = sheets.Get()
 gc = GoogleCalendar(config.SERVICE_ACCOUNT_FILE, config.CALENDAR_ID)
 
 bookings = Bookings(calendar=gc)
-bookings.AddNewData(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
+bookings.add_new_data(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 
 
 @app.route('/')
 @app.route('/bookings')
 def all_bookings():
     """Render the main bookings table page."""
-    return render_template('all_bookings.html', bookings=bookings.Get(), age=bookings.Age())
+    return render_template('all_bookings.html', bookings=bookings.get_booking(), age=bookings.age())
 
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
     """Render the booking detail page for a specific booking ID."""
-    booking = bookings.Get(booking_id)
+    booking = bookings.get_booking(booking_id)
 
     if not booking:
         flash("Booking not found", "danger")
         return redirect(url_for("all_bookings"))
 
-    transitions = bookings.GetStates()["transitions"]
+    transitions = bookings.get_states()["transitions"]
     current_status = booking["Status"]
 
     return render_template(
@@ -84,7 +84,7 @@ def modify_fields(booking_id):
 @app.route("/pull")
 def pull_now():
     """Pull new data from sheets and add to bookings."""
-    added = bookings.AddNewData(sheets.Get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
+    added = bookings.add_new_data(sheets.get(pull_new=True), BookingType.DISTRICT_DAY_VISIT)
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
