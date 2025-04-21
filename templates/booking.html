@@ -61,11 +61,11 @@
             <div class="col-md-6">
               <p>
                 <strong>Status:</strong>
-                <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
-                {% if booking.Status == 'Pending' %}
-                  <p>Question: {{ booking.pend_question }}</p>
-                {% endif %}
               </p>
+              <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
+              {% if booking.Status == 'Pending' %}
+                <p>Question: {{ booking.pend_question }}</p>
+              {% endif %}
 
               <p>
                 <strong>Arriving:</strong>
