@@ -310,7 +310,6 @@ class Bookings:
             self.data = {"timestamp": now_uk(), "bookings": {}}
 
     def _auto_update_statuses(self):
-        now = datetime.now()
 
         for _, booking in self.data.get("bookings", {}).items():
             status = booking.get("Status")
@@ -323,7 +322,7 @@ class Bookings:
 
             #
             ## Move confirmed bookings to completed/invoice once departure dates has passed
-            if status == "Confirmed" and departing < now:
+            if status == "Confirmed" and departing < now_uk():
                 new_status = "Completed" if invoice else "Invoice"
                 self._add_to_notes(
                     booking, f"Auto Status Change: [{status}] > [{new_status}]"
@@ -331,7 +330,7 @@ class Bookings:
                 booking["Status"] = new_status
                 self._save()
 
-            elif status == "Completed" and archive_date < now:
+            elif status == "Completed" and archive_date < now_uk():
                 new_status = "Archived"
                 self._add_to_notes(
                     booking, f"Auto Status Change: [{status}] > [{new_status}]"

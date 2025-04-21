@@ -5,7 +5,7 @@ booking_types.py - Contains the class BookingType.
 
 import re
 from enum import Enum
-from datetime import datetime
+from utils import now_uk
 
 
 class BookingType(Enum):
@@ -29,7 +29,7 @@ def gen_next_booking_id(existing_ids, booking_type: BookingType, year=None):
     Ensures the generated ID does not already exist in existing_ids.
     """
     if not year:
-        year = datetime.now().year
+        year = now_uk().year
 
     prefix = booking_type.prefix
     pattern = rf"{prefix}-{year}-(\d+)"

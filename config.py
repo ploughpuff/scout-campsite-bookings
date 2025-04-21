@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 CACHE_DIR = os.path.join(BASE_DIR, "cache")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 DATA_DIR = os.path.join(BASE_DIR, "data")
