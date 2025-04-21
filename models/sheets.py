@@ -15,8 +15,8 @@ from utils import now_uk, datetime_to_iso_uk, normalize_key
 from config import (
     CACHE_DIR,
     SERVICE_ACCOUNT_FILE,
-    SPREADSHEET_ID,
-    SPREADSHEET_IMPORT_RANGE,
+    GOOGLE_SPREADSHEET_ID,
+    GOOGLE_SPREADSHEET_IMPORT_RANGE,
 )
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -32,7 +32,7 @@ class Sheets:
         self._load()
 
     def get_sheet_data(self, pull_new=False):
-        """Read sheet data from Google.
+        """Read sheet data from Google and return dict of normalised keys with values.
 
         Args:
             pull_new (bool, optional): Force a re-read, not return file cache. Defaults to False.
@@ -53,7 +53,7 @@ class Sheets:
             new_data = self._ti_create_test_data(count=2)
 
             #
-            # w Normalise the column headers to snake-safe keys to avoid problems
+            # Normalise the column headers to snake-safe keys to avoid problems
             # in Python and Jinja templates later on
             normalized_sheet_data = [
                 {normalize_key(k): v for k, v in rec.items()} for rec in new_data
@@ -109,7 +109,10 @@ class Sheets:
 
         result = (
             sheet.values()
-            .get(spreadsheetId=SPREADSHEET_ID, range=SPREADSHEET_IMPORT_RANGE)
+            .get(
+                spreadsheetId=GOOGLE_SPREADSHEET_ID,
+                range=GOOGLE_SPREADSHEET_IMPORT_RANGE,
+            )
             .execute()
         )
 
