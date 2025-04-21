@@ -143,21 +143,47 @@ def normalize_key(key: str) -> str:
 
 
 def write_checksum(json_path):
+    """Create and write a checksum to file.
+
+    Args:
+        json_path (str): Path to JSON file to checksum.
+    """
     content = json_path.read_text(encoding="utf-8")
     digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
     json_path.with_suffix(".sha256").write_text(digest, encoding="utf-8")
 
 
 def verify_checksum(json_path):
+    """Compare checksum to real file
+
+    Args:
+        json_path (str): Path to JSON file.
+
+    Returns:
+        Boolean: True if file checksum matches value stored in checksum file, else False.
+    """
     try:
         content = json_path.read_text(encoding="utf-8")
         stored = json_path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
         return hashlib.sha256(content.encode("utf-8")).hexdigest() == stored
-    except Exception:
+    except (TypeError, ValueError) as e:
+        logger = logging.getLogger("app_logger")
+        logger.warning(
+            "Problem creating digest for comparison against stored [%s] [%s]: %s",
+            json_path,
+            stored,
+            e,
+        )
         return False
 
 
 def backup_with_rotation(file_path, max_backups=5):
+    """Backup booking JSON file and purge old backups.
+
+    Args:
+        file_path (str): Path to booking JSON file
+        max_backups (int, optional): Max backups.  See config. Defaults to 5.
+    """
     if not file_path.exists():
         return
 
@@ -176,6 +202,12 @@ def backup_with_rotation(file_path, max_backups=5):
 
 
 def atomic_write_json(data, target_path):
+    """Atomic save to avoid half-saved and corrupt files.
+
+    Args:
+        data (list): Seralised booking data
+        target_path (str): Path to save JSON dump
+    """
     with tempfile.NamedTemporaryFile(
         "w", dir=target_path.parent, delete=False, encoding="utf-8"
     ) as tmp:
