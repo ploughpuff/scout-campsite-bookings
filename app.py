@@ -7,6 +7,7 @@ Handles routing, app initialization, and integrates with the Bookings class.
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, flash
+from werkzeug.exceptions import HTTPException
 from markupsafe import Markup
 
 from models.bookings import Bookings
@@ -16,10 +17,10 @@ from models.sheets import Sheets
 from models.booking_types import BookingType
 
 from utils import now_uk
-from config import SERVICE_ACCOUNT_FILE, CALENDAR_ID, UK_TZ
+from config import TEMPLATE_DIR, SERVICE_ACCOUNT_FILE, CALENDAR_ID, UK_TZ
 
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = "dev-key"
 
 logger = setup_logger()
@@ -99,10 +100,31 @@ def pull_now():
     return redirect(url_for("all_bookings"))
 
 
+@app.errorhandler(404)
+def page_not_found(e):
+    """
+    Handle 404 Not Found errors by logging the event and rendering
+    a custom 404 error page.
+
+    Args:
+        e (HTTPException): The exception raised for the 404 error.
+
+    Returns:
+        Response: A rendered 404.html template with HTTP 404 status code.
+    """
+    app.logger.warning("404 error: %s", e)
+    return render_template("404.html"), 404
+
+
 @app.errorhandler(Exception)
 def handle_exception(e):
-    """Trap all exception so they can be recorded in the app log."""
-    logger.exception("Unhandled exception: %s: %s", type(e).__name__, e)
+    """Catch all exceptions and log them. Render 500 for non-HTTP errors."""
+
+    # Let Flask handle its own HTTP errors (like 404, 403, etc.)
+    if isinstance(e, HTTPException):
+        return e
+
+    logger.exception("Unhandled exception: [%s]: %s", type(e).__name__, str(e))
     return render_template("500.html"), 500
 
 
@@ -147,7 +169,7 @@ def pretty_date(value):
     month = dt.strftime("%B")
     time_part = dt.strftime("%H:%M")
     year = dt.year
-    current_year = datetime.now().year
+    current_year = now_uk().year
 
     date_str = f"{day}{suffix} {month}"
     if year != current_year:
