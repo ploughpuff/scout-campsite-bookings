@@ -30,6 +30,7 @@
       <div class="card shadow-sm rounded-4">
         <div class="card-header bg-primary text-white">
           <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
+        </div>
       </div>
 
       <div class="card-body">
@@ -98,24 +99,24 @@
         <div class="row">
           <div class="col-md-6">
             <p>
-              <strong>Email:</strong> {{ booking.original_sheet_data.Email address }}
+              <strong>Email:</strong> {{ booking.original_sheet_data.email_address }}
             </p>
             <p>
-              <strong>Mobile:</strong> {{ booking.original_sheet_data.Mobile Number for Lead Person }}
+              <strong>Mobile:</strong> {{ booking.original_sheet_data.mobile_number_for_lead_person }}
             </p>
             <p>
-              <strong>Scout Group:</strong> {{ booking.original_sheet_data.Chelmsford Scout Group }}
+              <strong>Scout Group:</strong> {{ booking.original_sheet_data.chelmsford_scout_group }}
             </p>
           </div>
           <div class="col-md-6">
             <p>
-              <strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data.Arrival Date / Time }}
+              <strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data.arrival_date_time }}
             </p>
             <p>
-              <strong>Departure Time:</strong> {{ booking.original_sheet_data.Departure Time }}
+              <strong>Departure Time:</strong> {{ booking.original_sheet_data.departure_time }}
             </p>
             <p>
-              <strong>Campsite:</strong> {{ booking.original_sheet_data.Campsite }}
+              <strong>Campsite:</strong> {{ booking.original_sheet_data.campsite }}
             </p>
           </div>
         </div>

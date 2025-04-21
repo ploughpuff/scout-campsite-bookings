@@ -29,7 +29,7 @@ def send_email_notification(booking_id, booking):
         Boolean: True on success, otherwise False.
     """
 
-    recipient = booking.get("original_sheet_data", {}).get("Email address")
+    recipient = booking.get("original_sheet_data", {}).get("email_address")
 
     if not recipient:
         logger.warning(

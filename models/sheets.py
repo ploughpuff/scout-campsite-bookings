@@ -11,7 +11,7 @@ import logging
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-from utils import now_uk, datetime_to_iso_uk
+from utils import now_uk, datetime_to_iso_uk, normalize_key
 from config import (
     CACHE_DIR,
     SERVICE_ACCOUNT_FILE,
@@ -53,11 +53,18 @@ class Sheets:
             new_data = self._ti_create_test_data(count=2)
 
             #
+            # w Normalise the column headers to snake-safe keys to avoid problems
+            # in Python and Jinja templates later on
+            normalized_sheet_data = [
+                {normalize_key(k): v for k, v in rec.items()} for rec in new_data
+            ]
+
+            #
             ## For testing append new data, not replace it
             if self.data.get("sheet_data"):
-                sheet_data = self.data["sheet_data"] + new_data
+                sheet_data = self.data["sheet_data"] + normalized_sheet_data
             else:
-                sheet_data = new_data
+                sheet_data = normalized_sheet_data
 
             self.data = {
                 "timestamp": datetime_to_iso_uk(now_uk()),

@@ -2,6 +2,7 @@
 utils.py - Utility functions for use in Scout Campsite Booking.
 """
 
+import re
 import logging
 from datetime import datetime
 from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
@@ -117,3 +118,20 @@ def get_pretty_datetime_str(value=None, include_seconds=False):
         logger = logging.getLogger("app_logger")
         logger.warning("Failed to format epoch timestamp: %s", e)
         return value
+
+
+def normalize_key(key: str) -> str:
+    """
+    Convert a string like 'Email address' or 'Arrival Date / Time'
+    into a safe, lowercase, underscore-separated key for Python/Jinja.
+
+    Args:
+        key (str): The original key string.
+
+    Returns:
+        str: Normalized key in snake_case format.
+    """
+    key = key.strip()
+    key = re.sub(r"[^\w\s]", "", key)  # Remove punctuation
+    key = re.sub(r"\s+", "_", key)  # Replace spaces with underscores
+    return key.lower()
