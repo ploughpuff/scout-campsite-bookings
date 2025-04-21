@@ -11,6 +11,7 @@ from googleapiclient.errors import HttpError
 
 from utils import now_uk, datetime_to_iso_uk, normalize_key
 from config import SHEETS_TO_PULL, SERVICE_ACCOUNT_FILE
+from models.booking_types import parse_booking_type
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
@@ -43,15 +44,19 @@ class Sheets:
                 )
                 continue
 
-            sheet_id = sheet_cfg.get("id")
-            sheet_range = sheet_cfg.get("range")
-            booking_type = sheet_cfg.get("type")
-
-            if not sheet_id or not sheet_range or not booking_type:
+            if (
+                not sheet_cfg.get("id")
+                or not sheet_cfg.get("range")
+                or not sheet_cfg.get("type")
+            ):
                 self.logger.warning(
                     "Skipping sheet due to missing ID or range: %s", sheet_cfg
                 )
                 continue
+
+            sheet_id = sheet_cfg.get("id")
+            sheet_range = sheet_cfg.get("range")
+            booking_type = parse_booking_type(sheet_cfg.get("type"))
 
             new_data = self._fetch_google_sheets_data(sheet_id, sheet_range)
 
