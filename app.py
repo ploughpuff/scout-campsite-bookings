@@ -13,7 +13,7 @@ from markupsafe import Markup
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
-from models.sheets import Sheets
+from models.sheets import get_sheet_data
 
 
 from utils import now_uk
@@ -25,8 +25,6 @@ app.secret_key = "dev-key"
 
 logger = setup_logger()
 logger.info("Starting")
-
-sheets = Sheets()
 
 gc = GoogleCalendar(SERVICE_ACCOUNT_FILE, CALENDAR_ID)
 bookings = Bookings(calendar=gc)
@@ -90,7 +88,7 @@ def modify_fields(booking_id):
 @app.route("/pull")
 def pull_now():
     """Pull new data from sheets and add to bookings."""
-    added = bookings.add_new_data(sheets.get_sheet_data())
+    added = bookings.add_new_data(get_sheet_data())
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
