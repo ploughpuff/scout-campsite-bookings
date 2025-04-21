@@ -7,12 +7,11 @@ import json
 from pathlib import Path
 import random
 import logging
-import time
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-
+from utils import now_uk, datetime_to_iso_uk
 from config import (
     CACHE_DIR,
     SERVICE_ACCOUNT_FILE,
@@ -60,7 +59,10 @@ class Sheets:
             else:
                 sheet_data = new_data
 
-            self.data = {"timestamp": int(time.time()), "sheet_data": sheet_data}
+            self.data = {
+                "timestamp": datetime_to_iso_uk(now_uk()),
+                "sheet_data": sheet_data,
+            }
 
             self._save()
         else:

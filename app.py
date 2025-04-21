@@ -4,7 +4,6 @@ app.py - Main Flask application entry point for Scout Campsite Booking.
 Handles routing, app initialization, and integrates with the Bookings class.
 """
 
-import time
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, flash
@@ -16,7 +15,8 @@ from models.logger import setup_logger
 from models.sheets import Sheets
 from models.booking_types import BookingType
 
-import config
+from utils import now_uk
+from config import SERVICE_ACCOUNT_FILE, CALENDAR_ID, UK_TZ
 
 
 app = Flask(__name__)
@@ -28,7 +28,7 @@ logger.info("Starting")
 sheets = Sheets()
 sheet_bookings = sheets.get_sheet_data()
 
-gc = GoogleCalendar(config.SERVICE_ACCOUNT_FILE, config.CALENDAR_ID)
+gc = GoogleCalendar(SERVICE_ACCOUNT_FILE, CALENDAR_ID)
 
 bookings = Bookings(calendar=gc)
 bookings.add_new_data(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
@@ -60,7 +60,7 @@ def booking_detail(booking_id):
         booking_id=booking_id,
         booking=booking,
         valid_transitions=transitions.get(current_status, []),
-        time_now=int(time.time()),
+        time_now=now_uk(),
     )
 
 
@@ -77,11 +77,11 @@ def modify_fields(booking_id):
     """Handle modifying fields from details page."""
     updated_fields = {
         "Number": request.form.get("Number"),
-        "Arriving": int(
-            datetime.fromisoformat(request.form.get("Arriving")).timestamp()
+        "Arriving": datetime.fromisoformat(request.form.get("Arriving")).replace(
+            tzinfo=UK_TZ
         ),
-        "Departing": int(
-            datetime.fromisoformat(request.form.get("Departing")).timestamp()
+        "Departing": datetime.fromisoformat(request.form.get("Departing")).replace(
+            tzinfo=UK_TZ
         ),
     }
 
@@ -104,6 +104,30 @@ def handle_exception(e):
     """Trap all exception so they can be recorded in the app log."""
     logger.exception("Unhandled exception: %s: %s", type(e).__name__, e)
     return render_template("500.html"), 500
+
+
+@app.template_filter("datetime_local_value")
+def datetime_local_value(value):
+    """
+    Format a datetime or ISO 8601 string into a format suitable for
+    <input type="datetime-local"> HTML fields.
+
+    Returns 'YYYY-MM-DDTHH:MM' (no seconds, no timezone).
+
+    Args:
+        value (datetime | str): The value to format.
+
+    Returns:
+        str: A valid datetime-local string or an empty string on failure.
+    """
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%dT%H:%M")
+
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt.strftime("%Y-%m-%dT%H:%M")
+    except (ValueError, TypeError):
+        return ""
 
 
 @app.template_filter("pretty_date")
@@ -130,19 +154,6 @@ def pretty_date(value):
         date_str += f" {year}"
 
     return Markup(f"{date_str}<br>{time_part}")
-
-
-@app.template_filter("html_datetime")
-def html_datetime(epoch_time):
-    """Convert an epoch timestamp to HTML datetime-local format (YYYY-MM-DDTHH:MM)."""
-    if not epoch_time:
-        return ""
-
-    try:
-        dt = datetime.fromtimestamp(int(epoch_time))
-        return dt.strftime("%Y-%m-%dT%H:%M")
-    except (ValueError, TypeError):
-        return ""
 
 
 if __name__ == "__main__":

@@ -2,19 +2,24 @@
 Bookings.py - Manage the bookings data file and provide access functions.
 """
 
-import time
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import flash
 
-from utils import secs_to_hr, get_pretty_datetime_str
-from config import CACHE_DIR
+from utils import (
+    now_uk,
+    secs_to_hr,
+    get_pretty_datetime_str,
+    parse_iso_datetime,
+    datetime_to_iso_uk,
+)
+from config import CACHE_DIR, ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
 from models.mailer import send_email_notification
-from models.booking_types import BookingType, gen_next_booking_id
+from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
 
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
@@ -59,7 +64,7 @@ class Bookings:
             str: Either 'NEVER' if not data exists, or string like '1d 5h 35m 17s'
         """
         if "timestamp" in self.data:
-            return secs_to_hr(int(time.time()) - self.data["timestamp"])
+            return secs_to_hr((now_uk() - self.data["timestamp"]).total_seconds())
 
         return "NEVER!"
 
@@ -128,7 +133,7 @@ class Bookings:
                 flash(msg, "danger")
                 return False
 
-            field = "Cancel Reason" if new_status == "Cancelled" else "Pend Question"
+            field = "Cancel Reason" if new_status == "Cancelled" else "pend_question"
             self._add_to_notes(booking, f"{field}: {description}")
             booking[field] = description
 
@@ -232,7 +237,7 @@ class Bookings:
         ## is still in the future.  We don't want to resurrest past bookings
         if from_status == "Cancelled" and to_status == "New":
             arriving = booking.get("Arriving")
-            if arriving is not None and arriving < int(time.time()):
+            if arriving is not None and arriving < now_uk():
                 msg = f"Unable to resurrect booking {booking_id}: arrival date is in the past!"
                 flash(msg, "warning")
                 return False
@@ -252,28 +257,49 @@ class Bookings:
         self._save()
 
     def _save(self):
-        # Searilise the BookingType ENUM to string before saving
-        for booking in self.data.get("bookings", {}).values():
-            if isinstance(booking.get("booking_type"), BookingType):
-                booking["booking_type"] = booking[
-                    "booking_type"
-                ].name  # Or .label if you prefer
+        """Searilise fields before storing in JSON format."""
+
+        # Make a shallow copy to avoid mutating in-memory data
+        data_to_save = {
+            "timestamp": datetime_to_iso_uk(self.data.get("timestamp")),
+            "bookings": {},
+        }
+
+        for booking_id, booking in self.data.get("bookings", {}).items():
+            serialized = {}
+            for key, value in booking.items():
+                if isinstance(value, datetime):
+                    serialized[key] = datetime_to_iso_uk(value)
+                elif isinstance(value, BookingType):
+                    serialized[key] = value.name
+                else:
+                    serialized[key] = value
+
+            data_to_save["bookings"][booking_id] = serialized
 
         with open(self.json_path, "w", encoding="utf-8") as f:
-            # self.logger.info(f"Saving bookings data to file")
-            json.dump(self.data, f, indent=2)
+            json.dump(data_to_save, f, indent=2)
 
     def _load(self):
         if self.json_path.exists():
             with open(self.json_path, "r", encoding="utf-8") as f:
                 self.data = json.load(f)
 
-                # Deseralise BookingType string back to ENUM
+                # Deseralise timestamp
+                self.data["timestamp"] = parse_iso_datetime(self.data.get("timestamp"))
+
                 for booking in self.data.get("bookings", {}).values():
+                    for key, value in booking.items():
+                        # Deserialize datetime strings
+                        booking[key] = parse_iso_datetime(value)
+
+                    # Deserialize BookingType enum
                     bt_raw = booking.get("booking_type")
-                    try:
-                        booking["booking_type"] = BookingType[bt_raw]
-                    except (KeyError, TypeError):
+                    parsed_bt = parse_booking_type(bt_raw)
+
+                    if parsed_bt:
+                        booking["booking_type"] = parsed_bt
+                    else:
                         self.logger.warning(
                             "Unknown or missing booking_type: %s", bt_raw
                         )
@@ -281,18 +307,32 @@ class Bookings:
                 self._auto_update_statuses()
 
         else:
-            self.data = {"timestamp": int(time.time()), "bookings": {}}
+            self.data = {"timestamp": now_uk(), "bookings": {}}
 
     def _auto_update_statuses(self):
-        now = int(time.time())
+        now = datetime.now()
 
         for _, booking in self.data.get("bookings", {}).items():
             status = booking.get("Status")
             departing = booking.get("Departing")
             invoice = booking.get("invoice")
 
-            if status == "Confirmed" and departing and departing < now:
+            archive_date = departing + timedelta(
+                days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+            )
+
+            #
+            ## Move confirmed bookings to completed/invoice once departure dates has passed
+            if status == "Confirmed" and departing < now:
                 new_status = "Completed" if invoice else "Invoice"
+                self._add_to_notes(
+                    booking, f"Auto Status Change: [{status}] > [{new_status}]"
+                )
+                booking["Status"] = new_status
+                self._save()
+
+            elif status == "Completed" and archive_date < now:
+                new_status = "Archived"
                 self._add_to_notes(
                     booking, f"Auto Status Change: [{status}] > [{new_status}]"
                 )
@@ -306,15 +346,14 @@ class Bookings:
         return hashlib.md5(encoded).hexdigest()
 
     def _find_booking_by_md5(self, target_md5):
-        for booking_id, booking in self.data["bookings"].items():
+        for booking in self.data.get("bookings", {}).values():
             if (
                 isinstance(booking, dict)
                 and booking.get("original_sheet_md5") == target_md5
             ):
-                return booking_id, booking
+                return True
 
-        self.logger.warning("No booking found with MD5: %s", target_md5)
-        return None, None
+        return False
 
     def add_new_data(self, sheet_bookings, booking_type):
         """Function to load a sheet of data in dict format into our booking structure
@@ -331,7 +370,8 @@ class Bookings:
 
         if "timestamp" in sheet_bookings and sheet_bookings["timestamp"]:
 
-            self.data["timestamp"] = sheet_bookings["timestamp"]
+            # Sheets records timestamp in ISO format.  Convert to dt object
+            self.data["timestamp"] = parse_iso_datetime(sheet_bookings["timestamp"])
 
             #
             ## Need to normalise the new data from Sheet to our structure
@@ -340,9 +380,8 @@ class Bookings:
                 #
                 ## Create MD5 of sheet line item so we can track if its new or seen before
                 new_booking_md5 = self._md5_of_dict(sb)
-                booking = self._find_booking_by_md5(new_booking_md5)
 
-                if not booking:
+                if not self._find_booking_by_md5(new_booking_md5):
 
                     start_dt = datetime.strptime(
                         sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S"
@@ -368,8 +407,8 @@ class Bookings:
                             "booking_type": booking_type.name,
                             "Group": sb["Chelmsford Scout Group"],
                             "Leader": sb["Name of Lead Person"],
-                            "Arriving": int(start_dt.timestamp()),
-                            "Departing": int(end_dt.timestamp()),
+                            "Arriving": start_dt,
+                            "Departing": end_dt,
                             "Number": sb["Number of people"],
                             "Status": "New",
                             "invoice": False,

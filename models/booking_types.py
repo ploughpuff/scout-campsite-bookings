@@ -53,3 +53,20 @@ def get_booking_type_choices():
     Useful for dropdowns or form options.
     """
     return [(bt.name, bt.label) for bt in BookingType]
+
+
+def parse_booking_type(value) -> BookingType | None:
+    """
+    Convert a string to a BookingType enum if valid.
+    Returns None if invalid or missing.
+
+    Args:
+        value (str): The string to convert.
+
+    Returns:
+        BookingType or None
+    """
+    try:
+        return BookingType[value]
+    except (KeyError, TypeError):
+        return None

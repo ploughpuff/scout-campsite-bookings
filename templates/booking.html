@@ -1,217 +1,220 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Booking Details</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-</head>
-<body>
-  <div class="container py-5">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    <div class="mb-4">
-    {% for category, message in messages %}
-      <div class="alert alert-{{ category }} alert-dismissible fade show w-100" role="alert" style="border-radius: 0;">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-      </div>
-    {% endfor %}
-    </div>
-  {% endif %}
-  {% endwith %}
-
-    <h1 class="display-4 text-center mb-4">📅 Riffhams Bookings Manager</h1>
-    <div class="mb-4 d-flex justify-content-between align-items-center">
-      <h2 class="mb-0">Booking Details</h2>
-      <a href="{{ url_for('all_bookings') }}" class="btn btn-outline-secondary">← Back to All Bookings</a>
-    </div>
-
-    <div class="card shadow-sm rounded-4">
-      <div class="card-header bg-primary text-white">
-      <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
-    </div>
-
-    <div class="card-body">
-      
-      <form method="POST" action="{{ url_for('modify_fields', booking_id=booking_id) }}">
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <p><strong>Group:</strong> {{ booking.Group }}</p>
-            <p><strong>Leader:</strong> {{ booking.Leader }}</p>
-      
-            <p><strong>Number of People:</strong></p>
-            {% if booking.Status in ["New", "Pending", "Confirmed"] %}
-              <input type="number" name="Number" class="form-control mb-2" value="{{ booking.Number }}" min="1" required>
-            {% else %}
-              <p>{{ booking.Number }}</p>
-            {% endif %}
-      
-            <p><strong>Booking Type:</strong> {{ booking.booking_type }}</p>
-          </div>
-      
-          <div class="col-md-6">
-            <p><strong>Status:</strong>
-              <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
-              {% if booking.Status == "Pending" %}
-              <p>Question: {{ booking["Pend Question"] }}</p>
-              {% endif %}
-            </p>
-      
-            <p><strong>Arriving:</strong></p>
-            {% if booking.Status in ["New", "Pending", "Confirmed"] %}
-              <input type="datetime-local" name="Arriving" class="form-control mb-2"
-                     value="{{ booking.Arriving | html_datetime }}">
-            {% else %}
-              <p>{{ booking.Arriving | pretty_date }}</p>
-            {% endif %}
-      
-            <p><strong>Departing:</strong></p>
-            {% if booking.Status in ["New", "Pending", "Confirmed"] %}
-              <input type="datetime-local" name="Departing" class="form-control mb-2"
-                     value="{{ booking.Departing | html_datetime }}">
-            {% else %}
-              <p>{{ booking.Departing | pretty_date }}</p>
-            {% endif %}
-          </div>
-        </div>
-      
-        {% if booking.Status in ["New", "Pending", "Confirmed"] %}
-          <div class="text-end">
-            <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Booking Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="container py-5">
+      {% with messages=get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-4">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show w-100" role="alert" style="border-radius: 0;">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
           </div>
         {% endif %}
-      </form>
-      
-      
-      <hr>
-      <h6 class="text-muted">Original Submission</h6>
-      <div class="row">
-        <div class="col-md-6">
-          <p><strong>Email:</strong> {{ booking.original_sheet_data["Email address"] }}</p>
-          <p><strong>Mobile:</strong> {{ booking.original_sheet_data["Mobile Number for Lead Person"] }}</p>
-          <p><strong>Scout Group:</strong> {{ booking.original_sheet_data["Chelmsford Scout Group"] }}</p>
-        </div>
-        <div class="col-md-6">
-          <p><strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data["Arrival Date / Time"] }}</p>
-          <p><strong>Departure Time:</strong> {{ booking.original_sheet_data["Departure Time"] }}</p>
-          <p><strong>Campsite:</strong> {{ booking.original_sheet_data["Campsite"] }}</p>
-        </div>
+      {% endwith %}
+
+      <h1 class="display-4 text-center mb-4">📅 Riffhams Bookings Manager</h1>
+      <div class="mb-4 d-flex justify-content-between align-items-center">
+        <h2 class="mb-0">Booking Details</h2>
+        <a href="{{ url_for('all_bookings') }}" class="btn btn-outline-secondary">← Back to All Bookings</a>
       </div>
 
-      <div class="text-end mt-4">
-        {% for next_status in valid_transitions %}
-      
-          {# Cancelled → New only if booking in the future #}
-          {% if next_status == "New" %}
-            {% if booking.Arriving > time_now %}
-              <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=booking_id) }}" class="d-inline">
-                <button type="submit" class="btn btn-warning">
-                  🔄 Resurrect Booking
-                </button>
-              </form>
-            {% else %}
-              <button class="btn btn-danger" disabled>
-                ❌ Past Bookings Cannot Be Resurrected
-              </button>
-            {% endif %}
-      
-          {# Invoice → Completed #}
-          {% elif next_status == "Completed" and booking.Status == "Invoice" %}
-            <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=booking_id) }}" class="d-inline">
-              <button type="submit" class="btn btn-success">
-                ✔️ Set Complete Once Xero Invoice Raised
-              </button>
-            </form>
-            
-          {# New → Confirmed #}
-          {% elif next_status == "Confirmed" %}
-            <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=booking_id) }}" class="d-inline">
-              <button type="submit" class="btn btn-success">
-                ✔️ Confirm Booking
-              </button>
-            </form>
-          
-          {# New → Pending #}
-          {% elif next_status == "Pending" %}
-          <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#pendModal">
-            ❓ Send query about booking (and pend)
-          </button>
+      <div class="card shadow-sm rounded-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Booking ID: {{ booking_id }}</h5>
+      </div>
 
-          {# Any → Cancelled (via modal) #}
-          {% elif next_status == "Cancelled" %}
-            <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
-            ❌ Cancel Booking
-          </button>
-      
-          {# Fallback: Generic transitions #}
-          {% else %}
-            <form method="POST" action="{{ url_for('change_status', new_status=next_status|lower, booking_id=booking_id) }}" class="d-inline">
-              <button type="submit" class="btn btn-outline-primary">
-                ▶ {{ next_status }}
-              </button>
-            </form>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('modify_fields', booking_id=booking_id) }}">
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <p>
+                <strong>Group:</strong> {{ booking.Group }}
+              </p>
+              <p>
+                <strong>Leader:</strong> {{ booking.Leader }}
+              </p>
+
+              <p>
+                <strong>Number of People:</strong>
+              </p>
+              {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
+                <input type="number" name="Number" class="form-control mb-2" value="{{ booking.Number }}" min="1" required />
+              {% else %}
+                <p>{{ booking.Number }}</p>
+              {% endif %}
+
+              <p>
+                <strong>Booking Type:</strong> {{ booking.booking_type }}
+              </p>
+            </div>
+
+            <div class="col-md-6">
+              <p>
+                <strong>Status:</strong>
+                <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
+                {% if booking.Status == 'Pending' %}
+                  <p>Question: {{ booking.pend_question }}</p>
+                {% endif %}
+              </p>
+
+              <p>
+                <strong>Arriving:</strong>
+              </p>
+              {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
+                <input type="datetime-local" name="Arriving" class="form-control mb-2" value="{{ booking.Arriving|datetime_local_value }}" />
+              {% else %}
+                <p>{{ booking.Arriving|pretty_date }}</p>
+              {% endif %}
+
+              <p>
+                <strong>Departing:</strong>
+              </p>
+              {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
+                <input type="datetime-local" name="Departing" class="form-control mb-2" value="{{ booking.Departing|datetime_local_value }}" />
+              {% else %}
+                <p>{{ booking.Departing|pretty_date }}</p>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
+            <div class="text-end">
+              <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+            </div>
           {% endif %}
-      
-        {% endfor %}
-      </div>
+        </form>
 
-      <hr>
-      <h6 class="text-muted">Notes</h6>
-      <div class="mb-3">
-        <pre class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ booking.Notes }}</pre>
-      </div>
-      
-    </div>
-  </div>
-
-  <!-- Pend Booking Modal -->
-  <div class="modal fade" id="pendModal" tabindex="-1" aria-labelledby="pendModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <form method="POST" action="{{ url_for('change_status', new_status='Pending', booking_id=booking_id) }}">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="pendModalLabel">Query and Pend Booking</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <hr />
+        <h6 class="text-muted">Original Submission</h6>
+        <div class="row">
+          <div class="col-md-6">
+            <p>
+              <strong>Email:</strong> {{ booking.original_sheet_data.Email address }}
+            </p>
+            <p>
+              <strong>Mobile:</strong> {{ booking.original_sheet_data.Mobile Number for Lead Person }}
+            </p>
+            <p>
+              <strong>Scout Group:</strong> {{ booking.original_sheet_data.Chelmsford Scout Group }}
+            </p>
           </div>
-          <div class="modal-body">
-            <label for="pendquestion" class="form-label">Question to requester:</label>
-            <textarea class="form-control" name="description" id="pendquestion" rows="3" required></textarea>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel This Popup</button>
-            <button type="submit" class="btn btn-danger">Submit Query to Booking Requester</button>
+          <div class="col-md-6">
+            <p>
+              <strong>Arrival Date / Time:</strong> {{ booking.original_sheet_data.Arrival Date / Time }}
+            </p>
+            <p>
+              <strong>Departure Time:</strong> {{ booking.original_sheet_data.Departure Time }}
+            </p>
+            <p>
+              <strong>Campsite:</strong> {{ booking.original_sheet_data.Campsite }}
+            </p>
           </div>
         </div>
-      </form>
-    </div>
-  </div>
-  
-  <!-- Cancel Booking Modal -->
-  <div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <form method="POST" action="{{ url_for('change_status', new_status='Cancelled', booking_id=booking_id) }}">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="cancelModalLabel">Cancel Booking</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <label for="cancelReason" class="form-label">Reason for cancellation:</label>
-            <textarea class="form-control" name="description" id="cancelReason" rows="3" required></textarea>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Do Not Cancel Booking</button>
-            <button type="submit" class="btn btn-danger">Cancel Booking</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
 
-  
-  <!-- Bootstrap Bundle with Popper (needed for alerts, modals, etc.) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="{{ url_for('static', filename='scripts.js') }}"></script>
-</body>
+        <div class="text-end mt-4">
+          {% for next_status in valid_transitions %}
+            {# Cancelled → New only if booking in the future #}
+            {% if next_status == 'New' %}
+              {% if booking.Arriving > time_now %}
+                <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=booking_id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-warning">🔄 Resurrect Booking</button>
+                </form>
+              {% else %}
+                <button class="btn btn-danger" disabled>❌ Past Bookings Cannot Be Resurrected</button>
+              {% endif %}
+
+              {# Invoice → Completed #}
+            {% elif next_status == 'Completed' and booking.Status == 'Invoice' %}
+              <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=booking_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-success">✔️ Set Complete Once Xero Invoice Raised</button>
+              </form>
+
+              {# New → Confirmed #}
+            {% elif next_status == 'Confirmed' %}
+              <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=booking_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-success">✔️ Confirm Booking</button>
+              </form>
+
+              {# New → Pending #}
+            {% elif next_status == 'Pending' %}
+              <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#pendModal">❓ Send query about booking (and pend)</button>
+
+              {# Any → Cancelled (via modal) #}
+            {% elif next_status == 'Cancelled' %}
+              <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">❌ Cancel Booking</button>
+
+              {# Fallback: Generic transitions #}
+            {% else %}
+              <form method="POST" action="{{ url_for('change_status', new_status=next_status|lower, booking_id=booking_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-outline-primary">▶ {{ next_status }}</button>
+              </form>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <hr />
+        <h6 class="text-muted">Notes</h6>
+        <div class="mb-3">
+          <pre class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ booking.Notes }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pend Booking Modal -->
+    <div class="modal fade" id="pendModal" tabindex="-1" aria-labelledby="pendModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('change_status', new_status='Pending', booking_id=booking_id) }}">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="pendModalLabel">Query and Pend Booking</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <label for="pendquestion" class="form-label">Question to requester:</label>
+              <textarea class="form-control" name="description" id="pendquestion" rows="3" required></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel This Popup</button>
+              <button type="submit" class="btn btn-danger">Submit Query to Booking Requester</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Cancel Booking Modal -->
+    <div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('change_status', new_status='Cancelled', booking_id=booking_id) }}">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="cancelModalLabel">Cancel Booking</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <label for="cancelReason" class="form-label">Reason for cancellation:</label>
+              <textarea class="form-control" name="description" id="cancelReason" rows="3" required></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Do Not Cancel Booking</button>
+              <button type="submit" class="btn btn-danger">Cancel Booking</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper (needed for alerts, modals, etc.) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+  </body>
 </html>
