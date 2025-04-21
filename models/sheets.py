@@ -49,8 +49,8 @@ class Sheets:
             #
             ## Use Google API to pull sheet data
             ## We have internal and external types of data but just do internal for now
-            ## new_data = self._fetch_google_sheets_data()
-            new_data = self._ti_create_test_data(count=2)
+            new_data = self._fetch_google_sheets_data()
+            # new_data = self._ti_create_test_data(count=2)
 
             #
             # Normalise the column headers to snake-safe keys to avoid problems
