@@ -32,13 +32,13 @@ SHEETS_TO_PULL = [
         "use": False,
         "id": os.getenv("GOOGLE_SPREADSHEET_ID_TEST_DATA"),
         "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_TEST_DATA"),
-        "type": "district_day_visit",
+        "type": "DISTRICT_DAY_VISIT",
     },
     {
         "use": True,
         "id": os.getenv("GOOGLE_SPREADSHEET_ID_REP_TEST_DATA"),
         "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_REP_TEST_DATA"),
-        "type": "district_day_visit",
+        "type": "DISTRICT_DAY_VISIT",
     },
 ]
 
@@ -49,3 +49,6 @@ DATE_FORMAT_WITH_SECONDS = "%Y-%m-%d %H:%M:%S"
 #
 ## Anonymise bookings by removing personnel information once a completed is X days old
 ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS = 90
+
+
+MAX_BACKUPS_TO_KEEP = 50  # Keep 50 recent JSON backups for safety
