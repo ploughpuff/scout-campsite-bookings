@@ -2,22 +2,15 @@
 sheets.py - Handle pull operations to Google sheets.
 """
 
-import json
-
-from pathlib import Path
 import random
 import logging
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from utils import now_uk, datetime_to_iso_uk, normalize_key
-from config import (
-    CACHE_DIR,
-    SERVICE_ACCOUNT_FILE,
-    GOOGLE_SPREADSHEET_ID,
-    GOOGLE_SPREADSHEET_IMPORT_RANGE,
-)
+from config import SHEETS_TO_PULL, SERVICE_ACCOUNT_FILE
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
@@ -27,77 +20,66 @@ class Sheets:
 
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
-        self.json_path = Path(CACHE_DIR, "sheet_cache.json")
-        self.data = {}
-        self._load()
 
-    def get_sheet_data(self, pull_new=False):
-        """Read sheet data from Google and return dict of normalised keys with values.
+    def get_sheet_data(self) -> dict:
+        """
+        Fetch and normalize data from all enabled Google Sheets.
 
-        Args:
-            pull_new (bool, optional): Force a re-read, not return file cache. Defaults to False.
+        Sheets are defined in SHEETS_TO_PULL. Each row's keys are converted
+        to snake_case for safer use in Python and Jinja templates.
 
         Returns:
-            dict: Sheet data in a dictionary.
+            dict: {
+                "timestamp": ISO string of when data was pulled,
+                "sheet_data": List of row dicts with normalized keys
+            }
         """
+        all_data = []
 
-        #
-        ## Force read of sheet data from service provider
-        if pull_new is True:
-            self.logger.info("User forced update of sheet data from provider")
+        for sheet_cfg in SHEETS_TO_PULL:
+            if not sheet_cfg.get("use"):
+                self.logger.info(
+                    "Skipping sheet %s (disabled via 'use' flag).", sheet_cfg.get("id")
+                )
+                continue
 
-            #
-            ## Use Google API to pull sheet data
-            ## We have internal and external types of data but just do internal for now
-            new_data = self._fetch_google_sheets_data()
-            # new_data = self._ti_create_test_data(count=2)
+            sheet_id = sheet_cfg.get("id")
+            sheet_range = sheet_cfg.get("range")
+            type = sheet_cfg.get("type")
 
-            #
-            # Normalise the column headers to snake-safe keys to avoid problems
-            # in Python and Jinja templates later on
+            if not sheet_id or not sheet_range or not type:
+                self.logger.warning(
+                    "Skipping sheet due to missing ID or range: %s", sheet_cfg
+                )
+                continue
+
+            new_data = self._fetch_google_sheets_data(sheet_id, sheet_range)
+
+            # Normalize column headers for each row
             normalized_sheet_data = [
                 {normalize_key(k): v for k, v in rec.items()} for rec in new_data
             ]
 
-            #
-            ## For testing append new data, not replace it
-            if self.data.get("sheet_data"):
-                sheet_data = self.data["sheet_data"] + normalized_sheet_data
-            else:
-                sheet_data = normalized_sheet_data
+            all_data.append(
+                {"type": sheet_cfg.get("type"), "sheet_data": normalized_sheet_data}
+            )
 
-            self.data = {
-                "timestamp": datetime_to_iso_uk(now_uk()),
-                "sheet_data": sheet_data,
-            }
+        return {
+            "timestamp": datetime_to_iso_uk(now_uk()),
+            "data": all_data,
+        }
 
-            self._save()
-        else:
-            self.logger.info("Read sheet data from file cache")
-            self._load()
+    def _fetch_google_sheets_data(self, spreadsheet_id, sheet_range):
+        """
+        Fetch data from Google Sheets API and return as list of dicts.
 
-        return self.data
+        Args:
+            spreadsheet_id (str): The ID of the spreadsheet.
+            sheet_range (str): The A1 notation range to fetch.
 
-    def _save(self):
-        with open(self.json_path, "w", encoding="utf-8") as f:
-            self.logger.info("Saving sheet data to file cache")
-            json.dump(self.data, f, indent=2)
-
-    def _load(self):
-        if self.json_path.exists():
-            with open(self.json_path, "r", encoding="utf-8") as f:
-                self.logger.info("Loading sheet data from file cache")
-                self.data = json.load(f)
-        else:
-            self.data = {}
-
-    def clear_cache(self):
-        """Delete the sheets file cache"""
-        if self.json_path.exists():
-            self.json_path.unlink()
-
-    def _fetch_google_sheets_data(self):
-        """Fetch the data from Google Sheets API."""
+        Returns:
+            list[dict]: List of rows as dictionaries using the first row as headers.
+        """
         credentials = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES
         )
@@ -107,22 +89,28 @@ class Sheets:
         # pylint: disable=no-member
         sheet = service.spreadsheets()
 
-        result = (
-            sheet.values()
-            .get(
-                spreadsheetId=GOOGLE_SPREADSHEET_ID,
-                range=GOOGLE_SPREADSHEET_IMPORT_RANGE,
+        try:
+            result = (
+                sheet.values()
+                .get(spreadsheetId=spreadsheet_id, range=sheet_range)
+                .execute()
             )
-            .execute()
-        )
+        except HttpError as e:
+            self.logger.error("Google Sheets API error: %s", e)
+            return []
+        except (TypeError, ValueError, KeyError) as e:
+            self.logger.warning("Unexpected data format: %s", e)
+            return []
 
         values = result.get("values", [])
 
-        #
-        ## Convert from lists of lists, to list of dict
-        dicts = [dict(zip(values[0], row)) for row in values[1:]]
+        if not values or len(values) < 2:
+            self.logger.warning("No data rows found in spreadsheet.")
+            return []
 
-        return dicts
+        # Convert rows to list of dicts
+        headers = values[0]
+        return [dict(zip(headers, row)) for row in values[1:] if any(row)]
 
     def _ti_create_test_data(self, count=1):
 

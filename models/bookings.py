@@ -354,7 +354,7 @@ class Bookings:
 
         return False
 
-    def add_new_data(self, sheet_bookings, booking_type):
+    def add_new_data(self, all_sheets):
         """Function to load a sheet of data in dict format into our booking structure
 
         Args:
@@ -367,61 +367,65 @@ class Bookings:
 
         bookings_added = 0
 
-        if "timestamp" in sheet_bookings and sheet_bookings["timestamp"]:
+        if "timestamp" in all_sheets and all_sheets["timestamp"]:
 
             # Sheets records timestamp in ISO format.  Convert to dt object
-            self.data["timestamp"] = parse_iso_datetime(sheet_bookings["timestamp"])
+            self.data["timestamp"] = parse_iso_datetime(all_sheets["timestamp"])
 
             #
             ## Need to normalise the new data from Sheet to our structure
-            for sb in sheet_bookings["sheet_data"]:
+            for single_sheet in all_sheets["data"]:
 
-                #
-                ## Create MD5 of sheet line item so we can track if its new or seen before
-                new_booking_md5 = self._md5_of_dict(sb)
+                booking_type = single_sheet.get("type")
 
-                if not self._find_booking_by_md5(new_booking_md5):
+                for sb in single_sheet.get("sheet_data"):
 
-                    start_dt = datetime.strptime(
-                        sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S"
-                    )
+                    #
+                    ## Create MD5 of sheet line item so we can track if its new or seen before
+                    new_booking_md5 = self._md5_of_dict(sb)
 
-                    # Parse the departure time and replace the time part of arrival
-                    dep_time = datetime.strptime(
-                        sb["departure_time"], "%H:%M:%S"
-                    ).time()
-                    end_dt = start_dt.replace(
-                        hour=dep_time.hour, minute=dep_time.minute, second=0
-                    )
+                    if not self._find_booking_by_md5(new_booking_md5):
 
-                    existing_ids = list(self.data["bookings"].keys())
-                    new_booking_id = gen_next_booking_id(
-                        existing_ids, booking_type, start_dt.year
-                    )
+                        start_dt = datetime.strptime(
+                            sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S"
+                        )
 
-                    new_booking = {
-                        new_booking_id: {
-                            "original_sheet_md5": new_booking_md5,
-                            "original_sheet_data": sb,
-                            "booking_type": booking_type.name,
-                            "Group": sb["chelmsford_scout_group"],
-                            "Leader": sb["name_of_lead_person"],
-                            "Arriving": start_dt,
-                            "Departing": end_dt,
-                            "Number": sb["number_of_people"],
-                            "Status": "New",
-                            "invoice": False,
-                            "confirmation_email_sent": False,
-                            "google_calendar_id": None,
-                            "Notes": "",
+                        # Parse the departure time and replace the time part of arrival
+                        dep_time = datetime.strptime(
+                            sb["departure_time"], "%H:%M:%S"
+                        ).time()
+                        end_dt = start_dt.replace(
+                            hour=dep_time.hour, minute=dep_time.minute, second=0
+                        )
+
+                        existing_ids = list(self.data["bookings"].keys())
+                        new_booking_id = gen_next_booking_id(
+                            existing_ids, booking_type, start_dt.year
+                        )
+
+                        new_booking = {
+                            new_booking_id: {
+                                "original_sheet_md5": new_booking_md5,
+                                "original_sheet_data": sb,
+                                "booking_type": booking_type,
+                                "Group": sb["chelmsford_scout_group"],
+                                "Leader": sb["name_of_lead_person"],
+                                "Arriving": start_dt,
+                                "Departing": end_dt,
+                                "Number": sb["number_of_people"],
+                                "Status": "New",
+                                "invoice": False,
+                                "confirmation_email_sent": False,
+                                "google_calendar_id": None,
+                                "Notes": "",
+                            }
                         }
-                    }
 
-                    self._add_to_notes(
-                        new_booking.get(new_booking_id), "Pulled from sheets"
-                    )
-                    self.data["bookings"].update(new_booking)
-                    bookings_added += 1
+                        self._add_to_notes(
+                            new_booking.get(new_booking_id), "Pulled from sheets"
+                        )
+                        self.data["bookings"].update(new_booking)
+                        bookings_added += 1
 
             self._save()
 

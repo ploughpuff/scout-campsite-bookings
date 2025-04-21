@@ -7,6 +7,7 @@ import os
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
+from models.booking_types import BookingType
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -27,9 +28,20 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_CREDS", "credentials.json")
 
-
-GOOGLE_SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
-GOOGLE_SPREADSHEET_IMPORT_RANGE = os.getenv("GOOGLE_SPREADSHEET_IMPORT_RANGE")
+SHEETS_TO_PULL = [
+    {
+        "use": False,
+        "id": os.getenv("GOOGLE_SPREADSHEET_ID_TEST_DATA"),
+        "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_TEST_DATA"),
+        "type": BookingType.DISTRICT_DAY_VISIT,
+    },
+    {
+        "use": True,
+        "id": os.getenv("GOOGLE_SPREADSHEET_ID_REP_TEST_DATA"),
+        "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_REP_TEST_DATA"),
+        "type": BookingType.DISTRICT_DAY_VISIT,
+    },
+]
 
 UK_TZ = ZoneInfo("Europe/London")
 DATE_FORMAT = "%Y-%m-%d %H:%M"

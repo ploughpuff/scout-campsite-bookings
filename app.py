@@ -14,7 +14,7 @@ from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
 from models.sheets import Sheets
-from models.booking_types import BookingType
+
 
 from utils import now_uk
 from config import TEMPLATE_DIR, SERVICE_ACCOUNT_FILE, CALENDAR_ID, UK_TZ
@@ -27,12 +27,9 @@ logger = setup_logger()
 logger.info("Starting")
 
 sheets = Sheets()
-sheet_bookings = sheets.get_sheet_data()
 
 gc = GoogleCalendar(SERVICE_ACCOUNT_FILE, CALENDAR_ID)
-
 bookings = Bookings(calendar=gc)
-bookings.add_new_data(sheet_bookings, BookingType.DISTRICT_DAY_VISIT)
 
 
 @app.route("/")
@@ -93,9 +90,7 @@ def modify_fields(booking_id):
 @app.route("/pull")
 def pull_now():
     """Pull new data from sheets and add to bookings."""
-    added = bookings.add_new_data(
-        sheets.get_sheet_data(pull_new=True), BookingType.DISTRICT_DAY_VISIT
-    )
+    added = bookings.add_new_data(sheets.get_sheet_data())
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
