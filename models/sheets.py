@@ -45,9 +45,9 @@ class Sheets:
 
             sheet_id = sheet_cfg.get("id")
             sheet_range = sheet_cfg.get("range")
-            type = sheet_cfg.get("type")
+            booking_type = sheet_cfg.get("type")
 
-            if not sheet_id or not sheet_range or not type:
+            if not sheet_id or not sheet_range or not booking_type:
                 self.logger.warning(
                     "Skipping sheet due to missing ID or range: %s", sheet_cfg
                 )
@@ -60,9 +60,7 @@ class Sheets:
                 {normalize_key(k): v for k, v in rec.items()} for rec in new_data
             ]
 
-            all_data.append(
-                {"type": sheet_cfg.get("type"), "sheet_data": normalized_sheet_data}
-            )
+            all_data.append({"type": booking_type, "sheet_data": normalized_sheet_data})
 
         return {
             "timestamp": datetime_to_iso_uk(now_uk()),
