@@ -16,8 +16,13 @@ from utils import (
     get_pretty_datetime_str,
     parse_iso_datetime,
     datetime_to_iso_uk,
+    write_checksum,
+    verify_checksum,
+    backup_with_rotation,
+    atomic_write_json,
 )
-from config import CACHE_DIR, ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+
+from config import CACHE_DIR, ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, MAX_BACKUPS_TO_KEEP
 from models.mailer import send_email_notification
 from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
 
@@ -277,11 +282,19 @@ class Bookings:
 
             data_to_save["bookings"][booking_id] = serialized
 
-        with open(self.json_path, "w", encoding="utf-8") as f:
-            json.dump(data_to_save, f, indent=2)
+        if self.json_path.exists():
+            backup_with_rotation(self.json_path, max_backups=MAX_BACKUPS_TO_KEEP)
+
+        atomic_write_json(data_to_save, self.json_path)
+        write_checksum(self.json_path)
 
     def _load(self):
         if self.json_path.exists():
+
+            if not verify_checksum(self.json_path):
+                self.logger.error("JSON checksum failed! File may be corrupted.")
+                raise ValueError("Checksum mismatch!")
+
             with open(self.json_path, "r", encoding="utf-8") as f:
                 self.data = json.load(f)
 

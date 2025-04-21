@@ -4,6 +4,11 @@ utils.py - Utility functions for use in Scout Campsite Booking.
 
 import re
 import logging
+import tempfile
+import os
+import json
+import hashlib
+import shutil
 from datetime import datetime
 from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
 
@@ -135,3 +140,45 @@ def normalize_key(key: str) -> str:
     key = re.sub(r"[^\w\s]", "", key)  # Remove punctuation
     key = re.sub(r"\s+", "_", key)  # Replace spaces with underscores
     return key.lower()
+
+
+def write_checksum(json_path):
+    content = json_path.read_text(encoding="utf-8")
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    json_path.with_suffix(".sha256").write_text(digest, encoding="utf-8")
+
+
+def verify_checksum(json_path):
+    try:
+        content = json_path.read_text(encoding="utf-8")
+        stored = json_path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
+        return hashlib.sha256(content.encode("utf-8")).hexdigest() == stored
+    except Exception:
+        return False
+
+
+def backup_with_rotation(file_path, max_backups=5):
+    if not file_path.exists():
+        return
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = file_path.with_name(f"{file_path.stem}-{timestamp}{file_path.suffix}")
+    shutil.copy2(file_path, backup_path)
+
+    # Cleanup old backups
+    backups = sorted(
+        file_path.parent.glob(f"{file_path.stem}-*{file_path.suffix}"),
+        key=os.path.getmtime,
+        reverse=True,
+    )
+    for old in backups[max_backups:]:
+        old.unlink(missing_ok=True)
+
+
+def atomic_write_json(data, target_path):
+    with tempfile.NamedTemporaryFile(
+        "w", dir=target_path.parent, delete=False, encoding="utf-8"
+    ) as tmp:
+        json.dump(data, tmp, indent=2)
+        temp_path = tmp.name
+    os.replace(temp_path, target_path)
