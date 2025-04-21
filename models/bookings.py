@@ -383,12 +383,12 @@ class Bookings:
                 if not self._find_booking_by_md5(new_booking_md5):
 
                     start_dt = datetime.strptime(
-                        sb["Arrival Date / Time"], "%d/%m/%Y %H:%M:%S"
+                        sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S"
                     )
 
                     # Parse the departure time and replace the time part of arrival
                     dep_time = datetime.strptime(
-                        sb["Departure Time"], "%H:%M:%S"
+                        sb["departure_time"], "%H:%M:%S"
                     ).time()
                     end_dt = start_dt.replace(
                         hour=dep_time.hour, minute=dep_time.minute, second=0
@@ -404,11 +404,11 @@ class Bookings:
                             "original_sheet_md5": new_booking_md5,
                             "original_sheet_data": sb,
                             "booking_type": booking_type.name,
-                            "Group": sb["Chelmsford Scout Group"],
-                            "Leader": sb["Name of Lead Person"],
+                            "Group": sb["chelmsford_scout_group"],
+                            "Leader": sb["name_of_lead_person"],
                             "Arriving": start_dt,
                             "Departing": end_dt,
-                            "Number": sb["Number of people"],
+                            "Number": sb["number_of_people"],
                             "Status": "New",
                             "invoice": False,
                             "confirmation_email_sent": False,
