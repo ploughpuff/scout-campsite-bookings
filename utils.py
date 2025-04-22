@@ -163,6 +163,9 @@ def verify_checksum(json_path):
     Returns:
         Boolean: True if file checksum matches value stored in checksum file, else False.
     """
+    if not json_path.with_suffix(".sha256").exists():
+        return True
+
     try:
         content = json_path.read_text(encoding="utf-8")
         stored = json_path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
