@@ -22,7 +22,7 @@ LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILENAME)
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
-DEBUG = True
+LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
 load_dotenv()
 EMAIL_USER = os.getenv("EMAIL_USER")

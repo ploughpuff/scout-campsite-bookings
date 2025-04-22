@@ -5,13 +5,17 @@ logger.py - Provides function to maintain an app logger to record warnings and e
 import logging
 from logging.handlers import RotatingFileHandler
 
-from config import LOG_FILE_PATH
+from config import LOG_LEVEL_STR, LOG_FILE_PATH
 
 
 def setup_logger():
     """Set up the logger for the application."""
     logger = logging.getLogger("app_logger")
-    logger.setLevel(logging.INFO)
+
+    # Convert string level to logging level constant
+    log_level = getattr(logging, LOG_LEVEL_STR, logging.INFO)
+
+    logger.setLevel(log_level)
 
     if not logger.handlers:
         # Set up the RotatingFileHandler
