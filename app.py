@@ -9,7 +9,6 @@ from datetime import datetime
 
 from flask import (
     Flask,
-    abort,
     flash,
     redirect,
     render_template,
@@ -102,6 +101,7 @@ def pull_now():
 
 @app.route("/logs")
 def view_logs():
+    """View app log"""
     if not os.path.exists(LOG_FILE_PATH):
         return "Log file not found", 404
     return render_template("logs.html")
@@ -109,11 +109,12 @@ def view_logs():
 
 @app.route("/logs/data")
 def get_logs():
+    """Filter the app log and display"""
     level_filter = request.args.get("level", "").upper()
     if not os.path.exists(LOG_FILE_PATH):
         return "", 204
 
-    with open(LOG_FILE_PATH, "r") as f:
+    with open(LOG_FILE_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     if level_filter:
@@ -124,6 +125,7 @@ def get_logs():
 
 @app.route("/logs/download")
 def download_logs():
+    """Download the complete app log"""
     if os.path.exists(LOG_FILE_PATH):
         return send_file(LOG_FILE_PATH, as_attachment=True)
     return "Log file not found", 404

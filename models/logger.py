@@ -3,7 +3,6 @@ logger.py - Provides function to maintain an app logger to record warnings and e
 """
 
 import logging
-import os
 from logging.handlers import RotatingFileHandler
 
 from config import LOG_FILE_PATH
