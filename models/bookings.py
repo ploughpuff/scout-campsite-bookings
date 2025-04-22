@@ -25,7 +25,7 @@ from utils import (
     write_checksum,
 )
 
-status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
+status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 
 #
 ## Valid transitions to control buttons on html, and filter user input
@@ -37,6 +37,7 @@ status_transitions = {
         "Completed",
     ],
     "Completed": [],
+    "Archived": [],
     "Cancelled": ["New"],
 }
 
@@ -80,8 +81,6 @@ class Bookings:
         Returns:
             dict: Dictionary of values for display purposes.
         """
-
-        self._load()
 
         # If booking_id is provided, return only that booking
         if booking_id:
@@ -154,9 +153,7 @@ class Bookings:
         if self._apply_status_change(booking_id, new_status):
             send_email_notification(booking_id, booking)
             # handle_calendar_entry(booking_id, booking)
-            self._add_to_notes(
-                booking, f"Status changed [{old_status}] > [{new_status}]"
-            )
+            self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
 
             self._save()
             return True
@@ -175,8 +172,6 @@ class Bookings:
         """
 
         editable_fields = {"Number", "Arriving", "Departing"}
-
-        self._load()  # Ensure fresh data
 
         booking = self.data.get("bookings", {}).get(booking_id)
         if not booking:
@@ -311,43 +306,40 @@ class Bookings:
                     if parsed_bt:
                         booking["booking_type"] = parsed_bt
                     else:
-                        self.logger.warning(
-                            "Unknown or missing booking_type: %s", bt_raw
-                        )
-
-                self._auto_update_statuses()
+                        self.logger.warning("Unknown or missing booking_type: %s", bt_raw)
 
         else:
             self.data = {"timestamp": now_uk(), "bookings": {}}
 
-    def _auto_update_statuses(self):
+    def auto_update_statuses(self):
+        """Look for bookings to automatically change the status of"""
 
-        for _, booking in self.data.get("bookings", {}).items():
+        for booking_id, booking in self.data.get("bookings", {}).items():
             status = booking.get("Status")
             departing = booking.get("Departing")
             invoice = booking.get("invoice")
 
-            archive_date = departing + timedelta(
-                days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
-            )
+            archive_date = departing + timedelta(days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS)
 
             #
             ## Move confirmed bookings to completed/invoice once departure dates has passed
             if status == "Confirmed" and departing < now_uk():
-                new_status = "Completed" if invoice else "Invoice"
-                self._add_to_notes(
-                    booking, f"Auto Status Change: [{status}] > [{new_status}]"
-                )
+                new_status = "Invoice" if invoice else "Completed"
                 booking["Status"] = new_status
-                self._save()
+                self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
+                flash(
+                    f"{booking_id} automatically change from {status} to {new_status} now booking has passed",
+                    "warning",
+                )
 
             elif status == "Completed" and archive_date < now_uk():
                 new_status = "Archived"
-                self._add_to_notes(
-                    booking, f"Auto Status Change: [{status}] > [{new_status}]"
-                )
                 booking["Status"] = new_status
-                self._save()
+                self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
+                flash(
+                    f"{booking_id} automatically change from {status} to {new_status} as booking {ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS} days passec",
+                    "warning",
+                )
 
     def _md5_of_dict(self, data):
         # Ensure consistent ordering to get a consistent hash
@@ -357,10 +349,7 @@ class Bookings:
 
     def _find_booking_by_md5(self, target_md5):
         for booking in self.data.get("bookings", {}).values():
-            if (
-                isinstance(booking, dict)
-                and booking.get("original_sheet_md5") == target_md5
-            ):
+            if isinstance(booking, dict) and booking.get("original_sheet_md5") == target_md5:
                 return True
 
         return False
@@ -397,14 +386,10 @@ class Bookings:
 
                     if not self._find_booking_by_md5(new_booking_md5):
 
-                        start_dt = datetime.strptime(
-                            sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S"
-                        )
+                        start_dt = datetime.strptime(sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S")
 
                         # Parse the departure time and replace the time part of arrival
-                        dep_time = datetime.strptime(
-                            sb["departure_time"], "%H:%M:%S"
-                        ).time()
+                        dep_time = datetime.strptime(sb["departure_time"], "%H:%M:%S").time()
                         end_dt = start_dt.replace(
                             hour=dep_time.hour, minute=dep_time.minute, second=0
                         )
@@ -432,9 +417,7 @@ class Bookings:
                             }
                         }
 
-                        self._add_to_notes(
-                            new_booking.get(new_booking_id), "Pulled from sheets"
-                        )
+                        self._add_to_notes(new_booking.get(new_booking_id), "Pulled from sheets")
                         self.data["bookings"].update(new_booking)
                         bookings_added += 1
 
