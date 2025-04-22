@@ -5,22 +5,64 @@
     <style>
       body {
         font-family: monospace;
-        background: #111;
-        color: #eee;
+        background: #f9f9f9;
+        color: #333;
         margin: 0;
         padding: 1rem;
       }
+      
+      h1 {
+        font-family: sans-serif;
+        color: #444;
+      }
+      
       #log-container {
         white-space: pre-wrap;
         max-height: 80vh;
         overflow-y: auto;
-        border: 1px solid #444;
+        border: 1px solid #ccc;
         padding: 1rem;
-        background: #222;
+        background: #fff;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
       }
+      
       select,
       button {
         margin-right: 10px;
+        padding: 5px 10px;
+        font-family: sans-serif;
+        font-size: 14px;
+      }
+      
+      button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      
+      button:hover {
+        background-color: #0056b3;
+      }
+      
+      /* Add this below the existing style */
+      .log-line {
+        display: block;
+      }
+      
+      .log-ERROR {
+        color: #c00;
+        font-weight: bold;
+      }
+      .log-WARNING {
+        color: #d58512;
+      }
+      .log-INFO {
+        color: #117a8b;
+      }
+      .log-DEBUG {
+        color: #6c757d;
       }
     </style>
   </head>
