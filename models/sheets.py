@@ -34,16 +34,10 @@ def get_sheet_data() -> dict:
 
     for sheet_cfg in SHEETS_TO_PULL:
         if not sheet_cfg.get("use"):
-            logger.info(
-                "Skipping sheet %s (disabled via 'use' flag).", sheet_cfg.get("id")
-            )
+            logger.info("Skipping sheet %s (disabled via 'use' flag).", sheet_cfg.get("id"))
             continue
 
-        if (
-            not sheet_cfg.get("id")
-            or not sheet_cfg.get("range")
-            or not sheet_cfg.get("type")
-        ):
+        if not sheet_cfg.get("id") or not sheet_cfg.get("range") or not sheet_cfg.get("type"):
             logger.warning("Skipping sheet due to missing ID or range: %s", sheet_cfg)
             continue
 
@@ -54,9 +48,7 @@ def get_sheet_data() -> dict:
         new_data = _fetch_google_sheets_data(sheet_id, sheet_range)
 
         # Normalize column headers for each row
-        normalized_sheet_data = [
-            {normalize_key(k): v for k, v in rec.items()} for rec in new_data
-        ]
+        normalized_sheet_data = [{normalize_key(k): v for k, v in rec.items()} for rec in new_data]
 
         all_data.append({"type": booking_type, "sheet_data": normalized_sheet_data})
 
@@ -89,11 +81,7 @@ def _fetch_google_sheets_data(spreadsheet_id, sheet_range):
     sheet = service.spreadsheets()
 
     try:
-        result = (
-            sheet.values()
-            .get(spreadsheetId=spreadsheet_id, range=sheet_range)
-            .execute()
-        )
+        result = sheet.values().get(spreadsheetId=spreadsheet_id, range=sheet_range).execute()
     except HttpError as e:
         logger.error("Google Sheets API error: %s", e)
         return []

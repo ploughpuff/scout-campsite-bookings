@@ -31,9 +31,7 @@ def gen_next_booking_id(existing_ids, booking_type: BookingType, year):
     prefix = booking_type.prefix
     pattern = rf"{prefix}-{year}-(\d+)"
 
-    nums = [
-        int(match.group(1)) for bid in existing_ids if (match := re.match(pattern, bid))
-    ]
+    nums = [int(match.group(1)) for bid in existing_ids if (match := re.match(pattern, bid))]
 
     next_number = max(nums, default=0) + 1
 

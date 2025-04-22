@@ -54,9 +54,7 @@ Status: {booking.get('Status', 'N/A')}
 
             # pylint: disable=no-member
             created_event = (
-                self.service.events()
-                .insert(calendarId=self.calendar_id, body=event)
-                .execute()
+                self.service.events().insert(calendarId=self.calendar_id, body=event).execute()
             )
 
             logger.info("Event created: %s", created_event.get("htmlLink"))
@@ -108,9 +106,7 @@ Status: {booking.get('Status', 'N/A')}
         """
         try:
             # pylint: disable=no-member
-            self.service.events().delete(
-                calendarId=self.calendar_id, eventId=event_id
-            ).execute()
+            self.service.events().delete(calendarId=self.calendar_id, eventId=event_id).execute()
             logger.info("Event deleted: %s", event_id)
             return True
         except HttpError as e:
