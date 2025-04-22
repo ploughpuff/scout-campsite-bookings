@@ -66,7 +66,7 @@ def send_email_notification(booking_id, booking):
         return False
 
     msg = EmailMessage()
-    msg["Subject"] = "✅ Campsite Booking " + booking["Status"]
+    msg["Subject"] = "Campsite Booking " + booking["Status"]
     msg["From"] = config.EMAIL_USER
     msg["To"] = recipient
 
@@ -92,6 +92,7 @@ def send_email_notification(booking_id, booking):
         logger.info("=== EMAIL LOG ===")
         logger.info("To: %s", msg["To"])
         logger.info("Subject: %s", msg["Subject"])
-        logger.info("Body:\n%s", msg.get_content())
+        plain = next(p for p in msg.iter_parts() if p.get_content_type() == "text/plain")
+        logger.info("Body:\n%s", plain.get_content())
         booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
         return True
