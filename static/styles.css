@@ -1,46 +1,62 @@
 .badge-status {
-    color: white;
-  }
-  
-  .badge-status.new {
-    background-color: #dc3545; /* Danger */
-  }
-  .badge-status.pending {
-    background-color: #e67111; /* Danger */
-  }
-  .badge-status.confirmed {
-    background-color: #198754; /* Success */
-  }
-  .badge-status.invoice {
-    background-color: #ffc107;
-    color: #212529; /* Warning + dark text */
-  }
-  .badge-status.completed {
-    background-color: #0dcaf0;
-    color: #212529; /* Info + dark text */
-  }
-  .badge-status.cancelled {
-    background-color: #6c757d; /* Secondary */
-  }
-  
+  color: white;
+}
 
-  .alert-success {
-    background-color: #198754;
-    color: #fff;
-  }
-  
-  .alert-warning {
-    background-color: #ffc107;
-    color: #212529;
-  }
-  
-  .alert-danger {
-    background-color: #dc3545;
-    color: #fff;
-  }
-  
-  .alert-info {
-    background-color: #0dcaf0;
-    color: #212529;
-  }
-  
+.badge-status.new {
+  background-color: #dc3545;
+  /* Danger */
+}
+
+.badge-status.pending {
+  background-color: #e67111;
+  /* Danger */
+}
+
+.badge-status.confirmed {
+  background-color: #198754;
+  /* Success */
+}
+
+.badge-status.invoice {
+  background-color: #ffc107;
+  color: #212529;
+  /* Warning + dark text */
+}
+
+.badge-status.completed {
+  background-color: #0dcaf0;
+  color: #212529;
+  /* Info + dark text */
+}
+
+.badge-status.archived {
+  background-color: #7d8ccf;
+  color: #212529;
+  /* Info + dark text */
+}
+
+.badge-status.cancelled {
+  background-color: #6c757d;
+  /* Secondary */
+}
+
+
+.alert-success {
+  background-color: #198754;
+  color: #fff;
+}
+
+.alert-warning {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.alert-danger {
+  background-color: #dc3545;
+  color: #fff;
+}
+
+.alert-info {
+  background-color: #0dcaf0;
+  color: #212529;
+}
