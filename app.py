@@ -4,13 +4,23 @@ app.py - Main Flask application entry point for Scout Campsite Booking.
 Handles routing, app initialization, and integrates with the Bookings class.
 """
 
+import os
 from datetime import datetime
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+    send_file,
+    abort,
+)
 from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 
-from config import CALENDAR_ID, SERVICE_ACCOUNT_FILE, TEMPLATE_DIR, UK_TZ
+from config import CALENDAR_ID, SERVICE_ACCOUNT_FILE, TEMPLATE_DIR, UK_TZ, LOG_FILE_PATH
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
@@ -88,6 +98,35 @@ def pull_now():
     added = bookings.add_new_data(get_sheet_data())
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
+
+
+@app.route("/logs")
+def view_logs():
+    if not os.path.exists(LOG_FILE_PATH):
+        return "Log file not found", 404
+    return render_template("logs.html")
+
+
+@app.route("/logs/data")
+def get_logs():
+    level_filter = request.args.get("level", "").upper()
+    if not os.path.exists(LOG_FILE_PATH):
+        return "", 204
+
+    with open(LOG_FILE_PATH, "r") as f:
+        lines = f.readlines()
+
+    if level_filter:
+        lines = [line for line in lines if level_filter in line]
+
+    return "".join(lines), 200, {"Content-Type": "text/plain"}
+
+
+@app.route("/logs/download")
+def download_logs():
+    if os.path.exists(LOG_FILE_PATH):
+        return send_file(LOG_FILE_PATH, as_attachment=True)
+    return "Log file not found", 404
 
 
 @app.errorhandler(404)

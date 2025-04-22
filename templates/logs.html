@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>App Logs</title>
+    <style>
+      body {
+        font-family: monospace;
+        background: #111;
+        color: #eee;
+        margin: 0;
+        padding: 1rem;
+      }
+      #log-container {
+        white-space: pre-wrap;
+        max-height: 80vh;
+        overflow-y: auto;
+        border: 1px solid #444;
+        padding: 1rem;
+        background: #222;
+      }
+      select,
+      button {
+        margin-right: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Application Logs</h1>
+
+    <div>
+      <label for="level">Filter:</label>
+      <select id="level">
+        <option value="">All</option>
+        <option value="ERROR">ERROR</option>
+        <option value="WARNING">WARNING</option>
+        <option value="INFO">INFO</option>
+        <option value="DEBUG">DEBUG</option>
+      </select>
+
+      <button onclick="fetchLogs()">Refresh</button>
+      <button onclick="downloadLogs()">Download</button>
+    </div>
+
+    <div id="log-container">Loading logs...</div>
+
+    <script src="{{ url_for('static', filename='logviewer.js') }}"></script>
+  </body>
+</html>
