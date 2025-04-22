@@ -328,7 +328,8 @@ class Bookings:
                 booking["Status"] = new_status
                 self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
                 flash(
-                    f"{booking_id} automatically change from {status} to {new_status} now booking has passed",
+                    f"{booking_id} automatically change from {status} "
+                    f"to {new_status} now booking has passed",
                     "warning",
                 )
 
@@ -337,7 +338,8 @@ class Bookings:
                 booking["Status"] = new_status
                 self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
                 flash(
-                    f"{booking_id} automatically change from {status} to {new_status} as booking {ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS} days passec",
+                    f"{booking_id} automatically change from {status} to {new_status} "
+                    f"as booking {ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS} days passec",
                     "warning",
                 )
 
