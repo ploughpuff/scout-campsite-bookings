@@ -40,9 +40,8 @@ bookings = Bookings(calendar=gc)
 @app.route("/bookings")
 def all_bookings():
     """Render the main bookings table page."""
-    return render_template(
-        "all_bookings.html", bookings=bookings.get_booking(), age=bookings.age()
-    )
+    bookings.auto_update_statuses()
+    return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
 
 
 @app.route("/booking/<booking_id>")
@@ -79,12 +78,8 @@ def modify_fields(booking_id):
     """Handle modifying fields from details page."""
     updated_fields = {
         "Number": request.form.get("Number"),
-        "Arriving": datetime.fromisoformat(request.form.get("Arriving")).replace(
-            tzinfo=UK_TZ
-        ),
-        "Departing": datetime.fromisoformat(request.form.get("Departing")).replace(
-            tzinfo=UK_TZ
-        ),
+        "Arriving": datetime.fromisoformat(request.form.get("Arriving")).replace(tzinfo=UK_TZ),
+        "Departing": datetime.fromisoformat(request.form.get("Departing")).replace(tzinfo=UK_TZ),
     }
 
     bookings.modify_fields(booking_id, updated_fields)
@@ -194,9 +189,7 @@ def pretty_date(value):
         return str(value)
 
     day = dt.day
-    suffix = (
-        "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-    )
+    suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
     month = dt.strftime("%B")
     time_part = dt.strftime("%H:%M")
     year = dt.year
