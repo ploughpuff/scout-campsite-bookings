@@ -2,16 +2,16 @@
 sheets.py - Handle pull operations to Google sheets.
 """
 
-import random
 import logging
+import random
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from utils import now_uk, datetime_to_iso_uk, normalize_key
-from config import SHEETS_TO_PULL, SERVICE_ACCOUNT_FILE
+from config import SERVICE_ACCOUNT_FILE, SHEETS_TO_PULL
 from models.booking_types import parse_booking_type
+from utils import datetime_to_iso_uk, normalize_key, now_uk
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 

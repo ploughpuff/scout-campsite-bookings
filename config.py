@@ -5,8 +5,8 @@ config.py - Contains configuration settings for Scout Campsite Bookings
 
 import os
 from zoneinfo import ZoneInfo
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")

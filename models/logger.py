@@ -2,8 +2,8 @@
 logger.py - Provides function to maintain an app logger to record warnings and errors.
 """
 
-import os
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 
 

@@ -6,19 +6,16 @@ Handles routing, app initialization, and integrates with the Bookings class.
 
 from datetime import datetime
 
-from flask import Flask, render_template, request, redirect, url_for, flash
-from werkzeug.exceptions import HTTPException
+from flask import Flask, flash, redirect, render_template, request, url_for
 from markupsafe import Markup
+from werkzeug.exceptions import HTTPException
 
+from config import CALENDAR_ID, SERVICE_ACCOUNT_FILE, TEMPLATE_DIR, UK_TZ
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
-
-
 from utils import now_uk
-from config import TEMPLATE_DIR, SERVICE_ACCOUNT_FILE, CALENDAR_ID, UK_TZ
-
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = "dev-key"

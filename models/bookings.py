@@ -10,22 +10,20 @@ from pathlib import Path
 
 from flask import flash
 
-from utils import (
-    now_uk,
-    secs_to_hr,
-    get_pretty_datetime_str,
-    parse_iso_datetime,
-    datetime_to_iso_uk,
-    write_checksum,
-    verify_checksum,
-    backup_with_rotation,
-    atomic_write_json,
-)
-
-from config import CACHE_DIR, ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, MAX_BACKUPS_TO_KEEP
-from models.mailer import send_email_notification
+from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, CACHE_DIR, MAX_BACKUPS_TO_KEEP
 from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
-
+from models.mailer import send_email_notification
+from utils import (
+    atomic_write_json,
+    backup_with_rotation,
+    datetime_to_iso_uk,
+    get_pretty_datetime_str,
+    now_uk,
+    parse_iso_datetime,
+    secs_to_hr,
+    verify_checksum,
+    write_checksum,
+)
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Cancelled"]
 

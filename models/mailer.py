@@ -4,10 +4,10 @@ mailer.py - Provide functions to send emails from the app.
 
 import logging
 import smtplib
-
 from email.message import EmailMessage
-from jinja2 import Environment, FileSystemLoader
+
 from flask import flash
+from jinja2 import Environment, FileSystemLoader
 
 import config
 from utils import get_pretty_datetime_str
