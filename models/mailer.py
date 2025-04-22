@@ -78,17 +78,28 @@ def send_email_notification(booking_id, booking):
     msg.set_content(body_text)
     msg.add_alternative(body_html, subtype="html")
 
-    try:
-        with smtplib.SMTP("smtp.office365.com", 587) as server:
-            server.starttls()
-            server.login(config.EMAIL_USER, config.EMAIL_PASS)
-            server.send_message(msg)
-            booking["email_confirmation_sent"] = get_pretty_datetime_str(
-                include_seconds=True
-            )
+    if config.APP_ENV == "production":
+        try:
+            with smtplib.SMTP("smtp.office365.com", 587) as server:
+                server.starttls()
+                server.login(config.EMAIL_USER, config.EMAIL_PASS)
+                server.send_message(msg)
+                booking["email_confirmation_sent"] = get_pretty_datetime_str(
+                    include_seconds=True
+                )
+            return True
+        except smtplib.SMTPException as e:
+            logger.error("Failed to send email to %s: %s", recipient, e)
+            msg = f"Failed to send email to {recipient}: {e}"
+            flash(msg, "danger")
+            return False
+    else:
+        # Development mode: log instead of sending
+        logger.info("=== EMAIL LOG ===")
+        logger.info("To: %s", msg["To"])
+        logger.info("Subject: %s", msg["Subject"])
+        logger.info("Body:\n%s", msg.get_content())
+        booking["email_confirmation_sent"] = get_pretty_datetime_str(
+            include_seconds=True
+        )
         return True
-    except smtplib.SMTPException as e:
-        logger.error("Failed to send email to %s: %s", recipient, e)
-        msg = f"Failed to send email to {recipient}: {e}"
-        flash(msg, "danger")
-        return False

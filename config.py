@@ -8,6 +8,10 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
+load_dotenv()
+
+APP_ENV = os.getenv("APP_ENV", "development")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 CACHE_DIR = os.path.join(BASE_DIR, "cache")
@@ -24,7 +28,6 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
-load_dotenv()
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")

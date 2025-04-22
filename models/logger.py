@@ -5,7 +5,7 @@ logger.py - Provides function to maintain an app logger to record warnings and e
 import logging
 from logging.handlers import RotatingFileHandler
 
-from config import LOG_LEVEL_STR, LOG_FILE_PATH
+from config import LOG_FILE_PATH, LOG_LEVEL_STR
 
 
 def setup_logger():

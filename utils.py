@@ -217,4 +217,5 @@ def atomic_write_json(data, target_path):
     ) as tmp:
         json.dump(data, tmp, indent=2)
         temp_path = tmp.name
+
     os.replace(temp_path, target_path)
