@@ -1,90 +1,28 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>App Logs</title>
-    <style>
-      body {
-        font-family: monospace;
-        background: #f9f9f9;
-        color: #333;
-        margin: 0;
-        padding: 1rem;
-      }
-      
-      h1 {
-        font-family: sans-serif;
-        color: #444;
-      }
-      
-      #log-container {
-        white-space: pre-wrap;
-        max-height: 80vh;
-        overflow-y: auto;
-        border: 1px solid #ccc;
-        padding: 1rem;
-        background: #fff;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
-      }
-      
-      select,
-      button {
-        margin-right: 10px;
-        padding: 5px 10px;
-        font-family: sans-serif;
-        font-size: 14px;
-      }
-      
-      button {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-      }
-      
-      button:hover {
-        background-color: #0056b3;
-      }
-      
-      /* Add this below the existing style */
-      .log-line {
-        display: block;
-      }
-      
-      .log-ERROR {
-        color: #c00;
-        font-weight: bold;
-      }
-      .log-WARNING {
-        color: #d58512;
-      }
-      .log-INFO {
-        color: #117a8b;
-      }
-      .log-DEBUG {
-        color: #6c757d;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Application Logs</h1>
+{% extends 'base.html' %}
 
-    <div>
-      <label for="level">Filter:</label>
-      <select id="level">
-        <option value="">All</option>
-        <option value="ERROR">ERROR</option>
-        <option value="WARNING">WARNING</option>
-        <option value="INFO">INFO</option>
-        <option value="DEBUG">DEBUG</option>
-      </select>
+{% block title %}
+  View Logs
+{% endblock %}
 
-      <button onclick="fetchLogs()">Refresh</button>
-      <button onclick="downloadLogs()">Download</button>
-    </div>
+{% block body_class %}
+  logs-view
+{% endblock %}
 
-    <div id="log-container">Loading logs...</div>
+{% block content %}
+  <div>
+    <label for="level">Filter:</label>
+    <select id="level">
+      <option value="">All</option>
+      <option value="ERROR">ERROR</option>
+      <option value="WARNING">WARNING</option>
+      <option value="INFO">INFO</option>
+      <option value="DEBUG">DEBUG</option>
+    </select>
 
-    <script src="{{ url_for('static', filename='logviewer.js') }}"></script>
-  </body>
-</html>
+    <button onclick="fetchLogs()">Refresh</button>
+    <button onclick="downloadLogs()">Download</button>
+  </div>
+
+  <div id="log-container">Loading logs...</div>
+  <script src="{{ url_for('static', filename='logviewer.js') }}"></script>
+{% endblock %}

@@ -40,6 +40,18 @@
   /* Secondary */
 }
 
+.btn-primary {
+  background-color: #007bff
+}
+
+.btn-secondary {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background-color: #d0d0d0;
+}
 
 .alert-success {
   background-color: #198754;
@@ -59,4 +71,69 @@
 .alert-info {
   background-color: #0dcaf0;
   color: #212529;
+}
+
+body.logs-view {
+  font-family: monospace;
+  background: #f9f9f9;
+  color: #333;
+  margin: 0;
+  padding: 1rem;
+}
+
+body.logs-view h1 {
+  font-family: sans-serif;
+  color: #444;
+}
+
+body.logs-view #log-container {
+  white-space: pre-wrap;
+  max-height: 80vh;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 1rem;
+  background: #fff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+body.logs-view select,
+body.logs-view button {
+  margin-right: 10px;
+  padding: 5px 10px;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+body.logs-view button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+body.logs-view button:hover {
+  background-color: #0056b3;
+}
+
+/* Log line styles */
+body.logs-view .log-line {
+  display: block;
+}
+
+body.logs-view .log-ERROR {
+  color: #c00;
+  font-weight: bold;
+}
+
+body.logs-view .log-WARNING {
+  color: #d58512;
+}
+
+body.logs-view .log-INFO {
+  color: #117a8b;
+}
+
+body.logs-view .log-DEBUG {
+  color: #6c757d;
 }
