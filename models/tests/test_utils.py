@@ -1,7 +1,7 @@
 # pylint: skip-file
 import pytest
 
-from models.utils import secs_to_hr
+from models.utils import secs_to_hr, normalize_key
 
 
 # Test cases for different scenarios
@@ -41,3 +41,8 @@ def test_invalid_secs_to_hr():
 
     with pytest.raises(ValueError):
         secs_to_hr("abc")  # Non-integer input should raise an exception
+
+
+def test_normalise_key():
+    assert normalize_key("Arrival Date / Time") == "arrival_date_time"
+    assert normalize_key("Email Address") == "email_address"
