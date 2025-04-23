@@ -24,7 +24,7 @@ from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
-from utils import now_uk
+from models.utils import now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = "dev-key"

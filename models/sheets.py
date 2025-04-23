@@ -11,7 +11,7 @@ from googleapiclient.errors import HttpError
 
 from config import SERVICE_ACCOUNT_FILE, SHEETS_TO_PULL
 from models.booking_types import parse_booking_type
-from utils import datetime_to_iso_uk, normalize_key, now_uk
+from models.utils import datetime_to_iso_uk, normalize_key, now_uk
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 

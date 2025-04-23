@@ -13,7 +13,7 @@ from flask import flash
 from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, DATA_DIR, MAX_BACKUPS_TO_KEEP
 from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
 from models.mailer import send_email_notification
-from utils import (
+from models.utils import (
     atomic_write_json,
     backup_with_rotation,
     datetime_to_iso_uk,

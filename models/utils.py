@@ -77,6 +77,9 @@ def secs_to_hr(seconds):
     Returns:
         str: A sring like '1d 3h 45m 59s'
     """
+    if not isinstance(seconds, int) or seconds < 0:
+        raise ValueError("Seconds must be a non-negative integer")
+
     m, s = divmod(int(seconds), 60)
     h, m = divmod(m, 60)
     d, h = divmod(h, 24)

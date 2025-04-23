@@ -10,7 +10,7 @@ from flask import flash
 from jinja2 import Environment, FileSystemLoader
 
 import config
-from utils import get_pretty_datetime_str
+from models.utils import get_pretty_datetime_str
 
 logger = logging.getLogger("app_logger")
 
@@ -28,10 +28,9 @@ def send_email_notification(booking_id, booking):
     Returns:
         Boolean: True on success, otherwise False.
     """
-    valid_statuses = {"Confirmed", "Cancelled", "Pending"}
     status = booking.get("Status")
 
-    if status not in valid_statuses:
+    if status not in {"Confirmed", "Cancelled", "Pending"}:
         return False
 
     recipient = booking.get("original_sheet_data", {}).get("email_address")
