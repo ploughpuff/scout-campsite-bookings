@@ -8,6 +8,7 @@ from email.message import EmailMessage
 
 from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
+
 import config
 from models.utils import get_pretty_datetime_str
 

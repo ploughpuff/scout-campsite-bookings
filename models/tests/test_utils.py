@@ -1,7 +1,7 @@
 # pylint: skip-file
 import pytest
 
-from models.utils import secs_to_hr, normalize_key
+from models.utils import normalize_key, secs_to_hr
 
 
 # Test cases for different scenarios
