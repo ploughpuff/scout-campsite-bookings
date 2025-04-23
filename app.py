@@ -5,6 +5,9 @@ Handles routing, app initialization, and integrates with the Bookings class.
 """
 
 import os
+import zipfile
+import io
+
 from datetime import datetime
 
 from flask import (
@@ -19,7 +22,16 @@ from flask import (
 from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 
-from config import CALENDAR_ID, LOG_FILE_PATH, SERVICE_ACCOUNT_FILE, TEMPLATE_DIR, UK_TZ
+from config import (
+    CALENDAR_ID,
+    LOG_FILENAME,
+    LOG_FILE_PATH,
+    DATA_FILENAME,
+    DATA_FILE_PATH,
+    SERVICE_ACCOUNT_FILE,
+    TEMPLATE_DIR,
+    UK_TZ,
+)
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
@@ -124,6 +136,25 @@ def download_logs():
     if os.path.exists(LOG_FILE_PATH):
         return send_file(LOG_FILE_PATH, as_attachment=True)
     return "Log file not found", 404
+
+
+@app.route("/offline/analysis")
+def offline_analysis():
+    ct_points = [{DATA_FILENAME, DATA_FILE_PATH}, {LOG_FILENAME, LOG_FILE_PATH}]
+
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, "w") as zf:
+        for a, p in ct_points:
+            zf.write(p, arcname=a)
+
+    memory_file.seek(0)
+
+    return send_file(
+        memory_file,
+        download_name="booking_data.zip",
+        as_attachment=True,
+        mimetype="application/zip",
+    )
 
 
 @app.errorhandler(404)

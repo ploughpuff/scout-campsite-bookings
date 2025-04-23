@@ -33,6 +33,9 @@ def test_secs_to_hr():
     # Test for large number of seconds (more than 1 day)
     assert secs_to_hr(100000) == "1d 3h 46m 40s"
 
+    # Test it can handle floats
+    assert secs_to_hr(60.999) == "1m 0s"
+
 
 # Optional: Test for invalid inputs
 def test_invalid_secs_to_hr():

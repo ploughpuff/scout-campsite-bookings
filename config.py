@@ -20,6 +20,8 @@ EMAIL_TEMP_DIR = os.path.join(BASE_DIR, "email_templates")
 
 LOG_FILENAME = "app.log"
 LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILENAME)
+DATA_FILENAME = "bookings.json"
+DATA_FILE_PATH = os.path.join(DATA_DIR, DATA_FILENAME)
 
 # Make sure these directories exist when config is loaded
 os.makedirs(LOG_DIR, exist_ok=True)

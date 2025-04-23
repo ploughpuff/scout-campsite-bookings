@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import flash
 
-from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, DATA_DIR, MAX_BACKUPS_TO_KEEP
+from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP
 from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
 from models.mailer import send_email_notification
 from models.utils import (
@@ -48,7 +48,7 @@ class Bookings:
     def __init__(self, calendar=None):
         self.calendar = calendar  # GoogleCalendar instance
         self.logger = logging.getLogger("app_logger")
-        self.json_path = Path(DATA_DIR, "bookings.json")
+        self.json_path = Path(DATA_FILE_PATH)
         self.data = {}
         self._load()
 
