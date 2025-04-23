@@ -127,9 +127,11 @@ def _send_email(msg, recipient):
             flash(f"Failed to send email to {recipient}: {e}", "danger")
             return False
     else:
-        logger.info("=== EMAIL LOG ===")
-        logger.info("To: %s", msg["To"])
-        logger.info("Subject: %s", msg["Subject"])
-        plain = next(p for p in msg.iter_parts() if p.get_content_type() == "text/plain")
-        logger.info("Body:\n%s", plain.get_content())
+        try:
+            with smtplib.SMTP("localhost", 25) as server:
+                server.send_message(msg)
+        except smtplib.SMTPException as e:
+            logger.error("Failed to send email to %s: %s", recipient, e)
+            flash(f"Failed to send email to {recipient}: {e}", "danger")
+            return False
     return True
