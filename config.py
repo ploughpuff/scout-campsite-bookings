@@ -25,6 +25,7 @@ LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILENAME)
 # Make sure these directories exist when config is loaded
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 
 LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
