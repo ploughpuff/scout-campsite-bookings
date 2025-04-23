@@ -28,12 +28,13 @@ def send_email_notification(booking_id, booking):
     Returns:
         Boolean: True on success, otherwise False.
     """
+    valid_statuses = {"Confirmed", "Cancelled", "Pending"}
+    status = booking.get("Status")
 
-    if booking["Status"] not in {"Confirmed", "Cancelled", "Pending"}:
+    if status not in valid_statuses:
         return False
 
     recipient = booking.get("original_sheet_data", {}).get("email_address")
-
     if not recipient:
         logger.warning("No email address found for booking %s", booking_id)
         return False
@@ -45,22 +46,17 @@ def send_email_notification(booking_id, booking):
         "booking_id": booking_id,
     }
 
-    if booking["Status"] == "Confirmed":
-        text_template = env.get_template("booking_confirmed.txt")
-        html_template = env.get_template("booking_confirmed.html")
+    template_map = {
+        "Confirmed": ("booking_confirmed.txt", "booking_confirmed.html"),
+        "Cancelled": ("booking_cancelled.txt", "booking_cancelled.html"),
+        "Pending": ("booking_pending.txt", "booking_pending.html"),
+    }
 
-    elif booking["Status"] == "Cancelled":
-        text_template = env.get_template("booking_cancelled.txt")
-        html_template = env.get_template("booking_cancelled.html")
-
-    elif booking["Status"] == "Pending":
-        text_template = env.get_template("booking_pending.txt")
-        html_template = env.get_template("booking_pending.html")
-
-    else:
-        return False
+    text_template_name, html_template_name = template_map[status]
 
     try:
+        text_template = env.get_template(text_template_name)
+        html_template = env.get_template(html_template_name)
         body_text = text_template.render(context)
         body_html = html_template.render(context)
     except smtplib.SMTPException as e:
@@ -68,13 +64,13 @@ def send_email_notification(booking_id, booking):
         return False
 
     msg = EmailMessage()
-    msg["Subject"] = "Campsite Booking " + booking["Status"]
+    msg["Subject"] = f"Campsite Booking {status}"
     msg["From"] = config.EMAIL_USER
     msg["To"] = recipient
-
-    # Add plain and HTML versions
     msg.set_content(body_text)
     msg.add_alternative(body_html, subtype="html")
+
+    booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
 
     if config.APP_ENV == "production":
         try:
@@ -82,19 +78,15 @@ def send_email_notification(booking_id, booking):
                 server.starttls()
                 server.login(config.EMAIL_USER, config.EMAIL_PASS)
                 server.send_message(msg)
-                booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
-            return True
         except smtplib.SMTPException as e:
             logger.error("Failed to send email to %s: %s", recipient, e)
-            msg = f"Failed to send email to {recipient}: {e}"
-            flash(msg, "danger")
+            flash(f"Failed to send email to {recipient}: {e}", "danger")
             return False
     else:
-        # Development mode: log instead of sending
         logger.info("=== EMAIL LOG ===")
         logger.info("To: %s", msg["To"])
         logger.info("Subject: %s", msg["Subject"])
         plain = next(p for p in msg.iter_parts() if p.get_content_type() == "text/plain")
         logger.info("Body:\n%s", plain.get_content())
-        booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
-        return True
+
+    return True
