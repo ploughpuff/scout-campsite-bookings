@@ -323,6 +323,12 @@ class Bookings:
 
             #
             ## Move confirmed bookings to completed/invoice once departure dates has passed
+            if departing.tzinfo is None or departing.tzinfo.utcoffset(departing) is None:
+                self.logger.warning(
+                    "Departing time for %s is offset-naive [%s]", booking_id, departing
+                )
+                continue
+
             if status == "Confirmed" and departing < now_uk():
                 new_status = "Invoice" if invoice else "Completed"
                 booking["Status"] = new_status
