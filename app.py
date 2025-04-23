@@ -22,6 +22,7 @@ from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 
 from config import (
+    APP_SECRET_KEY,
     CALENDAR_ID,
     DATA_FILE_PATH,
     DATA_FILENAME,
@@ -38,7 +39,7 @@ from models.sheets import get_sheet_data
 from models.utils import now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
-app.secret_key = "dev-key"
+app.secret_key = APP_SECRET_KEY
 
 logger = setup_logger()
 logger.info("Starting")

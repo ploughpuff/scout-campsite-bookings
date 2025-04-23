@@ -12,6 +12,13 @@ load_dotenv()
 
 APP_ENV = os.getenv("APP_ENV", "development")
 
+if APP_ENV == "production":
+    load_dotenv(".env.production")
+else:
+    load_dotenv(".env")
+
+APP_SECRET_KEY = os.getenv("SECRET_KEY")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
