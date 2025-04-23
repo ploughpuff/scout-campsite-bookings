@@ -7,8 +7,7 @@ import smtplib
 from email.message import EmailMessage
 
 from flask import flash
-from jinja2 import Environment, FileSystemLoader
-
+from jinja2 import Environment, FileSystemLoader, TemplateError
 import config
 from models.utils import get_pretty_datetime_str
 
@@ -90,7 +89,7 @@ def _create_email_message(status, context, recipient, booking_id, booking):
         text_template_name, html_template_name = template_map[status]
         body_text = env.get_template(text_template_name).render(context)
         body_html = env.get_template(html_template_name).render(context)
-    except Exception as e:
+    except TemplateError as e:
         logger.error("%s trouble rendering email templates: %s: %s", booking_id, booking, e)
         return None
 

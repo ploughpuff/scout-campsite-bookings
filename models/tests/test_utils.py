@@ -1,3 +1,4 @@
+# pylint: skip-file
 import pytest
 
 from models.utils import secs_to_hr
