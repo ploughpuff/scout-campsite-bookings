@@ -1,28 +1,28 @@
 {% extends 'base.html' %}
 
 {% block title %}
-  View Logs
+View Logs
 {% endblock %}
 
 {% block body_class %}
-  logs-view
+logs-view
 {% endblock %}
 
 {% block content %}
-  <div>
-    <label for="level">Filter:</label>
-    <select id="level">
-      <option value="">All</option>
-      <option value="ERROR">ERROR</option>
-      <option value="WARNING">WARNING</option>
-      <option value="INFO">INFO</option>
-      <option value="DEBUG">DEBUG</option>
-    </select>
+<div>
+  <label for="level">Filter:</label>
+  <select id="level">
+    <option value="">All</option>
+    <option value="ERROR">ERROR</option>
+    <option value="WARNING">WARNING</option>
+    <option value="INFO">INFO</option>
+    <option value="DEBUG">DEBUG</option>
+  </select>
 
-    <button onclick="fetchLogs()">Refresh</button>
-    <button onclick="downloadLogs()">Download</button>
-  </div>
+  <button onclick="fetchLogs()">Refresh</button>
+  <button onclick="downloadLogs()">Download</button>
+</div>
 
-  <div id="log-container">Loading logs...</div>
-  <script src="{{ url_for('static', filename='logviewer.js') }}"></script>
+<div id="log-container">Loading logs...</div>
+<script src="{{ url_for('static', filename='logviewer.js') }}"></script>
 {% endblock %}
