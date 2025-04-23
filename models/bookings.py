@@ -104,7 +104,7 @@ class Bookings:
             bookings.append(simplified)
 
         # Optional: sort by status options order
-        bookings.sort(key=lambda b: status_options.index(b["Status"]))
+        bookings.sort(key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or ""))
 
         return bookings
 
