@@ -8,9 +8,8 @@ import io
 import os
 import zipfile
 from datetime import datetime
+
 import bleach
-
-
 from flask import (
     Flask,
     flash,
@@ -28,18 +27,18 @@ from config import (
     CALENDAR_ID,
     DATA_FILE_PATH,
     DATA_FILENAME,
+    EMAIL_TEMP_DIR,
     LOG_FILE_PATH,
     LOG_FILENAME,
     SERVICE_ACCOUNT_FILE,
     TEMPLATE_DIR,
     UK_TZ,
-    EMAIL_TEMP_DIR,
 )
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
-from models.utils import now_uk, get_pretty_date_str
+from models.utils import get_pretty_date_str, now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = APP_SECRET_KEY
@@ -163,6 +162,7 @@ def offline_analysis():
 
 @app.route("/edit_email_body", methods=["GET", "POST"])
 def edit_email_body():
+    """Route to edit the confirm email body"""
     email_template_path = os.path.join(EMAIL_TEMP_DIR, "confirmed_body.html")
 
     # If the form is submitted, sanitize and save the content back to the file
@@ -195,16 +195,19 @@ def edit_email_body():
             with open(email_template_path, "w", encoding="utf-8") as file:
                 file.write(sanitized_content)
             flash("Email template updated successfully!", "success")
-        except Exception as e:
+
+        except (FileNotFoundError, PermissionError) as e:
             flash(f"Error updating the email template: {e}", "danger")
+            logger.exception("Error updating the email template: [%s]", str(e))
             return redirect(url_for("edit_email_body"))
 
     # Read the current content of the template file to display
     try:
         with open(email_template_path, "r", encoding="utf-8") as file:
             current_content = file.read()
-    except Exception as e:
+    except (FileNotFoundError, PermissionError) as e:
         flash(f"Error reading the email template: {e}", "danger")
+        logger.exception("Error reading email confirm body template: [%s]", str(e))
         current_content = ""
 
     return render_template("edit_email_body.html", content=current_content)
