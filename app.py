@@ -6,6 +6,7 @@ Handles routing, app initialization, and integrates with the Bookings class.
 
 import io
 import os
+import shutil
 import zipfile
 from datetime import datetime
 
@@ -27,7 +28,8 @@ from config import (
     CALENDAR_ID,
     DATA_FILE_PATH,
     DATA_FILENAME,
-    EMAIL_TEMP_DIR,
+    EMAIL_BODY_BACKUP_DIR,
+    EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
     LOG_FILENAME,
     SERVICE_ACCOUNT_FILE,
@@ -163,7 +165,6 @@ def offline_analysis():
 @app.route("/edit_email_body", methods=["GET", "POST"])
 def edit_email_body():
     """Route to edit the confirm email body"""
-    email_template_path = os.path.join(EMAIL_TEMP_DIR, "confirmed_body.html")
 
     # If the form is submitted, sanitize and save the content back to the file
     if request.method == "POST":
@@ -192,7 +193,8 @@ def edit_email_body():
 
         # Save sanitized content to the file
         try:
-            with open(email_template_path, "w", encoding="utf-8") as file:
+            backup_email_template()
+            with open(EMAIL_BODY_FILE_PATH, "w", encoding="utf-8") as file:
                 file.write(sanitized_content)
             flash("Email template updated successfully!", "success")
 
@@ -203,14 +205,42 @@ def edit_email_body():
 
     # Read the current content of the template file to display
     try:
-        with open(email_template_path, "r", encoding="utf-8") as file:
+        with open(EMAIL_BODY_FILE_PATH, "r", encoding="utf-8") as file:
             current_content = file.read()
     except (FileNotFoundError, PermissionError) as e:
         flash(f"Error reading the email template: {e}", "danger")
         logger.exception("Error reading email confirm body template: [%s]", str(e))
         current_content = ""
 
-    return render_template("edit_email_body.html", content=current_content)
+    return render_template(
+        "edit_email_body.html", content=current_content, backups=get_backup_list()
+    )
+
+
+def backup_email_template():
+    """Backup the current email body to allow retrieval at later date"""
+    if os.path.exists(EMAIL_BODY_FILE_PATH):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(EMAIL_BODY_BACKUP_DIR, f"confirmed_body_{timestamp}.html")
+        shutil.copy2(EMAIL_BODY_FILE_PATH, backup_path)
+
+
+def get_backup_list():
+    """List all the files in the backup folder"""
+    if not os.path.exists(EMAIL_BODY_BACKUP_DIR):
+        return []
+    return sorted(os.listdir(EMAIL_BODY_BACKUP_DIR), reverse=True)  # latest first
+
+
+@app.route("/admin/load_backup")
+def load_backup():
+    """Called from JS, return file content for display in textarea box"""
+    filename = request.args.get("filename")
+    backup_path = os.path.join(EMAIL_BODY_BACKUP_DIR, filename)
+    if os.path.isfile(backup_path):
+        with open(backup_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "Backup not found", 404
 
 
 @app.errorhandler(404)

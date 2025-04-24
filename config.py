@@ -25,15 +25,19 @@ TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 EMAIL_TEMP_DIR = os.path.join(BASE_DIR, "email_templates")
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(EMAIL_TEMP_DIR, exist_ok=True)
+
+MAIL_BODY_FILENAME = "confirmed_body.html"
+EMAIL_BODY_FILE_PATH = os.path.join(EMAIL_TEMP_DIR, MAIL_BODY_FILENAME)
+EMAIL_BODY_BACKUP_DIR = os.path.join(EMAIL_TEMP_DIR, "backups")
+os.makedirs(EMAIL_BODY_BACKUP_DIR, exist_ok=True)
 
 LOG_FILENAME = "app.log"
 LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILENAME)
 DATA_FILENAME = "bookings.json"
 DATA_FILE_PATH = os.path.join(DATA_DIR, DATA_FILENAME)
-
-# Make sure these directories exist when config is loaded
-os.makedirs(LOG_DIR, exist_ok=True)
-os.makedirs(DATA_DIR, exist_ok=True)
 
 LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
