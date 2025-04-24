@@ -117,7 +117,7 @@ class Bookings:
         Args:
             booking_id (str): The booking ID to modify
             new_status (str): Proposed new status value
-            description (str, optional): Cancel reason or pending question text. Defaults to None.
+            description (str, optional): cancel_reason or pending question text. Defaults to None.
 
         Returns:
             Boolean: True if change made, else False
@@ -136,7 +136,7 @@ class Bookings:
                 return False
 
             booking["email_confirmation_sent"] = False  # Clear so we send again if resurected
-            field = "Cancel Reason" if new_status == "Cancelled" else "pend_question"
+            field = "cancel_reason" if new_status == "Cancelled" else "pend_question"
             self._add_to_notes(booking, f"{field}: {description}")
             booking[field] = description
 
