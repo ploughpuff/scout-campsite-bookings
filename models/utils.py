@@ -134,18 +134,24 @@ def get_pretty_datetime_str(value=None, include_seconds=False, fmt=None):
 
 
 def get_pretty_date_str(dt):
-    day = dt.day
-    suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-    month = dt.strftime("%B")
-    time_part = dt.strftime("%H:%M")
-    year = dt.year
-    current_year = now_uk().year
+    """Return pretty date string from passed dt object"""
+    try:
+        day = dt.day
+        suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+        month = dt.strftime("%B")
+        time_part = dt.strftime("%H:%M")
+        year = dt.year
+        current_year = now_uk().year
 
-    date_str = f"{day}{suffix} {month}"
-    if year != current_year:
-        date_str += f" {year}"
+        date_str = f"{day}{suffix} {month}"
+        if year != current_year:
+            date_str += f" {year}"
 
-    return f"{date_str} {time_part}"
+        return f"{date_str} {time_part}"
+    except (TypeError, ValueError) as e:
+        logger = logging.getLogger("app_logger")
+        logger.warning("Failed to create pretty date string %s", e)
+        return None
 
 
 def normalize_key(key: str) -> str:

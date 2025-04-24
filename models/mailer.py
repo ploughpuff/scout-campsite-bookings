@@ -13,7 +13,7 @@ from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
-from models.utils import get_pretty_datetime_str, get_pretty_date_str
+from models.utils import get_pretty_date_str, get_pretty_datetime_str
 
 logger = logging.getLogger("app_logger")
 
@@ -58,11 +58,11 @@ def _build_email_context(booking_id, booking):
     """
 
     arriving_str = get_pretty_date_str(booking.get("Arriving"))
-    summary = "TBD"
+    summary = f"Your campsite booking for {arriving_str} "
     body = "TBD"
 
     if booking.get("Status") == "Confirmed":
-        summary = f"Your campsite booking for {arriving_str} is <strong>CONFIRMED</strong>."
+        summary += "is <strong>CONFIRMED</strong>."
 
         file_path = Path(os.path.join(config.EMAIL_TEMP_DIR, "confirmed_body.html"))
 
@@ -71,10 +71,12 @@ def _build_email_context(booking_id, booking):
                 body = file.read()
 
     elif booking.get("Status") == "Cancelled":
-        summary = f"Your campsite booking for {arriving_str} is <strong>CANCELLED</strong>."
+        summary += "is <strong>CANCELLED</strong>."
         body = f"Reason: {booking["cancel_reason"]}"
     elif booking.get("Status") == "Pending":
-        summary = f"Your campsite booking for {arriving_str} has been set to <strong>PENDING</strong> with the following note to answer please:"
+        summary += (
+            "has been set to <strong>PENDING</strong> with the following note to answer please:"
+        )
         body = f"Pending Question: {booking["pend_question"]}"
 
     return {

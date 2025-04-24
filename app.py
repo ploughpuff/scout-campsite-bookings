@@ -140,6 +140,7 @@ def download_logs():
 
 @app.route("/offline/analysis")
 def offline_analysis():
+    """Route to facilitate offline analysis"""
     ct_points = [{DATA_FILENAME, DATA_FILE_PATH}, {LOG_FILENAME, LOG_FILE_PATH}]
 
     memory_file = io.BytesIO()
