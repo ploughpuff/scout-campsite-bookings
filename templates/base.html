@@ -53,6 +53,11 @@
         class="btn {% if current == 'view_logs' %}btn-primary{% else %}btn-secondary{% endif %}">
         View Log
       </a>
+
+      <a href="{{ url_for('edit_email_body') }}"
+        class="btn {% if current == 'edit_email_body' %}btn-primary{% else %}btn-secondary{% endif %}">
+        Edit Email Body
+      </a>
     </div>
   </div>
 

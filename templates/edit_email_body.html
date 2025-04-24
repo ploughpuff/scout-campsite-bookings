@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Booking Details
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+    <h1>Edit Email Template</h1>
+
+    <form method="POST" action="{{ url_for('edit_email_body') }}">
+        <textarea name="email_content" rows="50" cols="120">{{ content }}</textarea><br>
+        <button type="submit">Save Changes</button>
+    </form>
+
+    <div>
+        <h2>Note:</h2>
+        <p>You can use basic HTML tags in the email body:</p>
+        <ul>
+            <li><code>&lt;p&gt;</code> - for paragraphs</li>
+            <li><code>&lt;ul&gt;</code> - for unordered lists</li>
+            <li><code>&lt;li&gt;</code> - for list items</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

@@ -8,6 +8,8 @@ import io
 import os
 import zipfile
 from datetime import datetime
+import bleach
+
 
 from flask import (
     Flask,
@@ -31,6 +33,7 @@ from config import (
     SERVICE_ACCOUNT_FILE,
     TEMPLATE_DIR,
     UK_TZ,
+    EMAIL_TEMP_DIR,
 )
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
@@ -156,6 +159,55 @@ def offline_analysis():
         as_attachment=True,
         mimetype="application/zip",
     )
+
+
+@app.route("/edit_email_body", methods=["GET", "POST"])
+def edit_email_body():
+    email_template_path = os.path.join(EMAIL_TEMP_DIR, "confirmed_body.html")
+
+    # If the form is submitted, sanitize and save the content back to the file
+    if request.method == "POST":
+        new_content = request.form["email_content"]
+
+        # Sanitize the HTML input, allowing only specific tags and attributes
+        allowed_tags = [
+            "p",
+            "ul",
+            "li",
+            "strong",
+            "em",
+            "a",
+            "br",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+        ]
+        allowed_attributes = {"a": ["href", "title"]}
+        sanitized_content = bleach.clean(
+            new_content, tags=allowed_tags, attributes=allowed_attributes
+        )
+
+        # Save sanitized content to the file
+        try:
+            with open(email_template_path, "w", encoding="utf-8") as file:
+                file.write(sanitized_content)
+            flash("Email template updated successfully!", "success")
+        except Exception as e:
+            flash(f"Error updating the email template: {e}", "danger")
+            return redirect(url_for("edit_email_body"))
+
+    # Read the current content of the template file to display
+    try:
+        with open(email_template_path, "r", encoding="utf-8") as file:
+            current_content = file.read()
+    except Exception as e:
+        flash(f"Error reading the email template: {e}", "danger")
+        current_content = ""
+
+    return render_template("edit_email_body.html", content=current_content)
 
 
 @app.errorhandler(404)
