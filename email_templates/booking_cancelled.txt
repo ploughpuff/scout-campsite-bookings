@@ -1,5 +1,0 @@
-Hi {{ leader }},
-
-As agreed, your booking starting {{ arriving }} has been cancelled.
-
-— Campsite Team
