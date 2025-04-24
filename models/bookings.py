@@ -7,7 +7,6 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from flask import flash
 
@@ -18,18 +17,13 @@ from config import (
     UK_TZ,
     ARCHIVE_FILE_PATH,
 )
-from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
+from models.booking_types import gen_next_booking_id
 from models.mailer import send_email_notification
 from models.utils import (
-    atomic_write_json,
-    backup_with_rotation,
-    datetime_to_iso_uk,
     get_timestamp_for_notes,
     now_uk,
     parse_iso_datetime,
     secs_to_hr,
-    verify_checksum,
-    write_checksum,
 )
 
 from models.json_utils import load_json, save_json
@@ -62,6 +56,9 @@ class Bookings:
 
     def _save(self):
         save_json(self.data, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP)
+
+    def load(self):
+        self.data = load_json(DATA_FILE_PATH, use_checksum=False)
 
     def get_states(self):
         """Reveal the various status names and their valid transitions.
@@ -302,20 +299,17 @@ class Bookings:
         """Move bookings with status 'Archived' to archive.json and remove from bookings.json."""
         to_archive = []
 
-        for booking_id, booking in self.data.get("bookings", {}).items():
-
+        for booking_id, booking in list(self.data.get("bookings", {}).items()):
             departing = booking.get("Departing")
             archive_date = departing + timedelta(days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS)
 
             if booking.get("Status") == "Completed" and archive_date < now_uk():
 
-                #
-                ## Take a copy of this booking and remove from main bookings
+                # Take a deep copy of this booking and remove from main bookings
                 archive_copy = copy.deepcopy(booking)
                 self.data["bookings"].pop(booking_id)
 
-                #
-                ## Remove all GDPR data
+                # Remove all GDPR data
                 archive_copy.pop("original_sheet_data", None)
                 archive_copy.pop("Leader", None)
                 archive_copy["Status"] = "Archived"
@@ -326,15 +320,18 @@ class Bookings:
                 to_archive.append(archive_copy)
 
         if not to_archive:
+            self.logger.info("No bookings to archive.")
             return False
 
+        # Handle archive file
         if ARCHIVE_FILE_PATH.exists():
             archived = load_json(ARCHIVE_FILE_PATH)
             archived.extend(to_archive)
-            save_json(ARCHIVE_FILE_PATH, archived)
+            save_json(archived, ARCHIVE_FILE_PATH)
         else:
-            save_json(ARCHIVE_FILE_PATH, to_archive)
+            save_json(to_archive, ARCHIVE_FILE_PATH)
 
+        # Save main data after removing archived bookings
         self._save()
 
         self.logger.info("Archived %d bookings", len(to_archive))

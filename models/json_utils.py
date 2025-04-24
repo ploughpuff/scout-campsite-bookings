@@ -4,9 +4,10 @@ import shutil
 import tempfile
 import logging
 import hashlib
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 from models.utils import datetime_to_iso_uk
+
+logger = logging.getLogger("app_logger")
 
 
 def serialize_data(data):
@@ -62,8 +63,11 @@ def save_json(data, path, max_backups=5):
 def load_json(path, use_checksum=True):
     """Load and deserialize JSON file with optional checksum verification."""
 
+    if not path.exists():
+        return False
+
     if use_checksum and not verify_checksum(path):
-        self.logger.error("JSON checksum failed! File may be corrupted.")
+        logger.error("JSON checksum failed! File may be corrupted.")
         raise ValueError("Checksum mismatch!")
 
     # Proceed with loading the JSON data
@@ -131,7 +135,6 @@ def verify_checksum(json_path):
         stored = json_path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
         return hashlib.sha256(content.encode("utf-8")).hexdigest() == stored
     except (TypeError, ValueError) as e:
-        logger = logging.getLogger("app_logger")
         logger.warning(
             "Problem creating digest for comparison against stored [%s] [%s]: %s",
             json_path,
