@@ -2,6 +2,7 @@
 Bookings.py - Manage the bookings data file and provide access functions.
 """
 
+import copy
 import hashlib
 import json
 import logging
@@ -10,7 +11,13 @@ from pathlib import Path
 
 from flask import flash
 
-from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP, UK_TZ
+from config import (
+    ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS,
+    DATA_FILE_PATH,
+    MAX_BACKUPS_TO_KEEP,
+    UK_TZ,
+    ARCHIVE_FILE_PATH,
+)
 from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
 from models.mailer import send_email_notification
 from models.utils import (
@@ -24,6 +31,8 @@ from models.utils import (
     verify_checksum,
     write_checksum,
 )
+
+from models.json_utils import load_json, save_json
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 
@@ -48,9 +57,11 @@ class Bookings:
     def __init__(self, calendar=None):
         self.calendar = calendar  # GoogleCalendar instance
         self.logger = logging.getLogger("app_logger")
-        self.json_path = Path(DATA_FILE_PATH)
-        self.data = {}
-        self.load()
+        self.data = load_json(DATA_FILE_PATH)
+        self.archive = load_json(ARCHIVE_FILE_PATH)
+
+    def _save(self):
+        save_json(self.data, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP)
 
     def get_states(self):
         """Reveal the various status names and their valid transitions.
@@ -162,8 +173,7 @@ class Bookings:
             send_email_notification(booking_id, booking)
             # handle_calendar_entry(booking_id, booking)
             self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
-
-            self._save()
+            self._save()  # Only save if the state transition is valid
             return True
 
         return False
@@ -260,65 +270,6 @@ class Bookings:
 
         old_value = booking.get("Notes", "")
         booking["Notes"] = new_note_entry + ("\n" + old_value if old_value else "")
-        self._save()
-
-    def _save(self):
-        """Searilise fields before storing in JSON format."""
-
-        # Make a shallow copy to avoid mutating in-memory data
-        data_to_save = {
-            "timestamp": datetime_to_iso_uk(self.data.get("timestamp")),
-            "bookings": {},
-        }
-
-        for booking_id, booking in self.data.get("bookings", {}).items():
-            serialized = {}
-            for key, value in booking.items():
-                if isinstance(value, datetime):
-                    serialized[key] = datetime_to_iso_uk(value)
-                elif isinstance(value, BookingType):
-                    serialized[key] = value.name
-                else:
-                    serialized[key] = value
-
-            data_to_save["bookings"][booking_id] = serialized
-
-        if self.json_path.exists():
-            backup_with_rotation(self.json_path, max_backups=MAX_BACKUPS_TO_KEEP)
-
-        atomic_write_json(data_to_save, self.json_path)
-        write_checksum(self.json_path)
-
-    def load(self, use_checksum=True):
-        """Load the bokking JSON file to memory"""
-        if self.json_path.exists():
-
-            if use_checksum and not verify_checksum(self.json_path):
-                self.logger.error("JSON checksum failed! File may be corrupted.")
-                raise ValueError("Checksum mismatch!")
-
-            with open(self.json_path, "r", encoding="utf-8") as f:
-                self.data = json.load(f)
-
-                # Deseralise timestamp
-                self.data["timestamp"] = parse_iso_datetime(self.data.get("timestamp"))
-
-                for booking in self.data.get("bookings", {}).values():
-                    for key, value in booking.items():
-                        # Deserialize datetime strings
-                        booking[key] = parse_iso_datetime(value)
-
-                    # Deserialize BookingType enum
-                    bt_raw = booking.get("booking_type")
-                    parsed_bt = parse_booking_type(bt_raw)
-
-                    if parsed_bt:
-                        booking["booking_type"] = parsed_bt
-                    else:
-                        self.logger.warning("Unknown or missing booking_type: %s", bt_raw)
-
-        else:
-            self.data = {"timestamp": now_uk(), "bookings": {}}
 
     def auto_update_statuses(self):
         """Look for bookings to automatically change the status of"""
@@ -327,8 +278,6 @@ class Bookings:
             status = booking.get("Status")
             departing = booking.get("Departing")
             invoice = booking.get("invoice")
-
-            archive_date = departing + timedelta(days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS)
 
             #
             ## Move confirmed bookings to completed/invoice once departure dates has passed
@@ -342,21 +291,54 @@ class Bookings:
                 new_status = "Invoice" if invoice else "Completed"
                 booking["Status"] = new_status
                 self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
+                self._save()
                 flash(
                     f"{booking_id} automatically change from {status} "
                     f"to {new_status} now booking has passed",
                     "warning",
                 )
 
-            elif status == "Completed" and archive_date < now_uk():
-                new_status = "Archived"
-                booking["Status"] = new_status
-                self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
-                flash(
-                    f"{booking_id} automatically change from {status} to {new_status} "
-                    f"as booking {ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS} days passec",
-                    "warning",
+    def archive_old_bookings(self):
+        """Move bookings with status 'Archived' to archive.json and remove from bookings.json."""
+        to_archive = []
+
+        for booking_id, booking in self.data.get("bookings", {}).items():
+
+            departing = booking.get("Departing")
+            archive_date = departing + timedelta(days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS)
+
+            if booking.get("Status") == "Completed" and archive_date < now_uk():
+
+                #
+                ## Take a copy of this booking and remove from main bookings
+                archive_copy = copy.deepcopy(booking)
+                self.data["bookings"].pop(booking_id)
+
+                #
+                ## Remove all GDPR data
+                archive_copy.pop("original_sheet_data", None)
+                archive_copy.pop("Leader", None)
+                archive_copy["Status"] = "Archived"
+                self._add_to_notes(
+                    archive_copy, f"Auto Status Change: [{booking.get('Status')}] > [Archived]"
                 )
+                self.logger.info("%s archived", booking_id)
+                to_archive.append(archive_copy)
+
+        if not to_archive:
+            return False
+
+        if ARCHIVE_FILE_PATH.exists():
+            archived = load_json(ARCHIVE_FILE_PATH)
+            archived.extend(to_archive)
+            save_json(ARCHIVE_FILE_PATH, archived)
+        else:
+            save_json(ARCHIVE_FILE_PATH, to_archive)
+
+        self._save()
+
+        self.logger.info("Archived %d bookings", len(to_archive))
+        return True
 
     def _md5_of_dict(self, data):
         # Ensure consistent ordering to get a consistent hash
