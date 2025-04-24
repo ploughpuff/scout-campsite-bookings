@@ -5,6 +5,7 @@ config.py - Contains configuration settings for Scout Campsite Bookings
 
 import os
 from zoneinfo import ZoneInfo
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -20,24 +21,24 @@ else:
 APP_SECRET_KEY = os.getenv("SECRET_KEY")
 SITENAME = os.getenv("SITENAME")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
-LOG_DIR = os.path.join(BASE_DIR, "logs")
-DATA_DIR = os.path.join(BASE_DIR, "data")
-EMAIL_TEMP_DIR = os.path.join(BASE_DIR, "email_templates")
-os.makedirs(LOG_DIR, exist_ok=True)
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(EMAIL_TEMP_DIR, exist_ok=True)
+# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATE_DIR = Path(BASE_DIR) / "templates"
+LOG_DIR = Path(BASE_DIR) / "logs"
+DATA_DIR = Path(BASE_DIR) / "data"
+EMAIL_TEMP_DIR = Path(BASE_DIR) / "email_templates"
 
-MAIL_BODY_FILENAME = "confirmed_body.html"
-EMAIL_BODY_FILE_PATH = os.path.join(EMAIL_TEMP_DIR, MAIL_BODY_FILENAME)
-EMAIL_BODY_BACKUP_DIR = os.path.join(EMAIL_TEMP_DIR, "backups")
-os.makedirs(EMAIL_BODY_BACKUP_DIR, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+EMAIL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-LOG_FILENAME = "app.log"
-LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILENAME)
-DATA_FILENAME = "bookings.json"
-DATA_FILE_PATH = os.path.join(DATA_DIR, DATA_FILENAME)
+EMAIL_BODY_FILE_PATH = Path(EMAIL_TEMP_DIR) / "confirmed_body.html"
+EMAIL_BODY_BACKUP_DIR = Path(EMAIL_TEMP_DIR) / "backups"
+EMAIL_BODY_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+LOG_FILE_PATH = Path(LOG_DIR) / "app.log"
+DATA_FILE_PATH = Path(DATA_DIR) / "bookings.json"
+ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
 
 LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
