@@ -1,6 +1,6 @@
 /logs
-/cache
+/data
+/email_templates
 *.pyc
 .env
 credentials.json
-/data
