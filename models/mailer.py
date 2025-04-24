@@ -3,19 +3,22 @@ mailer.py - Provide functions to send emails from the app.
 """
 
 import logging
+import os
 import smtplib
 from email.message import EmailMessage
+from pathlib import Path
 
+import html2text
 from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
-from models.utils import get_pretty_datetime_str
+from models.utils import get_pretty_datetime_str, get_pretty_date_str
 
 logger = logging.getLogger("app_logger")
 
 # Setup Jinja2 environment to load from templates folder
-env = Environment(loader=FileSystemLoader(config.EMAIL_TEMP_DIR))
+env = Environment(loader=FileSystemLoader([config.EMAIL_TEMP_DIR]))
 
 
 def send_email_notification(booking_id, booking):
@@ -49,20 +52,36 @@ def send_email_notification(booking_id, booking):
 
 def _build_email_context(booking_id, booking):
     """
-    Build the context dictionary used for rendering email templates.
-
-    Args:
-        booking_id (str): Unique identifier of the booking.
-        booking (dict): Booking details.
-
-    Returns:
-        dict: Context with placeholder values for email content.
+    Confirmed
+    Cancelled
+    Pending
     """
+
+    arriving_str = get_pretty_date_str(booking.get("Arriving"))
+    summary = "TBD"
+    body = "TBD"
+
+    if booking.get("Status") == "Confirmed":
+        summary = f"Your campsite booking for {arriving_str} is <strong>CONFIRMED</strong>."
+
+        file_path = Path(os.path.join(config.EMAIL_TEMP_DIR, "confirmed_body.html"))
+
+        if file_path.exists():
+            with file_path.open("r", encoding="utf-8") as file:
+                body = file.read()
+
+    elif booking.get("Status") == "Cancelled":
+        summary = f"Your campsite booking for {arriving_str} is <strong>CANCELLED</strong>."
+        body = f"Reason: {booking["cancel_reason"]}"
+    elif booking.get("Status") == "Pending":
+        summary = f"Your campsite booking for {arriving_str} has been set to <strong>PENDING</strong> with the following note to answer please:"
+        body = f"Pending Question: {booking["pend_question"]}"
+
     return {
         "leader": booking.get("Leader", "Leader"),
-        "arriving": booking.get("Arriving", "a future date"),
-        "campsite": booking.get("Campsite", "the campsite"),
         "booking_id": booking_id,
+        "summary": summary,
+        "body": body,
     }
 
 
@@ -80,26 +99,24 @@ def _create_email_message(status, context, recipient, booking_id, booking):
     Returns:
         EmailMessage or None: A composed email message, or None if templates fail.
     """
-    template_map = {
-        "Confirmed": ("booking_confirmed.txt", "booking_confirmed.html"),
-        "Cancelled": ("booking_cancelled.txt", "booking_cancelled.html"),
-        "Pending": ("booking_pending.txt", "booking_pending.html"),
-    }
-
     try:
-        text_template_name, html_template_name = template_map[status]
-        body_text = env.get_template(text_template_name).render(context)
-        body_html = env.get_template(html_template_name).render(context)
+        body = env.get_template("base_email.html").render(context)
     except TemplateError as e:
         logger.error("%s trouble rendering email templates: %s: %s", booking_id, booking, e)
         return None
 
+    arriving_str = get_pretty_date_str(booking.get("Arriving"))
     msg = EmailMessage()
-    msg["Subject"] = f"Campsite Booking {status}"
+    msg["Subject"] = f"{config.SITENAME} Booking {arriving_str} - {status.upper()}"
     msg["From"] = config.EMAIL_USER
     msg["To"] = recipient
+
+    h = html2text.HTML2Text()
+    h.body = body
+    body_text = h.handle(body)
+
     msg.set_content(body_text)
-    msg.add_alternative(body_html, subtype="html")
+    msg.add_alternative(body, subtype="html")
     return msg
 
 

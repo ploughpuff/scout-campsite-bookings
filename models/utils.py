@@ -98,7 +98,7 @@ def secs_to_hr(seconds):
     return " ".join(parts)
 
 
-def get_pretty_datetime_str(value=None, include_seconds=False):
+def get_pretty_datetime_str(value=None, include_seconds=False, fmt=None):
     """
     Create a pretty date string from either dt object or epoch int.
 
@@ -122,13 +122,30 @@ def get_pretty_datetime_str(value=None, include_seconds=False):
     else:
         return value
 
-    try:
+    if fmt is None:
         fmt = DATE_FORMAT_WITH_SECONDS if include_seconds else DATE_FORMAT
+
+    try:
         return dt.strftime(fmt)
     except (TypeError, ValueError) as e:
         logger = logging.getLogger("app_logger")
         logger.warning("Failed to format epoch timestamp: %s", e)
         return value
+
+
+def get_pretty_date_str(dt):
+    day = dt.day
+    suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    month = dt.strftime("%B")
+    time_part = dt.strftime("%H:%M")
+    year = dt.year
+    current_year = now_uk().year
+
+    date_str = f"{day}{suffix} {month}"
+    if year != current_year:
+        date_str += f" {year}"
+
+    return f"{date_str} {time_part}"
 
 
 def normalize_key(key: str) -> str:
