@@ -4,8 +4,8 @@ config.py - Contains configuration settings for Scout Campsite Bookings
 """
 
 import os
-from zoneinfo import ZoneInfo
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 

@@ -25,12 +25,12 @@ from werkzeug.exceptions import HTTPException
 
 from config import (
     APP_SECRET_KEY,
+    ARCHIVE_FILE_PATH,
     CALENDAR_ID,
     DATA_FILE_PATH,
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
-    ARCHIVE_FILE_PATH,
     SERVICE_ACCOUNT_FILE,
     TEMPLATE_DIR,
     UK_TZ,

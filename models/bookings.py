@@ -12,12 +12,13 @@ from flask import flash
 
 from config import (
     ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS,
+    ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
     MAX_BACKUPS_TO_KEEP,
     UK_TZ,
-    ARCHIVE_FILE_PATH,
 )
 from models.booking_types import gen_next_booking_id
+from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.utils import (
     get_timestamp_for_notes,
@@ -25,8 +26,6 @@ from models.utils import (
     parse_iso_datetime,
     secs_to_hr,
 )
-
-from models.json_utils import load_json, save_json
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 
@@ -58,6 +57,7 @@ class Bookings:
         save_json(self.data, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP)
 
     def load(self):
+        """Reload the bookings json file from disk"""
         self.data = load_json(DATA_FILE_PATH, use_checksum=False)
 
     def get_states(self):

@@ -1,16 +1,20 @@
+"""json_utils.py - Utility function for managing JSON files"""
+
+import hashlib
 import json
+import logging
 import os
 import shutil
 import tempfile
-import logging
-import hashlib
 from datetime import datetime
+
 from models.utils import datetime_to_iso_uk
 
 logger = logging.getLogger("app_logger")
 
 
 def serialize_data(data):
+    """Recursive function to serialise a dist or list"""
     if isinstance(data, dict):
         return {k: serialize_data(v) for k, v in data.items()}
     elif isinstance(data, list):
@@ -23,6 +27,7 @@ def serialize_data(data):
 
 
 def deserialize_data(data):
+    """Recursive function to de-serialise a dist or list"""
     if isinstance(data, dict):
         return {k: deserialize_data(v) for k, v in data.items()}
     elif isinstance(data, list):
@@ -38,7 +43,8 @@ def deserialize_data(data):
 
 
 def save_json(data, path, max_backups=5):
-    """Serialize data and save it to a JSON file with backup rotation, atomic write, and checksum update."""
+    """Serialize data and save it to a JSON file with backup rotation, atomic write,
+    and checksum update."""
 
     # Make a shallow copy to avoid mutating in-memory data
     data_to_save = data.copy()
