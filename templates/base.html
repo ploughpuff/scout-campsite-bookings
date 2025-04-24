@@ -63,6 +63,11 @@
         class="btn {% if current == 'reload_json' %}btn-primary{% else %}btn-secondary{% endif %}">
         Reload JSON
       </a>
+
+      <a href="{{ url_for('archive_old_bookings') }}"
+        class="btn {% if current == 'archive_old_bookings' %}btn-primary{% else %}btn-secondary{% endif %}">
+        Archive Old Bookings
+      </a>
     </div>
   </div>
 
