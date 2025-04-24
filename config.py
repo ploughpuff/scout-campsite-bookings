@@ -62,8 +62,12 @@ SHEETS_TO_PULL = [
 ]
 
 UK_TZ = ZoneInfo("Europe/London")
+
+#
+## Date formats used in notes
 DATE_FORMAT = "%Y-%m-%d %H:%M"
 DATE_FORMAT_WITH_SECONDS = "%Y-%m-%d %H:%M:%S"
+
 
 #
 ## Anonymise bookings by removing personnel information once a completed is X days old

@@ -98,7 +98,7 @@ def secs_to_hr(seconds):
     return " ".join(parts)
 
 
-def get_pretty_datetime_str(value=None, include_seconds=False, fmt=None):
+def get_timestamp_for_notes(value=None, include_seconds=False):
     """
     Create a pretty date string from either dt object or epoch int.
 
@@ -122,10 +122,8 @@ def get_pretty_datetime_str(value=None, include_seconds=False, fmt=None):
     else:
         return value
 
-    if fmt is None:
-        fmt = DATE_FORMAT_WITH_SECONDS if include_seconds else DATE_FORMAT
-
     try:
+        fmt = DATE_FORMAT_WITH_SECONDS if include_seconds else DATE_FORMAT
         return dt.strftime(fmt)
     except (TypeError, ValueError) as e:
         logger = logging.getLogger("app_logger")

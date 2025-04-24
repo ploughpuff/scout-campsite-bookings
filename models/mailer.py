@@ -13,7 +13,7 @@ from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
-from models.utils import get_pretty_date_str, get_pretty_datetime_str
+from models.utils import get_pretty_date_str, now_uk
 
 logger = logging.getLogger("app_logger")
 
@@ -46,7 +46,7 @@ def send_email_notification(booking_id, booking):
     if not msg:
         return False
 
-    booking["email_confirmation_sent"] = get_pretty_datetime_str(include_seconds=True)
+    booking["email_confirmation_sent"] = now_uk()
     return _send_email(msg, recipient)
 
 
