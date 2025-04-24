@@ -243,6 +243,12 @@ def load_backup():
     return "Backup not found", 404
 
 
+@app.route("/admin/reload_json")
+def reload_json():
+    bookings.load(use_checksum=False)
+    return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
+
+
 @app.errorhandler(404)
 def page_not_found(e):
     """

@@ -58,6 +58,11 @@
         class="btn {% if current == 'edit_email_body' %}btn-primary{% else %}btn-secondary{% endif %}">
         Edit Email Body
       </a>
+
+      <a href="{{ url_for('reload_json') }}"
+        class="btn {% if current == 'reload_json' %}btn-primary{% else %}btn-secondary{% endif %}">
+        Reload JSON
+      </a>
     </div>
   </div>
 

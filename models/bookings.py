@@ -10,14 +10,14 @@ from pathlib import Path
 
 from flask import flash
 
-from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP
+from config import ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP, UK_TZ
 from models.booking_types import BookingType, gen_next_booking_id, parse_booking_type
 from models.mailer import send_email_notification
 from models.utils import (
     atomic_write_json,
     backup_with_rotation,
     datetime_to_iso_uk,
-    get_pretty_datetime_str,
+    get_timestamp_for_notes,
     now_uk,
     parse_iso_datetime,
     secs_to_hr,
@@ -50,7 +50,7 @@ class Bookings:
         self.logger = logging.getLogger("app_logger")
         self.json_path = Path(DATA_FILE_PATH)
         self.data = {}
-        self._load()
+        self.load()
 
     def get_states(self):
         """Reveal the various status names and their valid transitions.
@@ -104,7 +104,14 @@ class Bookings:
             bookings.append(simplified)
 
         # Optional: sort by status options order
-        bookings.sort(key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or ""))
+        try:
+            bookings.sort(
+                key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or "")
+            )
+        except TypeError as e:
+            msg = f"Corrupt datetime in one of the booking entries! {str(e)}"
+            flash(msg, "danger")
+            self.logger.warning(msg)
 
         return bookings
 
@@ -199,8 +206,8 @@ class Bookings:
             booking[field] = new_value
 
             if field in ("Arriving", "Departing"):
-                old_value_str = get_pretty_datetime_str(old_value)
-                new_value_str = get_pretty_datetime_str(new_value)
+                old_value_str = get_timestamp_for_notes(old_value)
+                new_value_str = get_timestamp_for_notes(new_value)
             else:
                 old_value_str = old_value
                 new_value_str = new_value
@@ -248,7 +255,7 @@ class Bookings:
 
     def _add_to_notes(self, booking, new_note):
 
-        timestamp = get_pretty_datetime_str(include_seconds=True)
+        timestamp = get_timestamp_for_notes(include_seconds=True)
         new_note_entry = f"[{timestamp}]: {new_note}"
 
         old_value = booking.get("Notes", "")
@@ -282,10 +289,10 @@ class Bookings:
         atomic_write_json(data_to_save, self.json_path)
         write_checksum(self.json_path)
 
-    def _load(self):
+    def load(self, use_checksum=True):
         if self.json_path.exists():
 
-            if not verify_checksum(self.json_path):
+            if use_checksum and not verify_checksum(self.json_path):
                 self.logger.error("JSON checksum failed! File may be corrupted.")
                 raise ValueError("Checksum mismatch!")
 
@@ -396,12 +403,14 @@ class Bookings:
                     if not self._find_booking_by_md5(new_booking_md5):
 
                         start_dt = datetime.strptime(sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S")
+                        start_dt = start_dt.replace(tzinfo=UK_TZ)
 
                         # Parse the departure time and replace the time part of arrival
                         dep_time = datetime.strptime(sb["departure_time"], "%H:%M:%S").time()
                         end_dt = start_dt.replace(
                             hour=dep_time.hour, minute=dep_time.minute, second=0
                         )
+                        end_dt = start_dt.replace(tzinfo=UK_TZ)
 
                         existing_ids = list(self.data["bookings"].keys())
                         new_booking_id = gen_next_booking_id(
