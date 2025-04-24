@@ -36,7 +36,7 @@ from models.bookings import Bookings
 from models.calendar import GoogleCalendar
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
-from models.utils import now_uk
+from models.utils import now_uk, get_pretty_date_str
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = APP_SECRET_KEY
@@ -220,18 +220,7 @@ def pretty_date(value):
     else:
         return str(value)
 
-    day = dt.day
-    suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-    month = dt.strftime("%B")
-    time_part = dt.strftime("%H:%M")
-    year = dt.year
-    current_year = now_uk().year
-
-    date_str = f"{day}{suffix} {month}"
-    if year != current_year:
-        date_str += f" {year}"
-
-    return Markup(f"{date_str}<br>{time_part}")
+    return Markup(get_pretty_date_str(dt))
 
 
 if __name__ == "__main__":
