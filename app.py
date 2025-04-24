@@ -27,11 +27,10 @@ from config import (
     APP_SECRET_KEY,
     CALENDAR_ID,
     DATA_FILE_PATH,
-    DATA_FILENAME,
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
-    LOG_FILENAME,
+    ARCHIVE_FILE_PATH,
     SERVICE_ACCOUNT_FILE,
     TEMPLATE_DIR,
     UK_TZ,
@@ -145,12 +144,12 @@ def download_logs():
 @app.route("/offline/analysis")
 def offline_analysis():
     """Route to facilitate offline analysis"""
-    ct_points = [{DATA_FILENAME, DATA_FILE_PATH}, {LOG_FILENAME, LOG_FILE_PATH}]
+    ct_points = [DATA_FILE_PATH, ARCHIVE_FILE_PATH, LOG_FILE_PATH]
 
     memory_file = io.BytesIO()
     with zipfile.ZipFile(memory_file, "w") as zf:
-        for a, p in ct_points:
-            zf.write(p, arcname=a)
+        for p in ct_points:
+            zf.write(p, arcname=p.name)
 
     memory_file.seek(0)
 
@@ -247,6 +246,13 @@ def load_backup():
 def reload_json():
     "Route to reload the bookings JSON file bypassing the checksum validation"
     bookings.load(use_checksum=False)
+    return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
+
+
+@app.route("/admin/archive_old_bookings")
+def archive_old_bookings():
+    "Route to archive old bookings"
+    bookings.archive_old_bookings()
     return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
 
 
