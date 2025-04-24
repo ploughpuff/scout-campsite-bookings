@@ -290,6 +290,7 @@ class Bookings:
         write_checksum(self.json_path)
 
     def load(self, use_checksum=True):
+        """Load the bokking JSON file to memory"""
         if self.json_path.exists():
 
             if use_checksum and not verify_checksum(self.json_path):

@@ -245,6 +245,7 @@ def load_backup():
 
 @app.route("/admin/reload_json")
 def reload_json():
+    "Route to reload the bookings JSON file bypassing the checksum validation"
     bookings.load(use_checksum=False)
     return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
 
