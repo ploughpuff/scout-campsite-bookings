@@ -86,7 +86,10 @@ def _fetch_google_sheets_data(spreadsheet_id, sheet_range):
         logger.error("Google Sheets API error: %s", e)
         return []
     except (TypeError, ValueError, KeyError) as e:
-        logger.warning("Unexpected data format: %s", e)
+        logger.error("Unexpected data format: %s", e)
+        return []
+    except TimeoutError as e:
+        logger.error("Timeout waiting to receive data from Google sheets: %s", e)
         return []
 
     values = result.get("values", [])
