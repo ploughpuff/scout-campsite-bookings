@@ -1,0 +1,26 @@
+name: Update Version Text File on Tag Creation
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  update_version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Get the latest tag and update version.txt
+        run: |
+          echo $(git describe --tags) > version.txt
+
+      - name: Commit and push updated version.txt
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add version.txt
+          git commit -m "Update version.txt"
+          git push
