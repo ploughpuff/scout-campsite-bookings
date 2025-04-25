@@ -153,4 +153,8 @@ def _send_email(msg, recipient):
             logger.error("Failed to send email to %s: %s", recipient, e)
             flash(f"Failed to send email to {recipient}: {e}", "danger")
             return False
+        except ConnectionRefusedError as e:
+            logger.error("Failed to send email to %s: %s", recipient, e)
+            flash(f"Failed to send email to {recipient}: {e}", "danger")
+            return False
     return True
