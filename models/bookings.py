@@ -327,14 +327,13 @@ class Bookings:
         if ARCHIVE_FILE_PATH.exists():
             archived = load_json(ARCHIVE_FILE_PATH)
             archived.extend(to_archive)
-            save_json(archived, ARCHIVE_FILE_PATH)
+            self.archive = archived
         else:
-            save_json(to_archive, ARCHIVE_FILE_PATH)
+            self.archive = to_archive
 
-        # Save main data after removing archived bookings
+        # Save the modified data files to json
         self._save()
-
-        self.logger.info("Archived %d bookings", len(to_archive))
+        save_json(archived, ARCHIVE_FILE_PATH)
         return True
 
     def _md5_of_dict(self, data):
@@ -344,7 +343,13 @@ class Bookings:
         return hashlib.md5(encoded).hexdigest()
 
     def _find_booking_by_md5(self, target_md5):
+        # Look in main bookings
         for booking in self.data.get("bookings", {}).values():
+            if isinstance(booking, dict) and booking.get("original_sheet_md5") == target_md5:
+                return True
+
+        # Now look in archive
+        for booking in self.archive:
             if isinstance(booking, dict) and booking.get("original_sheet_md5") == target_md5:
                 return True
 
