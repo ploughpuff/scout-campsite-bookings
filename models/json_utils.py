@@ -7,6 +7,8 @@ import os
 import shutil
 import tempfile
 from datetime import datetime
+from pathlib import Path
+from typing import Union
 
 from models.utils import datetime_to_iso_uk
 
@@ -17,11 +19,11 @@ def serialize_data(data):
     """Recursive function to serialise a dist or list"""
     if isinstance(data, dict):
         return {k: serialize_data(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [serialize_data(v) for v in data]
-    elif isinstance(data, datetime):
+    if isinstance(data, datetime):
         return datetime_to_iso_uk(data)
-    elif hasattr(data, "name"):
+    if hasattr(data, "name"):
         return data.name
     return data
 
@@ -30,9 +32,9 @@ def deserialize_data(data):
     """Recursive function to de-serialise a dist or list"""
     if isinstance(data, dict):
         return {k: deserialize_data(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [deserialize_data(v) for v in data]
-    elif isinstance(data, str):
+    if isinstance(data, str):
         try:
             # Try to parse datetime strings
             return datetime.fromisoformat(data)
@@ -42,7 +44,7 @@ def deserialize_data(data):
     return data
 
 
-def save_json(data, path, max_backups=5):
+def save_json(data: dict, path: Path, max_backups: int = 5) -> None:
     """Serialize data and save it to a JSON file with backup rotation, atomic write,
     and checksum update."""
 
@@ -66,7 +68,7 @@ def save_json(data, path, max_backups=5):
     write_checksum(path)
 
 
-def load_json(path, use_checksum=True):
+def load_json(path: Path, use_checksum: bool = True) -> Union[dict, bool]:
     """Load and deserialize JSON file with optional checksum verification."""
 
     if not path.exists():
