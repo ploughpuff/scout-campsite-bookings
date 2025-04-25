@@ -13,6 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Ensure we're on the default branch
+        run: |
+          git checkout main  # or 'master' if that's your default branch
+
       - name: Get the latest tag and update version.txt
         run: |
           echo $(git describe --tags) > version.txt
@@ -23,4 +27,4 @@ jobs:
           git config user.email "github-actions@github.com"
           git add version.txt
           git commit -m "Update version.txt"
-          git push
+          git push origin main
