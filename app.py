@@ -31,7 +31,7 @@ from config import (
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
-    SERVICE_ACCOUNT_FILE,
+    SERVICE_ACCOUNT_PATH,
     TEMPLATE_DIR,
     UK_TZ,
 )
@@ -47,7 +47,7 @@ app.secret_key = APP_SECRET_KEY
 logger = setup_logger()
 logger.info("Starting")
 
-gc = GoogleCalendar(SERVICE_ACCOUNT_FILE, CALENDAR_ID)
+gc = GoogleCalendar(SERVICE_ACCOUNT_PATH, CALENDAR_ID)
 bookings = Bookings(calendar=gc)
 
 

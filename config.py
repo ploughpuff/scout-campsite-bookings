@@ -45,7 +45,7 @@ LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_CREDS", "credentials.json")
+SERVICE_ACCOUNT_PATH = Path(BASE_DIR) / os.getenv("GOOGLE_CREDS", "credentials.json")
 
 SHEETS_TO_PULL = [
     {

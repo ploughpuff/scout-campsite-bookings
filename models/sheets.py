@@ -9,7 +9,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import SERVICE_ACCOUNT_FILE, SHEETS_TO_PULL
+from config import SERVICE_ACCOUNT_PATH, SHEETS_TO_PULL
 from models.booking_types import parse_booking_type
 from models.utils import datetime_to_iso_uk, normalize_key, now_uk
 
@@ -72,7 +72,7 @@ def _fetch_google_sheets_data(spreadsheet_id, sheet_range):
     logger = logging.getLogger("app_logger")
 
     credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        SERVICE_ACCOUNT_PATH, scopes=SCOPES
     )
 
     service = build("sheets", "v4", credentials=credentials)
