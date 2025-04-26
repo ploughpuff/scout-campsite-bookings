@@ -286,37 +286,48 @@ def handle_exception(e):
 
 @app.template_filter("datetime_local_value")
 def datetime_local_value(value):
-    """
-    Format a datetime or ISO 8601 string into a format suitable for
-    <input type="datetime-local"> HTML fields.
-
-    Returns 'YYYY-MM-DDTHH:MM' (no seconds, no timezone).
-
-    Args:
-        value (datetime | str): The value to format.
-
-    Returns:
-        str: A valid datetime-local string or an empty string on failure.
-    """
+    """Create an ISO date string from any input, less the seconds."""
+    # If it's already a datetime object, format it to ISO format
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%dT%H:%M")
 
-    try:
-        dt = datetime.fromisoformat(value)
-        return dt.strftime("%Y-%m-%dT%H:%M")
-    except (ValueError, TypeError):
-        return ""
+    # If it's a string, first check if it's in ISO format
+    if isinstance(value, str):
+        # Check if the string matches the ISO format
+        if len(value) == 19 and value[10] == "T":
+            try:
+                # Try parsing the ISO format string
+                dt = datetime.fromisoformat(value)
+                return dt.strftime("%Y-%m-%dT%H:%M")
+            except ValueError:
+                logger.warning("ISO parsing failed: [%s]", str(value))
+                return value
+        # Check if the string matches the custom 'dd/mm/yyyy HH:MM:SS' format from Google timestamp
+        try:
+            dt = datetime.strptime(value, "%d/%m/%Y %H:%M:%S")
+            return dt.strftime("%Y-%m-%dT%H:%M")
+        except ValueError:
+            logger.warning("Unknown date format so unable to create ISO string: [%s]", str(value))
+            return value
+
+    return value  # If the value is neither a string nor datetime object, return it as is
 
 
 @app.template_filter("pretty_date")
 def pretty_date(value):
-    """Create a pretty date string from an poch int."""
+    """Create a pretty formatted date string from any input."""
     if isinstance(value, (int, float)):
-        dt = datetime.fromtimestamp(value)
+        dt = datetime.fromtimestamp(value)  # Epoch time
+
     elif isinstance(value, datetime):
-        dt = value
+        dt = value  # Datetime object
+
     else:
-        return str(value)
+        try:
+            dt = datetime.strptime(value, "%d/%m/%Y %H:%M:%S")  # Goodle sheet timestamp
+        except ValueError:
+            logger.warning("Unknown format so unable to create pretty string: [%s]", str(value))
+            return value
 
     return Markup(get_pretty_date_str(dt))
 
