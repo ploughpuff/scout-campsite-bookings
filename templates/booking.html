@@ -22,10 +22,10 @@ Booking Details
         <div class="input-group">
           {% if booking.Status == 'Pending' %}
           <span class="input-group-text">Question Asked</span>
-          <span class="form-control">{{ booking.pend_question }}</span>
+          <span class="form-control custom-bg">{{ booking.pend_question }}</span>
           {% else %}
           <span class="input-group-text">Cancel Reason</span>
-          <span class="form-control">{{ booking.cancel_reason }}</span>
+          <span class="form-control custom-bg">{{ booking.cancel_reason }}</span>
           {% endif %}
         </div>
       </div>
@@ -35,54 +35,20 @@ Booking Details
       <div class="col-md-7">
         <div class="input-group">
           <span class="input-group-text">Group</span>
-          <span class="form-control">{{ booking.Group }}</span>
+          <span class="form-control custom-bg">{{ booking.Group }}</span>
         </div>
       </div>
       <div class="col-md-5">
         <div class="input-group">
           <span class="input-group-text">Leader</span>
-          <span class="form-control">{{ booking.Leader }}</span>
-        </div>
-      </div>
-
-      <!-- Row Two -->
-      <div class="col-md-5">
-        <div class="input-group">
-          <span class="input-group-text">Arriving</span>
-          {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
-          <input id="arriving" type="text" name="Arriving" class="form-control"
-            value="{{ booking.Arriving|datetime_local_value }}" />
-          {% else %}
-          <span class="form-control">{{ booking.Arriving|pretty_date }}</span>
-          {% endif %}
-        </div>
-      </div>
-      <div class="col-md-2">
-        <div class="input-group">
-          <span class="input-group-text">Number</span>
-          {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="number" name="Number" class="form-control" value="{{ booking.Number }}" min="1" required>
-          {% else %}
-          <span class="form-control">{{ booking.Number }}</span>
-          {% endif %}
-        </div>
-      </div>
-      <div class="col-md-5">
-        <div class="input-group">
-          <span class="input-group-text">Departing</span>
-          {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
-          <input id="arriving" type="text" name="Arriving" class="form-control"
-            value="{{ booking.Departing|datetime_local_value }}" />
-          {% else %}
-          <span class="form-control">{{ booking.Departing|pretty_date }}</span>
-          {% endif %}
+          <span class="form-control custom-bg">{{ booking.Leader }}</span>
         </div>
       </div>
 
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text">Phone Number</span>
-          <span class="form-control">
+          <span class="form-control custom-bg">
             {{ booking.original_sheet_data.mobile_number_for_lead_person | default('')}}
           </span>
         </div>
@@ -91,7 +57,7 @@ Booking Details
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text">Booking Request Submitted</span>
-          <span class="form-control">{{ booking.original_sheet_data.timestamp|pretty_date }}</span>
+          <span class="form-control custom-bg">{{ booking.original_sheet_data.timestamp|pretty_date }}</span>
         </div>
       </div>
 
@@ -99,28 +65,68 @@ Booking Details
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text">Email</span>
-          <span class="form-control">{{ booking.original_sheet_data.email_address }}</span>
+          <span class="form-control custom-bg">{{ booking.original_sheet_data.email_address }}</span>
         </div>
       </div>
 
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text">Booking Type</span>
-          <span class="form-control">{{ booking.booking_type }}</span>
+          <span class="form-control custom-bg">{{ booking.booking_type }}</span>
         </div>
       </div>
 
 
-
-
-
-
+      <!-- Row Two -->
       {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
-      <div class="mt-3">
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">Arriving</span>
+          <input id="arriving" type="text" name="Arriving" class="form-control"
+            value="{{ booking.Arriving|datetime_local_value }}" />
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="input-group">
+          <span class="input-group-text">Number</span>
+          <input type="number" name="Number" class="form-control" value="{{ booking.Number }}" min="1" required>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">Departing</span>
+          <input id="departing" type="text" name="Departing" class="form-control"
+            value="{{ booking.Departing|datetime_local_value }}" />
+        </div>
+      </div>
+      <div class="col-md-2">
         <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+      </div>
+      {% else %}
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">Arriving</span>
+          <span class="form-control custom-bg">{{ booking.Arriving|pretty_date }}</span>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="input-group">
+          <span class="input-group-text">Number</span>
+          <span class="form-control custom-bg">{{ booking.Number }}</span>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">Departing</span>
+          <span class="form-control custom-bg">{{ booking.Departing|pretty_date }}</span>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary" disabled>💾 Save Changes</button>
       </div>
       {% endif %}
     </div>
+  </div>
 </form>
 </div>
 
@@ -189,7 +195,7 @@ Booking Details
         </div>
         <div class="modal-body">
           <label for="pendquestion" class="form-label">Question to requester:</label>
-          <textarea class="form-control" name="description" id="pendquestion" rows="3" required></textarea>
+          <textarea class="form-control custom-bg" name="description" id="pendquestion" rows="3" required></textarea>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel This Popup</button>
@@ -211,7 +217,7 @@ Booking Details
         </div>
         <div class="modal-body">
           <label for="cancelReason" class="form-label">Reason for cancellation:</label>
-          <textarea class="form-control" name="description" id="cancelReason" rows="3" required></textarea>
+          <textarea class="form-control custom-bg" name="description" id="cancelReason" rows="3" required></textarea>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Do Not Cancel Booking</button>

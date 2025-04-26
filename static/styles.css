@@ -1,3 +1,8 @@
+.form-control.custom-bg {
+  background-color: #e9ecef;
+  /* Light gray */
+}
+
 .badge-status {
   color: white;
 }
