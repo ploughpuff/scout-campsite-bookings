@@ -50,7 +50,7 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
           {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="datetime-local" name="Arriving" class="form-control"
+          <input id="arriving" type="text" name="Arriving" class="form-control"
             value="{{ booking.Arriving|datetime_local_value }}" />
           {% else %}
           <span class="form-control">{{ booking.Arriving|pretty_date }}</span>
@@ -71,7 +71,7 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Departing</span>
           {% if booking.Status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="datetime-local" name="Departing" class="form-control"
+          <input id="arriving" type="text" name="Arriving" class="form-control"
             value="{{ booking.Departing|datetime_local_value }}" />
           {% else %}
           <span class="form-control">{{ booking.Departing|pretty_date }}</span>
@@ -94,6 +94,7 @@ Booking Details
           <span class="form-control">{{ booking.original_sheet_data.timestamp|pretty_date }}</span>
         </div>
       </div>
+
 
       <div class="col-md-6">
         <div class="input-group">
