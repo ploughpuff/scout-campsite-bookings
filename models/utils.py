@@ -131,7 +131,7 @@ def get_pretty_date_str(dt):
     try:
         day = dt.day
         suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-        month = dt.strftime("%B")
+        month = dt.strftime("%b")
         time_part = dt.strftime("%H:%M")
         year = dt.year
         current_year = now_uk().year
