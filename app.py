@@ -174,6 +174,8 @@ def edit_email_body():
             "p",
             "ul",
             "li",
+            "b",
+            "i",
             "strong",
             "em",
             "a",
