@@ -82,6 +82,57 @@
     crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='scripts.js') }}"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+  <script>
+    // Helper: Get ordinal suffix
+    function getDaySuffix(day) {
+      if (day > 3 && day < 21) return 'th'; // 4th to 20th always 'th'
+      switch (day % 10) {
+        case 1: return 'st';
+        case 2: return 'nd';
+        case 3: return 'rd';
+        default: return 'th';
+      }
+    }
+
+    // Helper: Format date to "4th Nov 2025 18:30"
+    function formatPrettyDate(date) {
+      const day = date.getDate();
+      const suffix = getDaySuffix(day);
+      const month = date.toLocaleString('default', { month: 'short' }); // Jan, Feb, Mar
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${day}${suffix} ${month} ${year} ${hours}:${minutes}`;
+    }
+
+    flatpickr("#arriving", {
+      enableTime: true,
+      time_24hr: true,
+      dateFormat: "Y-m-d\\TH:i",    // backend format
+      altInput: true,
+      altFormat: "j M Y H:i",        // initial altFormat (basic)
+      minuteIncrement: 5,
+
+      onReady: function (selectedDates, dateStr, instance) {
+        if (selectedDates.length > 0) {
+          const formatted = formatPrettyDate(selectedDates[0]);
+          instance.altInput.value = formatted;
+        }
+      },
+
+      onChange: function (selectedDates, dateStr, instance) {
+        if (selectedDates.length > 0) {
+          const formatted = formatPrettyDate(selectedDates[0]);
+          instance.altInput.value = formatted;
+        }
+      }
+    });
+  </script>
+
+
+
+
 </body>
 
 </html>
