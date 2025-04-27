@@ -139,7 +139,7 @@ Booking Details
   {% if next_status == 'New' %}
   {% if booking.Arriving > time_now %}
   <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=booking_id) }}" class="d-inline">
-    <button type="submit" class="btn btn-warning" onsubmit="showLoadingOverlay()">🔄 Resurrect Booking</button>
+    <button type="submit" class="btn btn-warning">🔄 Resurrect Booking</button>
   </form>
   {% else %}
   <button class="btn btn-danger" disabled>❌ Past Bookings Cannot Be Resurrected</button>
@@ -148,7 +148,7 @@ Booking Details
   {# Invoice → Completed #}
   {% elif next_status == 'Completed' and booking.Status == 'Invoice' %}
   <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=booking_id) }}"
-    class="d-inline" onsubmit="showLoadingOverlay()">
+    class="d-inline">
     <button type="submit" class="btn btn-success">✔️ Set Complete Once Xero Invoice Raised</button>
   </form>
 
@@ -171,7 +171,7 @@ Booking Details
   {# Fallback: Generic transitions #}
   {% else %}
   <form method="POST" action="{{ url_for('change_status', new_status=next_status|lower, booking_id=booking_id) }}"
-    class="d-inline" onsubmit="showLoadingOverlay()">
+    class="d-inline">
     <button type="submit" class="btn btn-outline-primary">▶ {{ next_status }}</button>
   </form>
   {% endif %}
