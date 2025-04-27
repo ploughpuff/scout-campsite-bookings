@@ -46,7 +46,11 @@ def send_email_notification(booking_id, booking):
     if not msg:
         return False
 
-    booking["email_confirmation_sent"] = now_uk()
+    if "email_sent" not in booking:
+        booking["email_sent"] = {}
+
+    booking["email_sent"][status] = now_uk()
+
     return _send_email(msg, recipient)
 
 

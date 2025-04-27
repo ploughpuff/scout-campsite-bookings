@@ -150,7 +150,6 @@ class Bookings:
                 flash(msg, "danger")
                 return False
 
-            booking["email_confirmation_sent"] = False  # Clear so we send again if resurected
             field = "cancel_reason" if new_status == "Cancelled" else "pend_question"
             self._add_to_notes(booking, f"{field}: {description}")
             booking[field] = description

@@ -307,6 +307,10 @@ def datetime_local_value(value):
 @app.template_filter("pretty_date")
 def pretty_date(value):
     """Create a pretty formatted date string from any input."""
+    if not value:
+        logger.warning("Asked to pretty a None value!")
+        return ""
+
     if isinstance(value, (int, float)):
         dt = datetime.fromtimestamp(value)  # Epoch time
 

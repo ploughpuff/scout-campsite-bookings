@@ -130,8 +130,50 @@ Booking Details
 </form>
 </div>
 
-
 <hr />
+
+<div class="col-md-4">
+  <div class="input-group">
+    <span class="input-group-text">Confirmation Email Sent</span>
+    {% if booking.get("email_sent") and booking["email_sent"].get("Confirmed") %}
+    <span class="form-control custom-bg">
+      <span class="text-success">&#10003; {{ booking["email_sent"]["Confirmed"] | pretty_date }}</span>
+    </span>
+    {% else %}
+    <span class="form-control custom-bg">
+      <span class="text-danger">&#10007;</span>
+    </span>
+    {% endif %}
+  </div>
+</div>
+<div class="col-md-4">
+  <div class="input-group">
+    <span class="input-group-text">Pending Email Sent</span>
+    {% if booking.get("email_sent") and booking["email_sent"].get("Pending") %}
+    <span class="form-control custom-bg">
+      <span class="text-success">&#10003; {{ booking["email_sent"]["Pending"] | pretty_date }}</span>
+    </span>
+    {% else %}
+    <span class="form-control custom-bg">
+      <span class="text-danger">&#10007;</span>
+    </span>
+    {% endif %}
+  </div>
+</div>
+<div class="col-md-4">
+  <div class="input-group">
+    <span class="input-group-text">Cancellation Email Sent</span>
+    {% if booking.get("email_sent") and booking["email_sent"].get("Cancelled") %}
+    <span class="form-control custom-bg">
+      <span class="text-success">&#10003; {{ booking["email_sent"]["Cancelled"] | pretty_date }}</span>
+    </span>
+    {% else %}
+    <span class="form-control custom-bg">
+      <span class="text-danger">&#10007;</span>
+    </span>
+    {% endif %}
+  </div>
+</div>
 
 <div class="text-end mt-4">
   {% for next_status in valid_transitions %}
