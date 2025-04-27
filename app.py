@@ -26,19 +26,16 @@ from werkzeug.exceptions import HTTPException
 from config import (
     APP_SECRET_KEY,
     ARCHIVE_FILE_PATH,
-    CALENDAR_ID,
     DATA_FILE_PATH,
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
-    SERVICE_ACCOUNT_PATH,
     TEMPLATE_DIR,
     UK_TZ,
     EDIT_EMAIL_BODY_ALLOWED_TAGS,
     EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
 )
 from models.bookings import Bookings
-from models.calendar import GoogleCalendar
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -49,8 +46,7 @@ app.secret_key = APP_SECRET_KEY
 logger = setup_logger()
 logger.info("Starting")
 
-gc = GoogleCalendar(SERVICE_ACCOUNT_PATH, CALENDAR_ID)
-bookings = Bookings(calendar=gc)
+bookings = Bookings()
 
 
 @app.route("/")

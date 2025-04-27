@@ -2,113 +2,126 @@
 calendar.py - Hanle all calendar related operations.
 """
 
-import datetime
 import logging
+import textwrap
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-logger = logging.getLogger(__name__)
+from config import SERVICE_ACCOUNT_PATH, UK_TZ, CALENDAR_ID
+
+logger = logging.getLogger("app_logger")
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
+# https://developers.google.com/workspace/calendar/api/v3/reference/events/insert
 
 
-class GoogleCalendar:
-    """class for Google calendar inerfacing."""
+def update_calendar_entry(booking_id, booking):
 
-    def __init__(self, service_account_file, calendar_id, timezone="Europe/London"):
-        self.service_account_file = service_account_file
-        self.calendar_id = calendar_id
-        self.timezone = timezone
-        self.service = self._build_service()
+    #
+    ## New, Pending, Invoice, Completed, Archived - No action
+    ## Confirmed - Add or modify cal entry
+    ## Cancelled - Delete cal entry
+    status = booking.get("Status")
 
-    def _build_service(self):
-        creds = service_account.Credentials.from_service_account_file(
-            self.service_account_file, scopes=SCOPES
-        )
-        return build("calendar", "v3", credentials=creds)
+    if not status:
+        logger.error("Unable to add event.  Status not found: %s", booking_id)
 
-    def add_event(self, booking):
-        """Add a new calendar event."""
-        try:
-            start = datetime.datetime.fromtimestamp(int(booking["Arriving"]))
-            end = (
-                datetime.datetime.fromtimestamp(int(booking.get("Departing", 0)))
-                if booking.get("Departing")
-                else start + datetime.timedelta(hours=2)
+    elif status == "Confirmed":
+        booking["google_calendar_id"] = _add_or_mod_event(booking_id, booking)
+
+    elif status == "Cancelled":
+        booking["google_calendar_id"] = _del_event(booking_id, booking)
+
+    else:
+        logger.debug("No calendar changes for status: %s", status)
+
+
+def _build_service():
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_PATH, scopes=SCOPES
+    )
+    return build("calendar", "v3", credentials=creds)
+
+
+def _build_event(booking_id, booking, extra_text=None):
+    summary = "EVE: Scouts"
+
+    extra_text = extra_text or ""
+
+    description = textwrap.dedent(
+        f"""
+        {booking_id}
+        Number of people: {booking.get('Number', 'N/A')}
+        {extra_text}
+    """
+    ).strip()
+
+    arriving = booking.get("Arriving")
+    departing = booking.get("Departing")
+
+    return {
+        "summary": summary,
+        "description": description,
+        "start": {"dateTime": arriving.isoformat() if arriving else None, "timeZone": UK_TZ.key},
+        "end": {"dateTime": departing.isoformat() if departing else None, "timeZone": UK_TZ.key},
+    }
+
+
+def _add_or_mod_event(booking_id, booking):
+    """Add a new calendar event."""
+
+    try:
+        service = _build_service()
+        event = _build_event(booking_id, booking)
+        google_calendar_id = booking.get("google_calendar_id")
+
+        # pylint: disable=no-member
+        if not google_calendar_id:
+            event_resource = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+            logger.info(
+                "Calendar event created: %s: %s", booking_id, event_resource.get("htmlLink")
+            )
+        else:
+            event_resource = (
+                service.events()
+                .update(calendarId=CALENDAR_ID, eventId=google_calendar_id, body=event)
+                .execute()
+            )
+            logger.info(
+                "Calendar event modified: %s: %s", booking_id, event_resource.get("htmlLink")
             )
 
-            event = {
-                "summary": f"{booking.get('Group', 'Group')} - {booking.get('Leader', 'Leader')}",
-                "description": f"""
-Booking confirmed for campsite: {booking.get('Campsite', 'N/A')}
-Number of people: {booking.get('Number', 'N/A')}
-Status: {booking.get('Status', 'N/A')}
-                """.strip(),
-                "start": {"dateTime": start.isoformat(), "timeZone": self.timezone},
-                "end": {"dateTime": end.isoformat(), "timeZone": self.timezone},
-            }
+        return event_resource["id"]
 
-            # pylint: disable=no-member
-            created_event = (
-                self.service.events().insert(calendarId=self.calendar_id, body=event).execute()
-            )
+    except HttpError as e:
+        logger.error("Failed to create or mod event: %s", str(e))
+        return None
 
-            logger.info("Event created: %s", created_event.get("htmlLink"))
-            return created_event["id"]
-        except HttpError as e:
-            logger.error("Failed to create event: %s", e)
-            return None
 
-    def update_event(self, event_id, booking):
-        """Update existing calendar entry."""
-        try:
-            start = datetime.datetime.fromtimestamp(int(booking["Arriving"]))
-            end = (
-                datetime.datetime.fromtimestamp(int(booking.get("Departing", 0)))
-                if booking.get("Departing")
-                else start + datetime.timedelta(hours=2)
-            )
+def _del_event(booking_id, booking):
+    """Delete an event from the calendar
 
-            updated_event = {
-                "summary": f"{booking.get('Group', 'Group')} - {booking.get('Leader', 'Leader')}",
-                "description": f"""
-Booking updated for campsite: {booking.get('Campsite', 'N/A')}
-Number of people: {booking.get('Number', 'N/A')}
-Status: {booking.get('Status', 'N/A')}
-                """.strip(),
-                "start": {"dateTime": start.isoformat(), "timeZone": self.timezone},
-                "end": {"dateTime": end.isoformat(), "timeZone": self.timezone},
-            }
+    Args:
+        google_calendar_id (str): String from the booking record corresponding to the calendar ID.
 
-            # pylint: disable=no-member
-            self.service.events().update(
-                calendarId=self.calendar_id, eventId=event_id, body=updated_event
-            ).execute()
+    Returns:
+        None on success, or google_calendar_id on error
+    """
+    try:
+        service = _build_service()
+        google_calendar_id = booking.get("google_calendar_id")
 
-            logger.info("Event updated: %s", event_id)
-            return True
-        except HttpError as e:
-            logger.error("Failed to update event %s: %s", event_id, e)
-            return False
+        if not google_calendar_id:
+            logger.info("Unable to delete calendar event as no ID available: %s", booking_id)
+            return google_calendar_id
 
-    def delete_event(self, event_id):
-        """Delete an event from the calendar
-
-        Args:
-            event_id (str): String from the booking record corresponding to the calendar ID.
-
-        Returns:
-            Boolean: True removed ok, otherwise False
-        """
-        try:
-            # pylint: disable=no-member
-            self.service.events().delete(calendarId=self.calendar_id, eventId=event_id).execute()
-            logger.info("Event deleted: %s", event_id)
-            return True
-        except HttpError as e:
-            logger.error("Failed to delete event %s: %s", event_id, e)
-            return False
+        # pylint: disable=no-member
+        service.events().delete(calendarId=CALENDAR_ID, eventId=google_calendar_id).execute()
+        return None
+    except HttpError as e:
+        logger.error("Failed to delete event: %s", str(e))
+        return google_calendar_id

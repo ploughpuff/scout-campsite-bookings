@@ -134,20 +134,6 @@ Booking Details
 
 <div class="col-md-4">
   <div class="input-group">
-    <span class="input-group-text">Confirmation Email Sent</span>
-    {% if booking.get("email_sent") and booking["email_sent"].get("Confirmed") %}
-    <span class="form-control custom-bg">
-      <span class="text-success">&#10003; {{ booking["email_sent"]["Confirmed"] | pretty_date }}</span>
-    </span>
-    {% else %}
-    <span class="form-control custom-bg">
-      <span class="text-danger">&#10007;</span>
-    </span>
-    {% endif %}
-  </div>
-</div>
-<div class="col-md-4">
-  <div class="input-group">
     <span class="input-group-text">Pending Email Sent</span>
     {% if booking.get("email_sent") and booking["email_sent"].get("Pending") %}
     <span class="form-control custom-bg">
@@ -162,10 +148,38 @@ Booking Details
 </div>
 <div class="col-md-4">
   <div class="input-group">
+    <span class="input-group-text">Confirmation Email Sent</span>
+    {% if booking.get("email_sent") and booking["email_sent"].get("Confirmed") %}
+    <span class="form-control custom-bg">
+      <span class="text-success">&#10003; {{ booking["email_sent"]["Confirmed"] | pretty_date }}</span>
+    </span>
+    {% else %}
+    <span class="form-control custom-bg">
+      <span class="text-danger">&#10007;</span>
+    </span>
+    {% endif %}
+  </div>
+</div>
+<div class="col-md-4">
+  <div class="input-group">
     <span class="input-group-text">Cancellation Email Sent</span>
     {% if booking.get("email_sent") and booking["email_sent"].get("Cancelled") %}
     <span class="form-control custom-bg">
       <span class="text-success">&#10003; {{ booking["email_sent"]["Cancelled"] | pretty_date }}</span>
+    </span>
+    {% else %}
+    <span class="form-control custom-bg">
+      <span class="text-danger">&#10007;</span>
+    </span>
+    {% endif %}
+  </div>
+</div>
+<div class="col-md-4">
+  <div class="input-group">
+    <span class="input-group-text">Calendar ID</span>
+    {% if booking.get("google_calendar_id") %}
+    <span class="form-control custom-bg">
+      <span class="text-success">&#10003; {{ booking["google_calendar_id"] }}</span>
     </span>
     {% else %}
     <span class="form-control custom-bg">

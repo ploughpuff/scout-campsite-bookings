@@ -26,6 +26,7 @@ from models.utils import (
     parse_iso_datetime,
     secs_to_hr,
 )
+from models.calendar import update_calendar_entry
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 
@@ -48,7 +49,6 @@ class Bookings:
     """Class for managing the booking data"""
 
     def __init__(self, calendar=None):
-        self.calendar = calendar  # GoogleCalendar instance
         self.logger = logging.getLogger("app_logger")
         self.data = load_json(DATA_FILE_PATH)
         self.archive = load_json(ARCHIVE_FILE_PATH)
@@ -139,6 +139,17 @@ class Bookings:
         """
 
         booking = self.data.get("bookings", {}).get(booking_id)
+        if not booking:
+            self.logger.warning("Booking ID return no records: [%s]", booking_id)
+            return False
+
+        old_status = booking.get("Status")
+        if not old_status:
+            self.logger.warning("No status for that booking ID: [%s]", booking_id)
+            return False
+
+        if not self._apply_status_change(booking_id, new_status):
+            return False
 
         if new_status in ("Cancelled", "Pending"):
             if not description:
@@ -154,25 +165,11 @@ class Bookings:
             self._add_to_notes(booking, f"{field}: {description}")
             booking[field] = description
 
-        elif description:
-            self.logger.warning(
-                "Unexpected description for state %s (%s): %s",
-                new_status,
-                booking_id,
-                description,
-            )
-            return False
-
-        old_status = booking.get("Status")
-
-        if self._apply_status_change(booking_id, new_status):
-            send_email_notification(booking_id, booking)
-            # handle_calendar_entry(booking_id, booking)
-            self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
-            self._save()  # Only save if the state transition is valid
-            return True
-
-        return False
+        send_email_notification(booking_id, booking)
+        update_calendar_entry(booking_id, booking)
+        self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
+        self._save()  # Only save if the state transition is valid
+        return True
 
     def modify_fields(self, booking_id, updates: dict) -> bool:
         """Modify fields in the booking from the html page.
