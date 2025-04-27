@@ -6,7 +6,7 @@ Booking Details
 
 {% block content %}
 
-<form method="POST" action="{{ url_for('modify_fields', booking_id=booking_id) }}">
+<form method="POST" action="{{ url_for('modify_fields', booking_id=booking_id) }}" onsubmit="showSpinner(this)">
   <div class="card">
     <div class="card-header badge-status {{ booking.Status|lower }}">
       <h5 class="mb-0">
@@ -103,7 +103,7 @@ Booking Details
         <button type="submit" class="btn btn-primary">💾 Save Changes</button>
       </div>
       {% else %}
-      <div class="col-md-4">
+      <div class=" col-md-4">
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
           <span class="form-control custom-bg">{{ booking.Arriving|pretty_date }}</span>
@@ -130,6 +130,7 @@ Booking Details
 </form>
 </div>
 
+
 <hr />
 
 <div class="text-end mt-4">
@@ -154,8 +155,8 @@ Booking Details
   {# New → Confirmed #}
   {% elif next_status == 'Confirmed' %}
   <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=booking_id) }}"
-    class="d-inline">
-    <button type="submit" class="btn btn-success">✔️ Confirm Booking</button>
+    class="d-inline" onsubmit="showSpinner()">
+    <button id="confirmButton" type="submit" class="btn btn-success">✔️ Confirm Booking</button>
   </form>
 
   {# New → Pending #}

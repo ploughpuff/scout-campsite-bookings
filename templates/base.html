@@ -84,6 +84,24 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
   <script>
+    function showSpinner() {
+
+      var buttons = document.querySelectorAll("button");
+
+      // Loop through each button and disable it
+      buttons.forEach(function (button) { button.disabled = true; });
+
+      const button = document.getElementById("confirmButton");
+
+      button.disabled = true;
+      button.innerHTML = `
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span role="status">Loading...</span>
+      `;
+
+    }
+
+
     // Helper: Get ordinal suffix
     function getDaySuffix(day) {
       if (day > 3 && day < 21) return 'th'; // 4th to 20th always 'th'
@@ -131,7 +149,6 @@
 
     flatpickr("#arriving", sharedFlatpickrOptions);
     flatpickr("#departing", sharedFlatpickrOptions);
-
   </script>
 
 
