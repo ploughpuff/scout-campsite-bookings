@@ -29,9 +29,9 @@ Booking Details
         <h2>Note:</h2>
         <p>You can use basic HTML tags in the email body:</p>
         <ul>
-            <li><code>&lt;p&gt;</code> - for paragraphs</li>
-            <li><code>&lt;ul&gt;</code> - for unordered lists</li>
-            <li><code>&lt;li&gt;</code> - for list items</li>
+            {% for tag in allowed_tags %}
+            <li>&lt;{{ tag }}&gt;</li>
+            {% endfor %}
         </ul>
     </div>
 </div>

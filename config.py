@@ -69,10 +69,27 @@ UK_TZ = ZoneInfo("Europe/London")
 DATE_FORMAT = "%Y-%m-%d %H:%M"
 DATE_FORMAT_WITH_SECONDS = "%Y-%m-%d %H:%M:%S"
 
-
 #
 ## Anonymise bookings by removing personnel information once a completed is X days old
 ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS = 90
 
-
 MAX_BACKUPS_TO_KEEP = 50  # Keep 50 recent JSON backups for safety
+
+EDIT_EMAIL_BODY_ALLOWED_TAGS = [
+    "p",
+    "ul",
+    "li",
+    "b",
+    "i",
+    "strong",
+    "em",
+    "a",
+    "br",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+]
+EDIT_EMAIL_BODY_ALLOWED_ATTRIBS = {"a": ["href", "title"]}

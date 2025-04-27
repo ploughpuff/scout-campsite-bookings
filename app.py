@@ -34,6 +34,8 @@ from config import (
     SERVICE_ACCOUNT_PATH,
     TEMPLATE_DIR,
     UK_TZ,
+    EDIT_EMAIL_BODY_ALLOWED_TAGS,
+    EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
 )
 from models.bookings import Bookings
 from models.calendar import GoogleCalendar
@@ -170,26 +172,10 @@ def edit_email_body():
         new_content = request.form["email_content"]
 
         # Sanitize the HTML input, allowing only specific tags and attributes
-        allowed_tags = [
-            "p",
-            "ul",
-            "li",
-            "b",
-            "i",
-            "strong",
-            "em",
-            "a",
-            "br",
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "h5",
-            "h6",
-        ]
-        allowed_attributes = {"a": ["href", "title"]}
         sanitized_content = bleach.clean(
-            new_content, tags=allowed_tags, attributes=allowed_attributes
+            new_content,
+            tags=EDIT_EMAIL_BODY_ALLOWED_TAGS,
+            attributes=EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
         )
 
         # Save sanitized content to the file
@@ -214,7 +200,10 @@ def edit_email_body():
         current_content = ""
 
     return render_template(
-        "edit_email_body.html", content=current_content, backups=get_backup_list()
+        "edit_email_body.html",
+        content=current_content,
+        backups=get_backup_list(),
+        allowed_tags=EDIT_EMAIL_BODY_ALLOWED_TAGS,
     )
 
 
