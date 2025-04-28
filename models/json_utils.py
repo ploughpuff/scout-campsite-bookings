@@ -68,11 +68,11 @@ def save_json(data: dict, path: Path, max_backups: int = 5) -> None:
     write_checksum(path)
 
 
-def load_json(path: Path, use_checksum: bool = True) -> Union[dict, bool]:
+def load_json(path: Path, use_checksum: bool = True) -> Union[dict]:
     """Load and deserialize JSON file with optional checksum verification."""
 
     if not path.exists():
-        return False
+        return None
 
     if use_checksum and not verify_checksum(path):
         logger.error("JSON checksum failed! File may be corrupted.")

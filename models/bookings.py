@@ -51,7 +51,13 @@ class Bookings:
     def __init__(self, calendar=None):
         self.logger = logging.getLogger("app_logger")
         self.data = load_json(DATA_FILE_PATH)
+        if not self.data:
+            self.data = {}
+            self.data["bookings"] = {}
+
         self.archive = load_json(ARCHIVE_FILE_PATH)
+        if not self.archive:
+            self.archive = []
 
     def _save(self):
         save_json(self.data, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP)
@@ -393,7 +399,8 @@ class Bookings:
                         )
                         end_dt = start_dt.replace(tzinfo=UK_TZ)
 
-                        existing_ids = list(self.data["bookings"].keys())
+                        existing_ids = list(self.data.get("bookings", {}).keys())
+
                         new_booking_id = gen_next_booking_id(
                             existing_ids, booking_type, start_dt.year
                         )
