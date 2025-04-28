@@ -36,10 +36,10 @@ from config import (
     UK_TZ,
 )
 from models.bookings import Bookings
+from models.calendar import get_cal_events
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
-from models.calendar import get_cal_events
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = APP_SECRET_KEY

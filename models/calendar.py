@@ -20,6 +20,7 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 
 def get_cal_events():
+    """Return a list of all calendar events, or between two dates"""
     try:
         service = _build_service()
 
