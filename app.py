@@ -39,6 +39,7 @@ from models.bookings import Bookings
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
+from models.calendar import get_cal_events
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.secret_key = APP_SECRET_KEY
@@ -241,6 +242,12 @@ def archive_old_bookings():
     "Route to archive old bookings"
     bookings.archive_old_bookings()
     return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
+
+
+@app.route("/admin/list_cal_events")
+def list_cal_events():
+    "Route to list all calendar events"
+    return render_template("list_cal_events.html", events=get_cal_events())
 
 
 @app.errorhandler(404)

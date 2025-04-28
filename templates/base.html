@@ -69,6 +69,11 @@
         class="btn {% if current == 'archive_old_bookings' %}btn-primary{% else %}btn-secondary{% endif %}">
         Archive Old Bookings
       </a>
+
+      <a href="{{ url_for('list_cal_events') }}"
+        class="btn {% if current == 'list_all_events' %}btn-primary{% else %}btn-secondary{% endif %}">
+        List Cal Events
+      </a>
     </div>
   </div>
 

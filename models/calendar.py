@@ -16,7 +16,22 @@ logger = logging.getLogger("app_logger")
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
-# https://developers.google.com/workspace/calendar/api/v3/reference/events/insert
+# https://developers.google.com/workspace/calendar/api/v3/reference
+
+
+def get_cal_events():
+    try:
+        service = _build_service()
+
+        # pylint: disable=no-member
+        event_resource = service.events().list(calendarId=CALENDAR_ID).execute()
+
+        print(event_resource)
+        return event_resource
+
+    except HttpError as e:
+        logger.error("Failed to list events: %s", str(e))
+        return None
 
 
 def update_calendar_entry(booking_id, booking):
