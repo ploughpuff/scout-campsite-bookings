@@ -9,7 +9,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import SERVICE_ACCOUNT_PATH, UK_TZ, CALENDAR_ID
+from config import CALENDAR_ID, SERVICE_ACCOUNT_PATH, UK_TZ
 
 logger = logging.getLogger("app_logger")
 
@@ -20,6 +20,7 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 
 def update_calendar_entry(booking_id, booking):
+    """Adds new, modifies existing, or deleted cal entry"""
 
     #
     ## New, Pending, Invoice, Completed, Archived - No action

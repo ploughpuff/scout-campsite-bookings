@@ -27,13 +27,13 @@ from config import (
     APP_SECRET_KEY,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
+    EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
+    EDIT_EMAIL_BODY_ALLOWED_TAGS,
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
     TEMPLATE_DIR,
     UK_TZ,
-    EDIT_EMAIL_BODY_ALLOWED_TAGS,
-    EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
 )
 from models.bookings import Bookings
 from models.logger import setup_logger

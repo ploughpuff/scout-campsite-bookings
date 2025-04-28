@@ -18,6 +18,7 @@ from config import (
     UK_TZ,
 )
 from models.booking_types import gen_next_booking_id
+from models.calendar import update_calendar_entry
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.utils import (
@@ -26,7 +27,6 @@ from models.utils import (
     parse_iso_datetime,
     secs_to_hr,
 )
-from models.calendar import update_calendar_entry
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 
@@ -48,7 +48,7 @@ status_transitions = {
 class Bookings:
     """Class for managing the booking data"""
 
-    def __init__(self, calendar=None):
+    def __init__(self):
         self.logger = logging.getLogger("app_logger")
         self.data = load_json(DATA_FILE_PATH)
         if not self.data:
