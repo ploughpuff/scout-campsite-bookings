@@ -4,6 +4,8 @@ calendar.py - Hanle all calendar related operations.
 
 import logging
 import textwrap
+import re
+from datetime import datetime, timezone
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -27,12 +29,51 @@ def get_cal_events():
         # pylint: disable=no-member
         event_resource = service.events().list(calendarId=CALENDAR_ID).execute()
 
-        print(event_resource)
         return event_resource
 
     except HttpError as e:
         logger.error("Failed to list events: %s", str(e))
         return None
+
+
+def get_clash_booking_ids(start: datetime, end: datetime) -> list:
+    """Return a list of events that clash between the two dates, else an empty list."""
+    try:
+        service = _build_service()
+
+        params = {
+            "calendarId": CALENDAR_ID,
+            "singleEvents": True,
+            "orderBy": "startTime",  # optional, but usually helpful
+        }
+
+        if start:
+            params["timeMin"] = start.astimezone(timezone.utc).isoformat()
+        if end:
+            params["timeMax"] = end.astimezone(timezone.utc).isoformat()
+
+        # pylint: disable=no-member
+        event_resource = service.events().list(**params).execute()
+
+        clash_events = []
+
+        if "items" in event_resource and event_resource["items"]:
+            # Loop through all events to find those with the CDS pattern in the extended properties
+            for event in event_resource["items"]:
+                event_id = event.get("id")
+
+                # Check if 'extendedProperties' exists and has the 'booking_id' field
+                extended_properties = event.get("extendedProperties", {}).get("private", {})
+                booking_id = extended_properties.get("booking_id", None)
+
+                if booking_id:  # If there's a booking ID, this event clashes
+                    clash_events.append(booking_id)
+
+        return clash_events
+
+    except HttpError as e:
+        logger.error("Failed to list events: %s", str(e))
+        return []
 
 
 def update_calendar_entry(booking_id, booking):
@@ -85,6 +126,7 @@ def _build_event(booking_id, booking, extra_text=None):
         "description": description,
         "start": {"dateTime": arriving.isoformat() if arriving else None, "timeZone": UK_TZ.key},
         "end": {"dateTime": departing.isoformat() if departing else None, "timeZone": UK_TZ.key},
+        "extendedProperties": {"private": {"booking_id": booking_id}},
     }
 
 

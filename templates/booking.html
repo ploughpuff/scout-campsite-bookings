@@ -188,6 +188,28 @@ Booking Details
     {% endif %}
   </div>
 </div>
+{% if clash_booking_ids is not none %}
+<div class="col-md-6">
+  <div class="input-group">
+    <span class="input-group-text">Calendar is FREE?</span>
+    {% if not clash_booking_ids %}
+    <span class="form-control custom-bg">
+      <span class="text-success">&#10003;</span>
+    </span>
+    {% else %}
+    <span class="form-control custom-bg">
+      <span class="text-danger">&#10007; Clashes with:
+        {% for booking_id in clash_booking_ids %}
+        <a href="{{ url_for('booking_detail', booking_id=booking_id) }}">{{ booking_id }}</a>{% if not loop.last %}, {%
+        endif %}
+        {% endfor %}
+      </span>
+      {% endif %}
+  </div>
+</div>
+{% endif %}
+
+
 
 <div class="text-end mt-4">
   {% for next_status in valid_transitions %}

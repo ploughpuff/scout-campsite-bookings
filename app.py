@@ -36,7 +36,7 @@ from config import (
     UK_TZ,
 )
 from models.bookings import Bookings
-from models.calendar import get_cal_events
+from models.calendar import get_cal_events, get_clash_booking_ids
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -70,12 +70,17 @@ def booking_detail(booking_id):
     transitions = bookings.get_states()["transitions"]
     current_status = booking["Status"]
 
+    clash_booking_ids = None  # Only need to check if cal is free when state is New or Pending
+    if current_status in ["New", "Pending"]:
+        clash_booking_ids = get_clash_booking_ids(booking.get("Arriving"), booking.get("Departing"))
+
     return render_template(
         "booking.html",
         booking_id=booking_id,
         booking=booking,
         valid_transitions=transitions.get(current_status, []),
         time_now=now_uk(),
+        clash_booking_ids=clash_booking_ids,
     )
 
 
