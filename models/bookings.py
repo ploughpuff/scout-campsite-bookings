@@ -389,15 +389,11 @@ class Bookings:
 
                     if not self._find_booking_by_md5(new_booking_md5):
 
-                        start_dt = datetime.strptime(sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S")
-                        start_dt = start_dt.replace(tzinfo=UK_TZ)
-
-                        # Parse the departure time and replace the time part of arrival
+                        start_dt = datetime.strptime(
+                            sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S"
+                        ).replace(tzinfo=UK_TZ)
                         dep_time = datetime.strptime(sb["departure_time"], "%H:%M:%S").time()
-                        end_dt = start_dt.replace(
-                            hour=dep_time.hour, minute=dep_time.minute, second=0
-                        )
-                        end_dt = start_dt.replace(tzinfo=UK_TZ)
+                        end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
 
                         existing_ids = list(self.data.get("bookings", {}).keys())
 
