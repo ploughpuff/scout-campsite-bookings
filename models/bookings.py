@@ -335,7 +335,7 @@ class Bookings:
 
         # Save the modified data files to json
         self._save()
-        save_json(archived, ARCHIVE_FILE_PATH)
+        save_json(self.archive, ARCHIVE_FILE_PATH)
         return True
 
     def _md5_of_dict(self, data):
@@ -417,8 +417,6 @@ class Bookings:
                                 "Number": sb["number_of_people"],
                                 "Status": "New",
                                 "invoice": False,
-                                "confirmation_email_sent": False,
-                                "google_calendar_id": None,
                                 "Notes": "",
                             }
                         }
