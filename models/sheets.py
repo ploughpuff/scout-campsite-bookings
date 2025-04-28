@@ -3,7 +3,6 @@ sheets.py - Handle pull operations to Google sheets.
 """
 
 import logging
-import random
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -101,29 +100,3 @@ def _fetch_google_sheets_data(spreadsheet_id, sheet_range):
     # Convert rows to list of dicts
     headers = values[0]
     return [dict(zip(headers, row)) for row in values[1:] if any(row)]
-
-
-def _ti_create_test_data(count=1):
-
-    district_groups = ["1st Town", "2nd Village", "3rd City", "4th Smallville"]
-    facilities = ["Top", "Bottom", "Trees", "Campfire", "Badgers"]
-
-    test_data = []
-
-    for _ in range(count):
-
-        data = {
-            "Timestamp": "03/04/2025 13:42:28",
-            "Email address": "me@here.com",
-            "Name of Lead Person": "Me You",
-            "Mobile Number for Lead Person": "0123456789",
-            "Chelmsford Scout Group": random.choice(district_groups),
-            "Number of people": str(random.randint(10, 30)),
-            "Arrival Date / Time": "23/06/2025 18:00:00",
-            "Departure Time": "21:00:00",
-            "Campsite": random.choice(facilities),
-        }
-
-        test_data.append(data)
-
-    return test_data
