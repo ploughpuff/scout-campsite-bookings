@@ -50,21 +50,24 @@ class Bookings:
 
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
-        self.data = load_json(DATA_FILE_PATH)
-        if not self.data:
-            self.data = {}
-            self.data["bookings"] = {}
-
-        self.archive = load_json(ARCHIVE_FILE_PATH)
-        if not self.archive:
-            self.archive = []
+        self.data = {}
+        self.data["bookings"] = {}
+        self.archive = []
+        self.load(use_checksum=True)
 
     def _save(self):
         save_json(self.data, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP)
 
-    def load(self):
-        """Reload the bookings json file from disk"""
-        self.data = load_json(DATA_FILE_PATH, use_checksum=False)
+    def load(self, use_checksum=False):
+        """Reload the bookings json file from disk. Create empty structure if file not found"""
+        self.data = load_json(DATA_FILE_PATH, use_checksum)
+        if not self.data:
+            self.data = {}
+            self.data["bookings"] = {}
+
+        self.archive = load_json(ARCHIVE_FILE_PATH, use_checksum)
+        if not self.archive:
+            self.archive = []
 
     def get_states(self):
         """Reveal the various status names and their valid transitions.
@@ -131,6 +134,30 @@ class Bookings:
 
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
+
+    def get_clash_booking_ids(self, candidate_start: datetime, candidate_end: datetime) -> list:
+        """
+        Return a list of conflicting booking IDs from local data.
+
+        - start/end: datetimes to check against
+        - current_booking_id: optional booking to ignore (useful when editing)
+        - all_bookings: dictionary of bookings from your local data
+        """
+        clashes = []
+
+        for booking_id, booking in self.data.get("bookings", {}).items():
+
+            existing_start = booking.get("Arriving")
+            existing_end = booking.get("Departing")
+
+            if not existing_start or not existing_end:
+                continue
+
+            # Check overlap
+            if candidate_start < existing_end and candidate_end > existing_start:
+                clashes.append(booking_id)
+
+        return clashes
 
     def change_status(self, booking_id, new_status, description=None):
         """Change the status of a single booking.

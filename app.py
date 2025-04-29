@@ -36,7 +36,7 @@ from config import (
     UK_TZ,
 )
 from models.bookings import Bookings
-from models.calendar import get_cal_events, get_clash_booking_ids
+from models.calendar import get_cal_events
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -72,7 +72,13 @@ def booking_detail(booking_id):
 
     clash_booking_ids = None  # Only need to check if cal is free when state is New or Pending
     if current_status in ["New", "Pending"]:
-        clash_booking_ids = get_clash_booking_ids(booking.get("Arriving"), booking.get("Departing"))
+        clash_booking_ids = bookings.get_clash_booking_ids(
+            booking.get("Arriving"), booking.get("Departing")
+        )
+
+        # Remove ourself from list of clashes
+        if booking_id in clash_booking_ids:
+            clash_booking_ids.remove(booking_id)
 
     return render_template(
         "booking.html",
@@ -238,7 +244,7 @@ def load_backup():
 @app.route("/admin/reload_json")
 def reload_json():
     "Route to reload the bookings JSON file bypassing the checksum validation"
-    bookings.load()
+    bookings.load(use_checksum=False)
     return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
 
 

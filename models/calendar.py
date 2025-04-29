@@ -36,46 +36,6 @@ def get_cal_events():
         return None
 
 
-def get_clash_booking_ids(start: datetime, end: datetime) -> list:
-    """Return a list of events that clash between the two dates, else an empty list."""
-    try:
-        service = _build_service()
-
-        params = {
-            "calendarId": CALENDAR_ID,
-            "singleEvents": True,
-            "orderBy": "startTime",  # optional, but usually helpful
-        }
-
-        if start:
-            params["timeMin"] = start.astimezone(timezone.utc).isoformat()
-        if end:
-            params["timeMax"] = end.astimezone(timezone.utc).isoformat()
-
-        # pylint: disable=no-member
-        event_resource = service.events().list(**params).execute()
-
-        clash_events = []
-
-        if "items" in event_resource and event_resource["items"]:
-            # Loop through all events to find those with the CDS pattern in the extended properties
-            for event in event_resource["items"]:
-                event_id = event.get("id")
-
-                # Check if 'extendedProperties' exists and has the 'booking_id' field
-                extended_properties = event.get("extendedProperties", {}).get("private", {})
-                booking_id = extended_properties.get("booking_id", None)
-
-                if booking_id:  # If there's a booking ID, this event clashes
-                    clash_events.append(booking_id)
-
-        return clash_events
-
-    except HttpError as e:
-        logger.error("Failed to list events: %s", str(e))
-        return []
-
-
 def update_calendar_entry(booking_id, booking):
     """Adds new, modifies existing, or deleted cal entry"""
 
