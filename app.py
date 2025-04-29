@@ -50,6 +50,14 @@ logger.info("Starting")
 bookings = Bookings()
 
 
+@app.context_processor
+def inject_site_name():
+    """Make sitename available globally in all templates"""
+    from config import SITENAME
+
+    return dict(sitename=SITENAME)
+
+
 @app.route("/")
 @app.route("/bookings")
 def all_bookings():
