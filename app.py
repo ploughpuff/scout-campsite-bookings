@@ -34,6 +34,7 @@ from config import (
     LOG_FILE_PATH,
     TEMPLATE_DIR,
     UK_TZ,
+    SITENAME,
 )
 from models.bookings import Bookings
 from models.calendar import get_cal_events
@@ -53,9 +54,7 @@ bookings = Bookings()
 @app.context_processor
 def inject_site_name():
     """Make sitename available globally in all templates"""
-    from config import SITENAME
-
-    return dict(sitename=SITENAME)
+    return {"sitename": SITENAME}
 
 
 @app.route("/")
