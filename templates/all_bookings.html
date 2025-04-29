@@ -24,8 +24,8 @@
           {% for booking in bookings %}
           <tr>
             <td>
-              <a href="{{ url_for('booking_detail', booking_id=booking.ID) }}"
-                class="text-decoration-none fw-semibold">{{ booking.ID }}</a>
+              <a href="{{ url_for('booking_detail', booking_id=booking.id) }}"
+                class="text-decoration-none fw-semibold">{{ booking.id }}</a>
             </td>
             <td>{{ booking.Group }}</td>
             <td>{{ booking.Leader }}</td>

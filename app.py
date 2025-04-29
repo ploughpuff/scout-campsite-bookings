@@ -55,38 +55,39 @@ bookings = Bookings()
 def all_bookings():
     """Render the main bookings table page."""
     bookings.auto_update_statuses()
-    return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
+    return render_template(
+        "all_bookings.html", bookings=bookings.get_bookings_list(), age=bookings.age()
+    )
 
 
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
     """Render the booking detail page for a specific booking ID."""
-    booking = bookings.get_booking(booking_id)
+    booking_list = bookings.get_bookings_list(booking_id=booking_id)
+    booking = booking_list[0] if booking_list else None
 
     if not booking:
-        flash("Booking not found", "danger")
+        flash(f"Booking {booking_id} not found ", "danger")
         return redirect(url_for("all_bookings"))
 
     transitions = bookings.get_states()["transitions"]
-    current_status = booking["Status"]
+    current_status = booking.get("Status")
 
-    clash_booking_ids = None  # Only need to check if cal is free when state is New or Pending
+    booking_list_clash = None  # Only need to check if cal is free when state is New or Pending
     if current_status in ["New", "Pending"]:
-        clash_booking_ids = bookings.get_clash_booking_ids(
-            booking.get("Arriving"), booking.get("Departing")
+        booking_list_clash = bookings.get_bookings_list(
+            date_range=(booking.get("Arriving"), booking.get("Departing"))
         )
 
         # Remove ourself from list of clashes
-        if booking_id in clash_booking_ids:
-            clash_booking_ids.remove(booking_id)
+        booking_list_clash = [d for d in booking_list_clash if d.get("id") != booking_id]
 
     return render_template(
         "booking.html",
-        booking_id=booking_id,
         booking=booking,
         valid_transitions=transitions.get(current_status, []),
         time_now=now_uk(),
-        clash_booking_ids=clash_booking_ids,
+        booking_list_clash=booking_list_clash,
     )
 
 
@@ -245,14 +246,18 @@ def load_backup():
 def reload_json():
     "Route to reload the bookings JSON file bypassing the checksum validation"
     bookings.load(use_checksum=False)
-    return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
+    return render_template(
+        "all_bookings.html", bookings=bookings.get_bookings_list(), age=bookings.age()
+    )
 
 
 @app.route("/admin/archive_old_bookings")
 def archive_old_bookings():
     "Route to archive old bookings"
     bookings.archive_old_bookings()
-    return render_template("all_bookings.html", bookings=bookings.get_booking(), age=bookings.age())
+    return render_template(
+        "all_bookings.html", bookings=bookings.get_bookings_list(), age=bookings.age()
+    )
 
 
 @app.route("/admin/list_cal_events")

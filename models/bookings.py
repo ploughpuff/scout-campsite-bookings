@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
+from typing import Optional, Tuple, List
 
 from flask import flash
 
@@ -89,75 +90,48 @@ class Bookings:
 
         return "NEVER!"
 
-    def get_booking(self, booking_id=None):
-        """Gets specificed booking or list of all of them.
-
-        Args:
-            booking_id (str, optional): The bookinging ID to return. Defaults to None.
-
-        Returns:
-            dict: Dictionary of values for display purposes.
-        """
-
-        # If booking_id is provided, return only that booking
-        if booking_id:
-            # Fetch the specific booking data by booking_id
-            booking_data = self.data["bookings"].get(booking_id)
-            if booking_data:
-                return booking_data  # Return as a list to keep consistency
-
-        # If no booking_id provided, return the full list of bookings
-        bookings = []
-        for b_id, b in self.data["bookings"].items():
-            simplified = {
-                "ID": b_id,
-                "Group": b.get("Group"),
-                "Leader": b.get("Leader"),
-                "Arriving": b.get("Arriving"),
-                "Departing": b.get("Departing"),
-                "Number": b.get("Number"),
-                "Status": b.get("Status"),
-            }
-            bookings.append(simplified)
-
-        # Optional: sort by status options order
-        try:
-            bookings.sort(
-                key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or "")
-            )
-        except TypeError as e:
-            msg = f"Corrupt datetime in one of the booking entries! {str(e)}"
-            flash(msg, "danger")
-            self.logger.warning(msg)
-
-        return bookings
-
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
 
-    def get_clash_booking_ids(self, candidate_start: datetime, candidate_end: datetime) -> list:
+    def get_bookings_list(
+        self,
+        date_range: Optional[Tuple[datetime, datetime]] = None,
+        booking_id: Optional[str] = None,
+        booking_state: Optional[str] = None,
+    ) -> List[dict]:
         """
-        Return a list of conflicting booking IDs from local data.
+        Return a filtered and sorted list of bookings.
 
-        - start/end: datetimes to check against
-        - current_booking_id: optional booking to ignore (useful when editing)
-        - all_bookings: dictionary of bookings from your local data
+        - Filter by:
+            - booking_id: return only the booking with that ID
+            - booking_state: return bookings matching that status
+            - date_range: return bookings overlapping with the date range
+        - Otherwise, return all bookings.
+
+        The result is sorted by (status index, arrival datetime).
         """
-        clashes = []
+        results = []
 
-        for booking_id, booking in self.data.get("bookings", {}).items():
-
-            existing_start = booking.get("Arriving")
-            existing_end = booking.get("Departing")
-
-            if not existing_start or not existing_end:
+        for b_id, booking in self.data["bookings"].items():
+            if booking_id and b_id != booking_id:
                 continue
+            if booking_state and booking.get("Status") != booking_state:
+                continue
+            if date_range:
+                arriving = booking.get("Arriving")
+                departing = booking.get("Departing")
+                if not arriving or not departing:
+                    continue
+                start, end = date_range
+                if not (start < departing and end > arriving):
+                    continue
+            booking_copy = dict(booking)
+            booking_copy["id"] = b_id
+            results.append(booking_copy)
 
-            # Check overlap
-            if candidate_start < existing_end and candidate_end > existing_start:
-                clashes.append(booking_id)
-
-        return clashes
+        # Sort by status index then arrival datetime
+        results.sort(key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or ""))
+        return results
 
     def change_status(self, booking_id, new_status, description=None):
         """Change the status of a single booking.
