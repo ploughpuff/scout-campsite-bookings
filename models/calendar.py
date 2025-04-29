@@ -4,8 +4,6 @@ calendar.py - Hanle all calendar related operations.
 
 import logging
 import textwrap
-import re
-from datetime import datetime, timezone
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
