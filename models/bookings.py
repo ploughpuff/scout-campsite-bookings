@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 from flask import flash
 
@@ -134,6 +134,7 @@ class Bookings:
         return results
 
     def get_archive_list(self):
+        """Returns the list of archived bookings"""
         return self.archive
 
     def change_status(self, booking_id, new_status, description=None):

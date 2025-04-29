@@ -268,8 +268,15 @@ def list_cal_events():
 
 @app.route("/bookings/archived")
 def show_archived_bookings():
+    """Show archived bookings in list table"""
     archived_bookings = bookings.get_archive_list()
     return render_template("archived.html", bookings=archived_bookings)
+
+
+@app.route("/admin")
+def admin():
+    """Show the Admin dashboard"""
+    return render_template("admin.html", current="admin")
 
 
 @app.errorhandler(404)
