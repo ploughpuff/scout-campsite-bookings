@@ -133,6 +133,9 @@ class Bookings:
         results.sort(key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or ""))
         return results
 
+    def get_archive_list(self):
+        return self.archive
+
     def change_status(self, booking_id, new_status, description=None):
         """Change the status of a single booking.
 
@@ -315,6 +318,7 @@ class Bookings:
                 # Remove all GDPR data
                 archive_copy.pop("original_sheet_data", None)
                 archive_copy.pop("Leader", None)
+                archive_copy["id"] = booking_id
                 archive_copy["Status"] = "Archived"
                 self._add_to_notes(
                     archive_copy, f"Auto Status Change: [{booking.get('Status')}] > [Archived]"

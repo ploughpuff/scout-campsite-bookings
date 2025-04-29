@@ -266,6 +266,12 @@ def list_cal_events():
     return render_template("list_cal_events.html", events=get_cal_events())
 
 
+@app.route("/bookings/archived")
+def show_archived_bookings():
+    archived_bookings = bookings.get_archive_list()
+    return render_template("archived.html", bookings=archived_bookings)
+
+
 @app.errorhandler(404)
 def page_not_found(e):
     """

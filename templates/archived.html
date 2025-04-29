@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Archived Bookings</h2>
+
+{% if bookings %}
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Group</th>
+            <th>Leader</th>
+            <th>Arriving</th>
+            <th>Departing</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for booking in bookings %}
+        <tr>
+            <td>{{ booking.id }}</td>
+            <td>{{ booking.Group }}</td>
+            <td>{{ booking.Arriving.strftime('%d/%m/%Y %H:%M') if booking.Arriving }}</td>
+            <td>{{ booking.Departing.strftime('%d/%m/%Y %H:%M') if booking.Departing }}</td>
+            <td>{{ booking.Status }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No archived bookings found.</p>
+{% endif %}
+
+{% endblock %}
