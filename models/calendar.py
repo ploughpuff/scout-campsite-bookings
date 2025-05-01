@@ -35,6 +35,7 @@ def get_cal_events():
 
 
 def del_cal_events(event_resource):
+    """Delete all events from the calendar"""
 
     events = event_resource.get("items", [])
 

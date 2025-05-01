@@ -32,12 +32,12 @@ from config import (
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
+    SITENAME,
     TEMPLATE_DIR,
     UK_TZ,
-    SITENAME,
 )
 from models.bookings import Bookings
-from models.calendar import get_cal_events, del_cal_events, update_calendar_entry
+from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
