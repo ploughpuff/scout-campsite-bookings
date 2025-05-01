@@ -15,7 +15,6 @@ logger = logging.getLogger("app_logger")
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
-# booking["google_calendar_event_id"] = handle_calendar_entry(booking_id, booking)
 # https://developers.google.com/workspace/calendar/api/v3/reference
 
 
@@ -54,7 +53,7 @@ def del_cal_events(event_resource):
             print(f"Failed to delete {event_id}: {e}")
 
 
-def update_calendar_entry(booking_id, booking):
+def update_calendar_entry(booking):
     """Adds new, modifies existing, or deleted cal entry"""
 
     #
@@ -64,13 +63,13 @@ def update_calendar_entry(booking_id, booking):
     status = booking.get("Status")
 
     if not status:
-        logger.error("Unable to add event.  Status not found: %s", booking_id)
+        logger.error("Unable to add event.  Status not found: %s", booking.get("id"))
 
     elif status == "Confirmed":
-        booking["google_calendar_id"] = _add_or_mod_event(booking_id, booking)
+        booking["google_calendar_id"] = _add_or_mod_event(booking)
 
     elif status == "Cancelled":
-        booking["google_calendar_id"] = _del_event(booking_id, booking)
+        booking["google_calendar_id"] = _del_event(booking)
 
     else:
         logger.debug("No calendar changes for status: %s", status)
@@ -83,14 +82,14 @@ def _build_service():
     return build("calendar", "v3", credentials=creds)
 
 
-def _build_event(booking_id, booking, extra_text=None):
+def _build_event(booking, extra_text=None):
     summary = "EVE: Scouts"
 
     extra_text = extra_text or ""
 
     description = textwrap.dedent(
         f"""
-        {booking_id}
+        {booking.get("id")}
         Number of people: {booking.get('Number', 'N/A')}
         {extra_text}
     """
@@ -104,23 +103,23 @@ def _build_event(booking_id, booking, extra_text=None):
         "description": description,
         "start": {"dateTime": arriving.isoformat() if arriving else None, "timeZone": UK_TZ.key},
         "end": {"dateTime": departing.isoformat() if departing else None, "timeZone": UK_TZ.key},
-        "extendedProperties": {"private": {"booking_id": booking_id}},
+        "extendedProperties": {"private": {"booking_id": booking.get("id")}},
     }
 
 
-def _add_or_mod_event(booking_id, booking):
+def _add_or_mod_event(booking):
     """Add a new calendar event."""
 
     try:
         service = _build_service()
-        event = _build_event(booking_id, booking)
+        event = _build_event(booking.get("id"), booking)
         google_calendar_id = booking.get("google_calendar_id")
 
         # pylint: disable=no-member
         if not google_calendar_id:
             event_resource = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
             logger.info(
-                "Calendar event created: %s: %s", booking_id, event_resource.get("htmlLink")
+                "Calendar event created: %s: %s", booking.get("id"), event_resource.get("htmlLink")
             )
         else:
             event_resource = (
@@ -129,7 +128,7 @@ def _add_or_mod_event(booking_id, booking):
                 .execute()
             )
             logger.info(
-                "Calendar event modified: %s: %s", booking_id, event_resource.get("htmlLink")
+                "Calendar event modified: %s: %s", booking.get("id"), event_resource.get("htmlLink")
             )
 
         return event_resource["id"]
@@ -139,7 +138,7 @@ def _add_or_mod_event(booking_id, booking):
         return None
 
 
-def _del_event(booking_id, booking):
+def _del_event(booking):
     """Delete an event from the calendar
 
     Args:
@@ -153,7 +152,7 @@ def _del_event(booking_id, booking):
         google_calendar_id = booking.get("google_calendar_id")
 
         if not google_calendar_id:
-            logger.info("Unable to delete calendar event as no ID available: %s", booking_id)
+            logger.info("Unable to delete calendar event as no ID available: %s", booking.get("id"))
             return google_calendar_id
 
         # pylint: disable=no-member

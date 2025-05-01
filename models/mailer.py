@@ -21,12 +21,11 @@ logger = logging.getLogger("app_logger")
 env = Environment(loader=FileSystemLoader([config.EMAIL_TEMP_DIR]))
 
 
-def send_email_notification(booking_id, booking):
+def send_email_notification(booking):
     """
     Send an email notification based on the booking status.
 
     Args:
-        booking_id (str): Unique identifier of the booking.
         booking (dict): Booking details.
 
     Returns:
@@ -38,11 +37,11 @@ def send_email_notification(booking_id, booking):
 
     recipient = booking.get("original_sheet_data", {}).get("email_address")
     if not recipient:
-        logger.warning("No email address found for booking %s", booking_id)
+        logger.warning("No email address found for booking %s", booking.get("id"))
         return False
 
-    context = _build_email_context(booking_id, booking)
-    msg = _create_email_message(status, context, recipient, booking_id, booking)
+    context = _build_email_context(booking)
+    msg = _create_email_message(status, context, recipient, booking)
     if not msg:
         return False
 
@@ -54,7 +53,7 @@ def send_email_notification(booking_id, booking):
     return _send_email(msg, recipient)
 
 
-def _build_email_context(booking_id, booking):
+def _build_email_context(booking):
     """
     Confirmed
     Cancelled
@@ -85,13 +84,13 @@ def _build_email_context(booking_id, booking):
 
     return {
         "leader": booking.get("Leader", "Leader"),
-        "booking_id": booking_id,
+        "booking_id": booking.get("id"),
         "summary": summary,
         "body": body,
     }
 
 
-def _create_email_message(status, context, recipient, booking_id, booking):
+def _create_email_message(status, context, recipient, booking):
     """
     Generate the email message object with both plain text and HTML content.
 
@@ -99,7 +98,6 @@ def _create_email_message(status, context, recipient, booking_id, booking):
         status (str): The booking status (Confirmed, Cancelled, Pending).
         context (dict): Data used in template rendering.
         recipient (str): Email address of the recipient.
-        booking_id (str): Booking identifier.
         booking (dict): The full booking dictionary.
 
     Returns:
@@ -108,12 +106,14 @@ def _create_email_message(status, context, recipient, booking_id, booking):
     try:
         body = env.get_template("base_email.html").render(context)
     except TemplateError as e:
-        logger.error("%s trouble rendering email templates: %s: %s", booking_id, booking, e)
+        logger.error("%s trouble rendering email templates: %s: %s", booking.get("id"), booking, e)
         return None
 
     arriving_str = get_pretty_date_str(booking.get("Arriving"))
     msg = EmailMessage()
-    msg["Subject"] = f"{config.SITENAME} Booking - {arriving_str} - {booking_id} - {status.upper()}"
+    msg["Subject"] = (
+        f"{config.SITENAME} Booking - {arriving_str} - {booking.get("id")} - {status.upper()}"
+    )
     msg["From"] = config.EMAIL_USER
     msg["To"] = recipient
 

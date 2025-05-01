@@ -71,6 +71,7 @@ def all_bookings():
 def booking_detail(booking_id):
     """Render the booking detail page for a specific booking ID."""
     booking_list = bookings.get_bookings_list(booking_id=booking_id)
+    # Returns a list[] of one dict{}
     booking = booking_list[0] if booking_list else None
 
     if not booking:
@@ -87,7 +88,7 @@ def booking_detail(booking_id):
         )
 
         # Remove ourself from list of clashes
-        booking_list_clash = [d for d in booking_list_clash if d.get("id") != booking_id]
+        booking_list_clash = [b for b in booking_list_clash if b.get("id") != booking_id]
 
     return render_template(
         "booking.html",
@@ -287,7 +288,7 @@ def list_cal_events():
 @app.route("/admin/add_to_calendar")
 def add_to_calendar(booking):
     """Add a booking id to google calendar"""
-    update_calendar_entry(booking.get("id"), booking)
+    update_calendar_entry(booking)
     return render_template("list_cal_events.html", events=get_cal_events())
 
 
