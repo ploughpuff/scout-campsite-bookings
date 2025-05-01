@@ -24,7 +24,7 @@ def get_sheet_data() -> dict:
 
     Returns:
         dict: {
-            "timestamp": ISO string of when data was pulled,
+            "updated": Datetime object for when data was pulled,
             "sheet_data": List of row dicts with normalized keys
         }
     """
@@ -52,7 +52,7 @@ def get_sheet_data() -> dict:
         all_data.append({"type": booking_type, "sheet_data": normalized_sheet_data})
 
     return {
-        "timestamp": datetime_to_iso_uk(now_uk()),
+        "updated": now_uk(),
         "data": all_data,
     }
 

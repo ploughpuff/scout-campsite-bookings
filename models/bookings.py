@@ -85,8 +85,8 @@ class Bookings:
         Returns:
             str: Either 'NEVER' if not data exists, or string like '1d 5h 35m 17s'
         """
-        if "timestamp" in self.data:
-            return secs_to_hr((now_uk() - self.data["timestamp"]).total_seconds())
+        if "updated" in self.data:
+            return secs_to_hr((now_uk() - self.data["updated"]).total_seconds())
 
         return "NEVER!"
 
@@ -376,10 +376,10 @@ class Bookings:
 
         bookings_added = 0
 
-        if "timestamp" in all_sheets and all_sheets["timestamp"]:
+        if "updated" in all_sheets and all_sheets["updated"]:
 
             # Sheets records timestamp in ISO format.  Convert to dt object
-            self.data["timestamp"] = parse_iso_datetime(all_sheets["timestamp"])
+            self.data["updated"] = all_sheets["updated"]
 
             #
             ## Need to normalise the new data from Sheet to our structure
