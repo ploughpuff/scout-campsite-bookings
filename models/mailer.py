@@ -113,7 +113,7 @@ def _create_email_message(status, context, recipient, booking_id, booking):
 
     arriving_str = get_pretty_date_str(booking.get("Arriving"))
     msg = EmailMessage()
-    msg["Subject"] = f"{config.SITENAME} Booking {arriving_str} - {status.upper()}"
+    msg["Subject"] = f"{config.SITENAME} Booking - {arriving_str} - {booking_id} - {status.upper()}"
     msg["From"] = config.EMAIL_USER
     msg["To"] = recipient
 
