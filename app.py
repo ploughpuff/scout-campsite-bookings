@@ -37,7 +37,7 @@ from config import (
     SITENAME,
 )
 from models.bookings import Bookings
-from models.calendar import get_cal_events
+from models.calendar import get_cal_events, del_cal_events, update_calendar_entry
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -270,6 +270,31 @@ def archive_old_bookings():
 @app.route("/admin/list_cal_events")
 def list_cal_events():
     "Route to list all calendar events"
+    event_resource = get_cal_events()
+
+    missing = []
+    extra = []
+    event_ids = [event["id"] for event in event_resource.get("items", [])]
+
+    for booking in bookings.get_bookings_list(booking_state="Confirmed"):
+        calendar_id = booking.get("google_calendar_id")
+        if calendar_id and calendar_id not in event_ids:
+            missing.append(booking)
+
+    return render_template("list_cal_events.html", missing=missing, extra=extra)
+
+
+@app.route("/admin/add_to_calendar")
+def add_to_calendar(booking):
+    """Add a booking id to google calendar"""
+    update_calendar_entry(booking.get("id"), booking)
+    return render_template("list_cal_events.html", events=get_cal_events())
+
+
+@app.route("/admin/delete_cal_events")
+def delete_cal_events():
+    "Route to delete all calendar events"
+    del_cal_events(get_cal_events())
     return render_template("list_cal_events.html", events=get_cal_events())
 
 

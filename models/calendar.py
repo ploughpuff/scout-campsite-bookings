@@ -34,6 +34,25 @@ def get_cal_events():
         return None
 
 
+def del_cal_events(event_resource):
+
+    events = event_resource.get("items", [])
+
+    if not events:
+        return
+
+    for event in events:
+        event_id = event["id"]
+        try:
+            service = _build_service()
+
+            # pylint: disable=no-member
+            service.events().delete(calendarId=CALENDAR_ID, eventId=event_id).execute()
+            print(f"Deleted event: {event_id}")
+        except HttpError as e:
+            print(f"Failed to delete {event_id}: {e}")
+
+
 def update_calendar_entry(booking_id, booking):
     """Adds new, modifies existing, or deleted cal entry"""
 

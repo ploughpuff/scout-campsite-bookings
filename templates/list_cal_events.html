@@ -1,36 +1,22 @@
 {% extends 'base.html' %}
 
+{% block title %}
+Calendar Events
+{% endblock %}
+
 {% block content %}
-<div class="container mt-5">
-    <h1>Calendar Events</h1>
-    {% if events.items %}
-    <ul class="list-group">
-        {% for event in events["items"] %}
+
+<div class="card" style="width: 18rem;">
+    <div class="card-header">
+        Missing from Google Calendar
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for booking in missing %}
         <li class="list-group-item">
-            <h5>{{ event.summary or "No Title" }}</h5>
-            <p>
-                {% if event.start.dateTime %}
-                Start: {{ event.start.dateTime }}
-                {% elif event.start.date %}
-                Start: {{ event.start.date }}
-                {% endif %}
-                <br>
-                {% if event.end.dateTime %}
-                End: {{ event.end.dateTime }}
-                {% elif event.end.date %}
-                End: {{ event.end.date }}
-                {% endif %}
-            </p>
-            {% if event.description %}
-            <p>{{ event.description }}</p>
-            {% endif %}
+            {{ booking.id }}
         </li>
         {% endfor %}
     </ul>
-    {% else %}
-    <div class="alert alert-info" role="alert">
-        No events found.
-    </div>
-    {% endif %}
 </div>
+
 {% endblock %}

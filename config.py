@@ -49,13 +49,13 @@ SERVICE_ACCOUNT_PATH = Path(BASE_DIR) / os.getenv("GOOGLE_CREDS", "credentials.j
 
 SHEETS_TO_PULL = [
     {
-        "use": False,
-        "id": os.getenv("GOOGLE_SPREADSHEET_ID_TEST_DATA"),
-        "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_TEST_DATA"),
+        "use": True,
+        "id": os.getenv("GOOGLE_SPREADSHEET_ID_INTERNAL"),
+        "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_INTERNAL"),
         "type": "DISTRICT_DAY_VISIT",
     },
     {
-        "use": True,
+        "use": False,
         "id": os.getenv("GOOGLE_SPREADSHEET_ID_REP_TEST_DATA"),
         "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_REP_TEST_DATA"),
         "type": "DISTRICT_DAY_VISIT",
