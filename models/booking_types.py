@@ -3,7 +3,6 @@ booking_types.py - Contains the class BookingType.
 
 """
 
-import re
 from enum import Enum
 
 from config import FIELD_MAPPINGS
@@ -17,14 +16,17 @@ class BookingType(Enum):
 
     @property
     def prefix(self):
+        """Find the PREFIX from the field mappings JSON file"""
         return FIELD_MAPPINGS["booking_types"][self.value]["prefix"]
 
     @property
     def field_map(self):
+        """Find the field linst from the field mappings JSON file"""
         return FIELD_MAPPINGS["booking_types"][self.value]["fields"]
 
     @classmethod
     def from_label(cls, label: str):
+        """Match the passed text string with the ENUM and return that BookingType"""
         for bt in cls:
             if bt.value == label:
                 return bt

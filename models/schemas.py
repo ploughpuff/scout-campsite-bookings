@@ -13,7 +13,7 @@ from models.utils import (
 
 
 class LeaderData(BaseModel):
-    """This class encapsulates the leader's personal data"""
+    """This class encapsulates the leader's personal data."""
 
     name: str
     email: str
@@ -55,6 +55,7 @@ class SiteData(BaseModel):
     )
     @classmethod
     def ensure_uk_timezone(cls, value):
+        """This class method ensured the datetime object has a UK timezone."""
         if isinstance(value, str):
             dt = datetime.fromisoformat(value)
         elif isinstance(value, datetime):
@@ -62,19 +63,20 @@ class SiteData(BaseModel):
         else:
             return value  # Leave None or unexpected types alone
 
-        # If timezone-aware, convert to UK. If naive, assume UK.
         return dt.astimezone(UK_TZ) if dt.tzinfo else dt.replace(tzinfo=UK_TZ)
 
     def is_valid(self) -> bool:
+        """Helper function to check if if a data set is valid"""
         try:
-            self.__class__.model_validate(self.dict())
+            self.__class__.model_validate(self.model_dump())
             return True
         except ValidationError:
             return False
 
     def get_problematic_data(self):
+        """Helper function to cehck if a data set is problematic"""
         try:
-            self.__class__.model_validate(self.dict())
+            self.__class__.model_validate(self.model_dump())
             return None
         except ValidationError as e:
             return e.errors()

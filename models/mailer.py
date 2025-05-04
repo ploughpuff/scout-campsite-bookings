@@ -110,7 +110,8 @@ def _create_email_message(context, booking: SitePlusLeader):
     arriving_str = get_pretty_date_str(booking.site.arriving)
     msg = EmailMessage()
     msg["Subject"] = (
-        f"{config.SITENAME} Booking - {arriving_str} - {booking.site.id} - {booking.site.status.upper()}"
+        f"{config.SITENAME} Booking - {arriving_str} - "
+        f"{booking.site.id} - {booking.site.status.upper()}"
     )
     msg["From"] = config.EMAIL_USER
     msg["To"] = booking.leader.email

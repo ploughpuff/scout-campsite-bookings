@@ -65,14 +65,16 @@ def test_only(func):
 
 
 def integrity_check(method):
+    """Decorator function to perform integrity check on data"""
+
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         result = method(self, *args, **kwargs)
 
         try:
-            self._check_integrity()
+            self.check_integrity()
         except RuntimeError as e:
-            raise RuntimeError(f"Failed after {method.__name__}(): {e}")
+            raise RuntimeError(f"Failed after {method.__name__}(): {e}") from e
 
         return result
 
@@ -102,7 +104,8 @@ class Bookings:
         save_json(instance, path)
         return instance
 
-    def _check_integrity(self):
+    def check_integrity(self):
+        """Helper function via decorator to check the integrity of booking data"""
         problems = []
 
         for raw_booking in self.live.bookings + self.archive.bookings:
@@ -432,10 +435,11 @@ class Bookings:
 
     def _find_booking_by_md5(self, target_md5: str) -> bool:
         """Look in main table and archive for matching md5"""
-        return any(
-            b.site.original_sheet_md5 == target_md5
-            for b in self.live.bookings + self.archive.bookings
-        )
+        if any(b.site.original_sheet_md5 == target_md5 for b in self.live.bookings):
+            return True
+        if any(b.original_sheet_md5 == target_md5 for b in self.archive.bookings):
+            return True
+        return False
 
     def add_new_data(self, all_sheets) -> int:
         """Function to load a sheet of data in dict format into our booking structure
@@ -447,7 +451,7 @@ class Bookings:
         Returns:
             int: number of bookings added
         """
-
+        added = 0
         if "updated" in all_sheets and all_sheets["updated"]:
 
             # Sheets records timestamp in ISO format.  Convert to dt object
@@ -455,7 +459,6 @@ class Bookings:
 
             #
             ## Need to normalise the new data from Sheet to our structure
-            added = 0
             for single_sheet in all_sheets["data"]:
 
                 booking_type = single_sheet["booking_type"]
@@ -477,7 +480,7 @@ class Bookings:
                         added += 1
 
             save_json(self.live, DATA_FILE_PATH)
-            return added
+        return added
 
     def create_rec_from_sheet_row(self, row: dict, booking_type: BookingType) -> SiteData:
         """Create a booking record from a row of data from Google sheet using field mappings
@@ -496,9 +499,6 @@ class Bookings:
         dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
         end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
 
-        idx = self.live.next_idx
-        booking_id = f"{booking_type.prefix}-{start_dt.year}-{idx:04d}"
-
         #
         ## Map the google sheet fields to the Bookings class keys in one hit
         leader_fields = {key: row[src_field] for key, src_field in field_map["leader"].items()}
@@ -507,8 +507,8 @@ class Bookings:
         # Construct SiteData and LeaderData separately
         site_data = {
             **site_fields,
-            "idx": idx,
-            "id": booking_id,
+            "idx": self.live.next_idx,
+            "id": f"{booking_type.prefix}-{start_dt.year}-{self.live.next_idx:04d}",
             "original_sheet_md5": self._md5_of_dict(row),
             "booking_type": booking_type,
             "status": "New",
@@ -528,3 +528,4 @@ class Bookings:
         except ValidationError as e:
             self.logger.error("Validation failed for booking data: %s", e.json())
             self.logger.debug(e.json())  # Or use e.errors() for structured error list
+            return None

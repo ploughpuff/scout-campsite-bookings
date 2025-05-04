@@ -1,8 +1,14 @@
+"""
+test_state_transition.py
+"""
+
+# pylint: disable=all
+
 from typing import get_args
 
 import pytest
 
-from models.bookings import SiteData, status_transitions  # adjust import path
+from models.bookings import SiteData, status_transitions
 
 
 def get_valid_statuses():
