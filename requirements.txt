@@ -1,3 +1,4 @@
+annotated-types==0.7.0
 astroid==3.3.9
 bleach==6.2.0
 blinker==1.9.0
@@ -33,14 +34,19 @@ proto-plus==1.26.1
 protobuf==6.30.2
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
+pydantic==2.11.4
+pydantic_core==2.33.2
 pylint==3.3.6
 pyparsing==3.2.3
 pytest==8.3.5
+pytest-dotenv==0.5.2
 python-dotenv==1.1.0
 requests==2.32.3
 requests-oauthlib==2.0.0
 rsa==4.9.1
 tomlkit==0.13.2
+typing-inspection==0.4.0
+typing_extensions==4.13.2
 tzdata==2025.2
 uritemplate==4.1.1
 urllib3==2.4.0
