@@ -9,21 +9,25 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple, get_args
 
 from flask import flash
+from pydantic import BaseModel, ValidationError
 
 from config import (
     ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
-    MAX_BACKUPS_TO_KEEP,
     UK_TZ,
 )
-from models.booking_types import gen_next_booking_id
+from models.booking_types import BookingType
 from models.calendar import update_calendar_entry
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
+
+# from models.booking_types import
+from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
 from models.utils import (
     get_timestamp_for_notes,
     now_uk,
@@ -60,41 +64,75 @@ def test_only(func):
     return wrapper
 
 
+def integrity_check(method):
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+
+        try:
+            self._check_integrity()
+        except RuntimeError as e:
+            raise RuntimeError(f"Failed after {method.__name__}(): {e}")
+
+        return result
+
+    return wrapper
+
+
 class Bookings:
     """Class for managing the booking data"""
 
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
-        self.data = {}
-        self.data["bookings"] = []
-        self.archive = {}
-        self.archive["bookings"] = []
-        self.load(use_checksum=True)
+
+        self.live = self._load_or_initialize(DATA_FILE_PATH, LiveData)
+        self.archive = self._load_or_initialize(ARCHIVE_FILE_PATH, ArchiveData)
+
+    def _load_or_initialize(self, path: Path, model: BaseModel) -> BaseModel:
+        if path.exists():
+            instance = load_json(path, model)
+            if instance:
+                return instance
+            self.logger.warning("Failed to load or validate [%s], initializing new.", path)
+        else:
+            self.logger.info("[%s] not found, initializing new.", path)
+
+        # If load failed or file not found, initialize and save new
+        instance = model()
+        save_json(instance, path)
+        return instance
+
+    def _check_integrity(self):
+        problems = []
+
+        for raw_booking in self.live.bookings + self.archive.bookings:
+            entry = SiteData(**raw_booking)
+            if not entry.is_valid():
+                problems.append(
+                    {
+                        "booking": raw_booking.id,
+                        "errors": entry.get_problematic_data(),
+                    }
+                )
+
+        if problems:
+            raise RuntimeError(f"Integrity check failed with problems: {problems}")
 
     @test_only
     def set_test_data(self, bookings, archive):
         """Setter method to overwrite data for testing purposes"""
-        self.data = bookings
+        self.live = bookings
         self.archive = archive
 
-    def _save(self):
-        save_json(self.data, DATA_FILE_PATH, MAX_BACKUPS_TO_KEEP)
-
+    # @integrity_check
     def load(self, use_checksum=False):
         """Reload the bookings json file from disk. Create empty structure if file not found"""
-        self.data = load_json(DATA_FILE_PATH, use_checksum)
-        if not self.data:
-            self.data = {}
-            self.data["bookings"] = []
+        self.live = load_json(DATA_FILE_PATH, LiveData, use_checksum)
+        self.archive = load_json(ARCHIVE_FILE_PATH, ArchiveData, use_checksum)
 
-        self.archive = load_json(ARCHIVE_FILE_PATH, use_checksum)
-        if not self.archive:
-            self.archive = {}
-            self.archive["bookings"] = []
-
-    def _get_booking_by_id(self, booking_id):
+    def _get_booking_by_id(self, booking_id: str) -> SitePlusLeader:
         """Return booking with the matching booking id"""
-        return next((b for b in self.data["bookings"] if b["id"] == booking_id), None)
+        return next((b for b in self.live.bookings if b.site.id == booking_id), None)
 
     def get_states(self):
         """Reveal the various status names and their valid transitions.
@@ -102,7 +140,11 @@ class Bookings:
         Returns:
             dict: "name" of states, and "transition" list of valid transitions.
         """
-        return {"names": status_options, "transitions": status_transitions}
+        # Programmatically extract the options from a Literal field in a Pydantic model
+        # using the __annotations__ and typing.get_args
+        status_type = SiteData.__annotations__["status"]
+
+        return {"names": get_args(status_type), "transitions": status_transitions}
 
     def age(self):
         """
@@ -111,10 +153,7 @@ class Bookings:
         Returns:
             str: Either 'NEVER' if not data exists, or string like '1d 5h 35m 17s'
         """
-        if "updated" in self.data:
-            return secs_to_hr((now_uk() - self.data["updated"]).total_seconds())
-
-        return "NEVER!"
+        return secs_to_hr((now_uk() - self.live.updated).total_seconds())
 
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
@@ -138,24 +177,30 @@ class Bookings:
         """
         results = []
 
-        for booking in self.data["bookings"]:
-            if booking_id and booking.get("id") != booking_id:
+        for booking in self.live.bookings:
+            if booking_id and booking.site.id != booking_id:
                 continue
-            if booking_state and booking.get("Status") != booking_state:
+            if booking_state and booking.site.status != booking_state:
                 continue
             if date_range:
-                arriving = booking.get("Arriving")
-                departing = booking.get("Departing")
+                arriving = booking.site.arriving
+                departing = booking.site.departing
                 if not arriving or not departing:
                     continue
                 start, end = date_range
                 if not (start < departing and end > arriving):
                     continue
-            booking_copy = dict(booking)
+            booking_copy = copy.deepcopy(booking)
             results.append(booking_copy)
 
         # Sort by status index then arrival datetime
-        results.sort(key=lambda b: (status_options.index(b["Status"]), b.get("Arriving") or ""))
+        results.sort(
+            key=lambda b: (
+                status_options.index(b.site.status),
+                b.site.arriving or datetime.min,
+            )
+        )
+
         return results
 
     def get_archive_list(self):
@@ -179,10 +224,7 @@ class Bookings:
             self.logger.warning("Booking ID return no records: [%s]", booking_id)
             return False
 
-        old_status = booking.get("Status")
-        if not old_status:
-            self.logger.warning("No status for that booking ID: [%s]", booking_id)
-            return False
+        old_status = booking.site.status
 
         if not self._apply_status_change(booking, new_status):
             return False
@@ -197,17 +239,20 @@ class Bookings:
                 flash(msg, "danger")
                 return False
 
-            field = "cancel_reason" if new_status == "Cancelled" else "pend_question"
-            self._add_to_notes(booking, f"{field}: {description}")
-            booking[field] = description
+            if new_status == "Cancelled":
+                booking.site.cancel_reason = description
+                self._add_to_notes(booking, f"Cancel Reason: {description}")
+            else:
+                booking.site.pend_question = description
+                self._add_to_notes(booking, f"Pend Question: {description}")
 
         send_email_notification(booking)
         update_calendar_entry(booking)
         self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
-        self._save()  # Only save if the state transition is valid
+        save_json(self.live, DATA_FILE_PATH)
         return True
 
-    def modify_fields(self, booking_id, updates: dict) -> bool:
+    def modify_fields(self, booking_id, update_data: dict) -> bool:
         """Modify fields in the booking from the html page.
 
         Args:
@@ -218,8 +263,6 @@ class Bookings:
             bool: True is successful
         """
 
-        editable_fields = {"Number", "Arriving", "Departing"}
-
         booking = self._get_booking_by_id(booking_id)
 
         if not booking:
@@ -229,45 +272,59 @@ class Bookings:
             )
             return False
 
-        for field, new_value in updates.items():
-            if field not in editable_fields:
-                self.logger.warning(
-                    "Bookings/Update tried to edit field %s which is not in my list: %s",
-                    field,
-                    booking_id,
-                )
+        for section, fields in update_data.items():
+            if not hasattr(booking, section):
+                self.logger.warning("Unknown section '%s' in update data", section)
                 continue
 
-            old_value = booking.get(field)
+            original = getattr(booking, section)
 
-            if old_value == new_value:
-                continue  # No change, skip
+            try:
+                # Do a partial update on a copy
+                updated = original.model_copy(update=fields)
 
-            booking[field] = new_value
+                # Create new BaseModel with the updated fields
+                updated = original.__class__.model_validate(updated.model_dump())
 
-            if field in ("Arriving", "Departing"):
-                old_value_str = get_timestamp_for_notes(old_value)
-                new_value_str = get_timestamp_for_notes(new_value)
-            else:
-                old_value_str = old_value
-                new_value_str = new_value
+            except ValidationError as e:
+                self.logger.warning("Validation failed for %s update: %s", section, e)
+                continue
 
-            self._add_to_notes(
-                booking, f"{field} changed from [{old_value_str}] to [{new_value_str}]"
-            )
+            changes = False
+            for key in original.model_fields:
+                if key == "notes":
+                    continue
+                old_value = getattr(original, key)
+                new_value = getattr(updated, key)
+                if old_value != new_value:
+                    changes = True
+                    setattr(original, key, new_value)
 
-        self._save()
-        return True
+                    # Optionally format datetime changes nicely
+                    if isinstance(new_value, datetime):
+                        old_value = get_timestamp_for_notes(old_value)
+                        new_value = get_timestamp_for_notes(new_value)
+
+                    self.logger.info("Updated booking %s: %s = %s", booking_id, key, new_value)
+
+                    self._add_to_notes(
+                        booking, f"{key} changed from [{old_value}] to [{new_value}]"
+                    )
+
+        if changes:
+            save_json(self.live, DATA_FILE_PATH)
+
+        return changes
 
     def _apply_status_change(self, booking, to_status):
 
         if not booking:
             return False
 
-        from_status = booking.get("Status")
+        from_status = booking.site.status
 
         if not self._can_transition(from_status, to_status):
-            msg = f"Invalid transition for {booking.get("id")}: {from_status} > {to_status}"
+            msg = f"Invalid transition for {booking.site.id}: {from_status} > {to_status}"
             flash(msg, "danger")
             self.logger.warning(msg)
             return False
@@ -276,17 +333,14 @@ class Bookings:
         ## Before blindly transitioning to the new state, if its Cancel>New check the arrival time
         ## is still in the future.  We don't want to resurrest past bookings
         if from_status == "Cancelled" and to_status == "New":
-            arriving = booking.get("Arriving")
-            if arriving is not None and arriving < now_uk():
-                msg = (
-                    f"Unable to resurrect booking {booking.get("id")}: arrival date is in the past!"
-                )
+            if booking.site.arriving < now_uk():
+                msg = f"Unable to resurrect booking {booking.site.id}: arrival date is in the past!"
                 flash(msg, "warning")
                 return False
 
-        booking["Status"] = to_status
+        booking.site.status = to_status
 
-        self._save()
+        save_json(self.live, DATA_FILE_PATH)
         return True
 
     def _add_to_notes(self, booking, new_note):
@@ -294,32 +348,35 @@ class Bookings:
         timestamp = get_timestamp_for_notes(include_seconds=True)
         new_note_entry = f"[{timestamp}]: {new_note}"
 
-        old_value = booking.get("Notes", "")
-        booking["Notes"] = new_note_entry + ("\n" + old_value if old_value else "")
+        old_value = booking.site.notes
+        booking.site.notes = new_note_entry + ("\n" + old_value if old_value else "")
 
     def auto_update_statuses(self):
         """Look for bookings to automatically change the status of"""
 
-        for booking in self.data["bookings"]:
-            status = booking.get("Status")
-            departing = booking.get("Departing")
-            invoice = booking.get("invoice")
-
+        for booking in self.live.bookings:
             #
             ## Move confirmed bookings to completed/invoice once departure dates has passed
-            if departing.tzinfo is None or departing.tzinfo.utcoffset(departing) is None:
+            if (
+                booking.site.departing.tzinfo is None
+                or booking.site.departing.tzinfo.utcoffset(booking.site.departing) is None
+            ):
                 self.logger.warning(
-                    "Departing time for %s is offset-naive [%s]", booking.get("id"), departing
+                    "Departing time for %s is offset-naive [%s]",
+                    booking.site.id,
+                    booking.site.departing,
                 )
                 continue
 
-            if status == "Confirmed" and departing < now_uk():
-                new_status = "Invoice" if invoice else "Completed"
-                booking["Status"] = new_status
-                self._add_to_notes(booking, f"Auto Status Change: [{status}] > [{new_status}]")
-                self._save()
+            if booking.site.status == "Confirmed" and booking.site.departing < now_uk():
+                new_status = "Invoice" if booking.site.invoice else "Completed"
+                booking.site.status = new_status
+                self._add_to_notes(
+                    booking, f"Auto Status Change: [{booking.site.status}] > [{new_status}]"
+                )
+                save_json(self.live, DATA_FILE_PATH)
                 flash(
-                    f"{booking.get("id")} automatically change from {status} "
+                    f"{booking.site.id} automatically change from {booking.site.status} "
                     f"to {new_status} now booking has passed",
                     "warning",
                 )
@@ -328,11 +385,12 @@ class Bookings:
         """Move bookings with status 'Archived' to archive.json and remove from bookings.json."""
         to_archive = []
 
-        for booking in self.data["bookings"]:
-            departing = booking.get("Departing")
-            archive_date = departing + timedelta(days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS)
+        for booking in self.live.bookings:
+            archive_date = booking.site.departing + timedelta(
+                days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+            )
 
-            if booking.get("Status") == "Completed" and archive_date < now_uk():
+            if booking.site.status == "Completed" and archive_date < now_uk():
 
                 # Take a deep copy of this booking and remove all GDPR data
                 archive_copy = copy.deepcopy(booking)
@@ -340,16 +398,16 @@ class Bookings:
                 archive_copy.pop("Leader", None)
                 archive_copy["Status"] = "Archived"
                 self._add_to_notes(
-                    archive_copy, f"Auto Status Change: [{booking.get('Status')}] > [Archived]"
+                    archive_copy, f"Auto Status Change: [{booking.site.status}] > [Archived]"
                 )
                 to_archive.append(archive_copy)
 
                 # Remove this booking from the main data table
-                self.data["bookings"] = [
-                    b for b in self.data["bookings"] if b["id"] != booking.get("id")
+                self.live.site.bookings = [
+                    b for b in self.live.site.bookings if b.site.id != booking.site.id
                 ]
 
-                self.logger.info("%s archived", booking.get("id"))
+                self.logger.info("%s archived", booking.site.id)
 
         if not to_archive:
             self.logger.info("No bookings to archive.")
@@ -357,14 +415,12 @@ class Bookings:
 
         # Handle archive file
         if ARCHIVE_FILE_PATH.exists():
-            archived = load_json(ARCHIVE_FILE_PATH)
-            archived["bookings"].extend(to_archive)
-            self.archive = archived
+            self.archive.bookings.extend(to_archive)
         else:
-            self.archive = to_archive
+            self.archive.bookings = to_archive
 
         # Save the modified data files to json
-        self._save()
+        save_json(self.live, DATA_FILE_PATH)
         save_json(self.archive, ARCHIVE_FILE_PATH)
         return True
 
@@ -377,11 +433,11 @@ class Bookings:
     def _find_booking_by_md5(self, target_md5: str) -> bool:
         """Look in main table and archive for matching md5"""
         return any(
-            b["original_sheet_md5"] == target_md5
-            for b in self.data["bookings"] + self.archive["bookings"]
+            b.site.original_sheet_md5 == target_md5
+            for b in self.live.bookings + self.archive.bookings
         )
 
-    def add_new_data(self, all_sheets):
+    def add_new_data(self, all_sheets) -> int:
         """Function to load a sheet of data in dict format into our booking structure
 
         Args:
@@ -392,59 +448,83 @@ class Bookings:
             int: number of bookings added
         """
 
-        bookings_added = 0
-
         if "updated" in all_sheets and all_sheets["updated"]:
 
             # Sheets records timestamp in ISO format.  Convert to dt object
-            self.data["updated"] = all_sheets["updated"]
+            self.live.updated = all_sheets["updated"]
 
             #
             ## Need to normalise the new data from Sheet to our structure
+            added = 0
             for single_sheet in all_sheets["data"]:
 
-                booking_type = single_sheet.get("type")
+                booking_type = single_sheet["booking_type"]
 
-                for sb in single_sheet.get("sheet_data"):
+                for row in single_sheet["sheet_data"]:
 
                     #
                     ## Create MD5 of sheet line item so we can track if its new or seen before
-                    new_booking_md5 = self._md5_of_dict(sb)
+                    new_booking_md5 = self._md5_of_dict(row)
 
                     if not self._find_booking_by_md5(new_booking_md5):
 
-                        start_dt = datetime.strptime(
-                            sb["arrival_date_time"], "%d/%m/%Y %H:%M:%S"
-                        ).replace(tzinfo=UK_TZ)
-                        dep_time = datetime.strptime(sb["departure_time"], "%H:%M:%S").time()
-                        end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
-
-                        existing_ids = [b["id"] for b in self.data["bookings"]]
-
-                        new_booking_id = gen_next_booking_id(
-                            existing_ids, booking_type, start_dt.year
-                        )
-
-                        new_booking = {
-                            "id": new_booking_id,
-                            "original_sheet_md5": new_booking_md5,
-                            "original_sheet_data": sb,
-                            "booking_type": booking_type,
-                            "Group": sb["chelmsford_scout_group"],
-                            "Leader": sb["name_of_lead_person"],
-                            "Arriving": start_dt,
-                            "Departing": end_dt,
-                            "Number": sb["number_of_people"],
-                            "Status": "New",
-                            "invoice": False,
-                            "Notes": "",
-                        }
+                        new_booking = self.create_rec_from_sheet_row(row, booking_type)
 
                         self._add_to_notes(new_booking, "Pulled from sheets")
-                        self.data["bookings"].append(new_booking)
-                        self.logger.info("New booking added: %s", new_booking_id)
-                        bookings_added += 1
+                        self.live.bookings.append(new_booking)
+                        self.live.next_idx += 1
+                        self.logger.info("New booking added: %s", new_booking.site.id)
+                        added += 1
 
-            self._save()
+            save_json(self.live, DATA_FILE_PATH)
+            return added
 
-        return bookings_added
+    def create_rec_from_sheet_row(self, row: dict, booking_type: BookingType) -> SiteData:
+        """Create a booking record from a row of data from Google sheet using field mappings
+        from JSON file"""
+
+        field_map = booking_type.field_map
+
+        submitted_dt = datetime.strptime(row["timestamp"], "%d/%m/%Y %H:%M:%S").replace(
+            tzinfo=UK_TZ
+        )
+
+        start_dt = datetime.strptime(row["arrival_date_time"], "%d/%m/%Y %H:%M:%S").replace(
+            tzinfo=UK_TZ
+        )
+
+        dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
+        end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
+
+        idx = self.live.next_idx
+        booking_id = f"{booking_type.prefix}-{start_dt.year}-{idx:04d}"
+
+        #
+        ## Map the google sheet fields to the Bookings class keys in one hit
+        leader_fields = {key: row[src_field] for key, src_field in field_map["leader"].items()}
+        site_fields = {key: row[src_field] for key, src_field in field_map["site"].items()}
+
+        # Construct SiteData and LeaderData separately
+        site_data = {
+            **site_fields,
+            "idx": idx,
+            "id": booking_id,
+            "original_sheet_md5": self._md5_of_dict(row),
+            "booking_type": booking_type,
+            "status": "New",
+            "invoice": False,
+            "notes": "",
+            "google_calendar_id": "",
+            "submitted": submitted_dt,
+            "arriving": start_dt,
+            "departing": end_dt,
+        }
+
+        # Now build full SitePlusLeader record
+        try:
+            site_entry = SiteData.model_validate(site_data)
+            leader_data = LeaderData.model_validate(leader_fields)
+            return SitePlusLeader(site=site_entry, leader=leader_data)
+        except ValidationError as e:
+            self.logger.error("Validation failed for booking data: %s", e.json())
+            self.logger.debug(e.json())  # Or use e.errors() for structured error list

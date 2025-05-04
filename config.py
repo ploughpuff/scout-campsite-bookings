@@ -3,6 +3,7 @@ config.py - Contains configuration settings for Scout Campsite Bookings
 
 """
 
+import json
 import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -47,20 +48,15 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 SERVICE_ACCOUNT_PATH = Path(BASE_DIR) / os.getenv("GOOGLE_CREDS", "credentials.json")
 
-SHEETS_TO_PULL = [
-    {
-        "use": True,
-        "id": os.getenv("GOOGLE_SPREADSHEET_ID_INTERNAL"),
-        "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_INTERNAL"),
-        "type": "DISTRICT_DAY_VISIT",
-    },
-    {
-        "use": False,
-        "id": os.getenv("GOOGLE_SPREADSHEET_ID_REP_TEST_DATA"),
-        "range": os.getenv("GOOGLE_SPREADSHEET_RANGE_REP_TEST_DATA"),
-        "type": "DISTRICT_DAY_VISIT",
-    },
-]
+FIELD_MAPPING_PATH = Path(BASE_DIR) / "field_mappings.json"
+
+if not FIELD_MAPPING_PATH.exists():
+    raise RuntimeError(f"Missing required config file: {FIELD_MAPPING_PATH}")
+
+with open(FIELD_MAPPING_PATH, "r", encoding="utf-8") as f:
+    FIELD_MAPPINGS = json.load(f)
+
+APP_ENV = os.getenv("APP_ENV", "development")
 
 UK_TZ = ZoneInfo("Europe/London")
 

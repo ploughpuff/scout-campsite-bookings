@@ -24,16 +24,16 @@
           {% for booking in bookings %}
           <tr>
             <td>
-              <a href="{{ url_for('booking_detail', booking_id=booking.id) }}"
-                class="text-decoration-none fw-semibold">{{ booking.id }}</a>
+              <a href="{{ url_for('booking_detail', booking_id=booking.site.id) }}"
+                class="text-decoration-none fw-semibold">{{ booking.site.id }}</a>
             </td>
-            <td>{{ booking.Group }}</td>
-            <td>{{ booking.Leader }}</td>
-            <td>{{ booking.Arriving|pretty_date }}</td>
-            <td>{{ booking.Departing|pretty_date }}</td>
-            <td>{{ booking.Number }}</td>
+            <td>{{ booking.site.group_name }}</td>
+            <td>{{ booking.leader.name }}</td>
+            <td>{{ booking.site.arriving|pretty_date }}</td>
+            <td>{{ booking.site.departing|pretty_date }}</td>
+            <td>{{ booking.site.group_size }}</td>
             <td>
-              <span class="badge badge-status {{ booking.Status|lower }}">{{ booking.Status }}</span>
+              <span class="badge badge-status {{ booking.site.status|lower }}">{{ booking.site.status }}</span>
             </td>
           </tr>
           {% endfor %}

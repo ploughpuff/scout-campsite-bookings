@@ -8,69 +8,30 @@ import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Union
+from typing import Type
 
-from models.utils import datetime_to_iso_uk
+from pydantic import BaseModel
+
+from config import MAX_BACKUPS_TO_KEEP
 
 logger = logging.getLogger("app_logger")
 
 
-def serialize_data(data):
-    """Recursive function to serialise a dist or list"""
-    if isinstance(data, dict):
-        return {k: serialize_data(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [serialize_data(v) for v in data]
-    if isinstance(data, datetime):
-        return datetime_to_iso_uk(data)
-    if hasattr(data, "name"):
-        return data.name
-    return data
+def save_json(data: BaseModel, path: Path) -> None:
+    """Save a Pydantic model to JSON with backup, atomic write, and checksum."""
 
-
-def deserialize_data(data):
-    """Recursive function to de-serialise a dist or list"""
-    if isinstance(data, dict):
-        return {k: deserialize_data(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [deserialize_data(v) for v in data]
-    if isinstance(data, str):
-        try:
-            # Try to parse datetime strings
-            return datetime.fromisoformat(data)
-        except ValueError:
-            # Return as a string if it's not a datetime
-            return data
-    return data
-
-
-def save_json(data: dict, path: Path, max_backups: int = 5) -> None:
-    """Serialize data and save it to a JSON file with backup rotation, atomic write,
-    and checksum update."""
-
-    # Make a shallow copy to avoid mutating in-memory data
-    data_to_save = data.copy()
-
-    # Backup the existing file before overwriting
     if path.exists():
-        backup_with_rotation(path, max_backups)
+        backup_with_rotation(path, MAX_BACKUPS_TO_KEEP)
 
-    # Serialize the data
-    serialized = serialize_data(data_to_save)
+    serialized = data.model_dump(mode="json")  # Proper JSON-safe serialization
 
-    # Create the directory if it doesn't exist
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Use atomic write to ensure file is written safely
     atomic_write_json(serialized, path)
-
-    # Write the checksum after saving the JSON file
     write_checksum(path)
 
 
-def load_json(path: Path, use_checksum: bool = True) -> Union[dict]:
+def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> BaseModel | None:
     """Load and deserialize JSON file with optional checksum verification."""
-
     if not path.exists():
         return None
 
@@ -78,12 +39,10 @@ def load_json(path: Path, use_checksum: bool = True) -> Union[dict]:
         logger.error("JSON checksum failed! File may be corrupted.")
         raise ValueError("Checksum mismatch!")
 
-    # Proceed with loading the JSON data
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Deserialize the data (e.g., convert datetime strings back to datetime objects)
-    return deserialize_data(data)
+    return model.model_validate(data)
 
 
 def backup_with_rotation(file_path, max_backups=5):

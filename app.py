@@ -8,6 +8,7 @@ import io
 import os
 import shutil
 import zipfile
+from collections import defaultdict
 from datetime import datetime
 
 import bleach
@@ -34,7 +35,6 @@ from config import (
     LOG_FILE_PATH,
     SITENAME,
     TEMPLATE_DIR,
-    UK_TZ,
 )
 from models.bookings import Bookings
 from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
@@ -70,32 +70,32 @@ def all_bookings():
 @app.route("/booking/<booking_id>")
 def booking_detail(booking_id):
     """Render the booking detail page for a specific booking ID."""
-    booking_list = bookings.get_bookings_list(booking_id=booking_id)
+    bookings_list = bookings.get_bookings_list(booking_id=booking_id)
     # Returns a list[] of one dict{}
-    booking = booking_list[0] if booking_list else None
+    booking = bookings_list[0] if bookings_list else None
 
     if not booking:
         flash(f"Booking {booking_id} not found ", "danger")
         return redirect(url_for("all_bookings"))
 
     transitions = bookings.get_states()["transitions"]
-    current_status = booking.get("Status")
 
-    booking_list_clash = None  # Only need to check if cal is free when state is New or Pending
-    if current_status in ["New", "Pending"]:
-        booking_list_clash = bookings.get_bookings_list(
-            date_range=(booking.get("Arriving"), booking.get("Departing"))
+    # Only need to check if calendar is free when state is New or Pending
+    bookings_list_clash = None
+    if booking.site.status in ["New", "Pending"]:
+        bookings_list_clash = bookings.get_bookings_list(
+            date_range=(booking.site.arriving, booking.site.departing)
         )
 
         # Remove ourself from list of clashes
-        booking_list_clash = [b for b in booking_list_clash if b.get("id") != booking_id]
+        bookings_list_clash = [b for b in bookings_list_clash if b.site.id != booking_id]
 
     return render_template(
         "booking.html",
         booking=booking,
-        valid_transitions=transitions.get(current_status, []),
+        valid_transitions=transitions.get(booking.site.status, []),
         time_now=now_uk(),
-        booking_list_clash=booking_list_clash,
+        bookings_list_clash=bookings_list_clash,
     )
 
 
@@ -110,13 +110,18 @@ def change_status(new_status, booking_id):
 @app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
 def modify_fields(booking_id):
     """Handle modifying fields from details page."""
-    updated_fields = {
-        "Number": request.form.get("Number"),
-        "Arriving": datetime.fromisoformat(request.form.get("Arriving")).replace(tzinfo=UK_TZ),
-        "Departing": datetime.fromisoformat(request.form.get("Departing")).replace(tzinfo=UK_TZ),
-    }
+    nested = defaultdict(dict)
 
-    bookings.modify_fields(booking_id, updated_fields)
+    # names in post data are like site.group_size, leader.name
+    # Create dict with left-side of dot as key, right-side of dot as value
+    for full_key, value in request.form.items():
+        if "." in full_key:
+            section, key = full_key.split(".", 1)
+            nested[section][key] = value
+        else:
+            logger.warning("No flat names in POST data please: [%s]", full_key)
+
+    bookings.modify_fields(booking_id, dict(nested))
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
@@ -278,8 +283,7 @@ def list_cal_events():
     event_ids = [event["id"] for event in event_resource.get("items", [])]
 
     for booking in bookings.get_bookings_list(booking_state="Confirmed"):
-        calendar_id = booking.get("google_calendar_id")
-        if calendar_id and calendar_id not in event_ids:
+        if booking.site.google_calendar_id not in event_ids:
             missing.append(booking)
 
     return render_template("list_cal_events.html", missing=missing, extra=extra)
