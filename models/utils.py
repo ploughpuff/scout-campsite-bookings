@@ -11,7 +11,7 @@ from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
 
 def now_uk() -> datetime:
     """Returns the current datetime in UK local time."""
-    return datetime.now(UK_TZ)
+    return datetime.now(tz=UK_TZ)
 
 
 def now_uk_iso() -> str:
