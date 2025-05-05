@@ -283,11 +283,9 @@ class Bookings:
             original = getattr(booking, section)
 
             try:
-                # Do a partial update on a copy
-                updated = original.model_copy(update=fields)
-
-                # Create new BaseModel with the updated fields
-                updated = original.__class__.model_validate(updated.model_dump())
+                # Merge and re-validate in one go
+                merged = {**original.model_dump(mode="python"), **fields}
+                updated = original.__class__.model_validate(merged)
 
             except ValidationError as e:
                 self.logger.warning("Validation failed for %s update: %s", section, e)
