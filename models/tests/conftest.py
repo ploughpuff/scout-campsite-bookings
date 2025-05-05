@@ -58,7 +58,7 @@ def pytest_sessionstart(_session):
             "sheets": [
                 {
                     "name": "Fake Test Data",
-                    "use": true,
+                    "use": True,
                     "id": "0123456789ABCDEF0123456789ABCDEF0123456789AB",
                     "range": "2025!A:E",
                     "booking_type": "district_day_visit",
