@@ -8,7 +8,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import FIELD_MAPPINGS, SERVICE_ACCOUNT_PATH
+from config import SERVICE_ACCOUNT_PATH, get_field_mappings
 from models.booking_types import BookingType
 from models.utils import normalize_key, now_uk
 
@@ -32,7 +32,7 @@ def get_sheet_data() -> dict:
     logger = logging.getLogger("app_logger")
     all_data = []
 
-    for sheet_cfg in FIELD_MAPPINGS.get("sheets"):
+    for sheet_cfg in get_field_mappings()["sheets"]:
         if not sheet_cfg.get("use"):
             logger.info("Skipping sheet %s (disabled via 'use' flag).", sheet_cfg.get("id"))
             continue

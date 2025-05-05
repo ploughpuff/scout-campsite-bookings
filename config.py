@@ -48,14 +48,6 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 SERVICE_ACCOUNT_PATH = Path(BASE_DIR) / os.getenv("GOOGLE_CREDS", "credentials.json")
 
-FIELD_MAPPING_PATH = Path(BASE_DIR) / "field_mappings.json"
-
-if not FIELD_MAPPING_PATH.exists():
-    raise RuntimeError(f"Missing required config file: {FIELD_MAPPING_PATH}")
-
-with open(FIELD_MAPPING_PATH, "r", encoding="utf-8") as f:
-    FIELD_MAPPINGS = json.load(f)
-
 APP_ENV = os.getenv("APP_ENV", "development")
 
 UK_TZ = ZoneInfo("Europe/London")
@@ -89,3 +81,13 @@ EDIT_EMAIL_BODY_ALLOWED_TAGS = [
     "h6",
 ]
 EDIT_EMAIL_BODY_ALLOWED_ATTRIBS = {"a": ["href", "title"]}
+
+
+FIELD_MAPPING_PATH = Path(BASE_DIR) / "field_mappings.json"
+
+
+def get_field_mappings():
+    """Loads the JSON field mappings file"""
+    if not FIELD_MAPPING_PATH.exists():
+        raise RuntimeError(f"Missing required config file: {FIELD_MAPPING_PATH}")
+    return json.loads(FIELD_MAPPING_PATH.read_text())
