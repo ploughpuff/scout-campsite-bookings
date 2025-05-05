@@ -20,7 +20,7 @@ def set_test_env():
 FIELD_MAPPING_PATH = Path("field_mappings.json")
 
 
-def pytest_sessionstart(_session):
+def pytest_sessionstart(session):  # pylint: disable=unused-argument
     """Write a dummy field_mappings,json file to root so pytest can use it"""
     if not FIELD_MAPPING_PATH.exists():
         FIELD_MAPPING_PATH.parent.mkdir(parents=True, exist_ok=True)
