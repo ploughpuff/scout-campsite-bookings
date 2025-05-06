@@ -19,19 +19,23 @@ if APP_ENV == "production":
 else:
     load_dotenv(".env")
 
+APP_VERSION = os.environ.get("APP_VERSION", "dev")
+
+
 APP_SECRET_KEY = os.getenv("SECRET_KEY")
 SITENAME = os.getenv("SITENAME")
 
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = Path(BASE_DIR) / "templates"
 LOG_DIR = Path(BASE_DIR) / "logs"
 DATA_DIR = Path(BASE_DIR) / "data"
+CONFIG_DIR = Path(BASE_DIR) / "config"
 EMAIL_TEMP_DIR = Path(BASE_DIR) / "email_templates"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 EMAIL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 EMAIL_BODY_FILE_PATH = Path(EMAIL_TEMP_DIR) / "confirmed_body.html"
 EMAIL_BODY_BACKUP_DIR = Path(EMAIL_TEMP_DIR) / "backups"
@@ -46,7 +50,11 @@ LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
-SERVICE_ACCOUNT_PATH = Path(BASE_DIR) / os.getenv("GOOGLE_CREDS", "credentials.json")
+
+#
+## Config data
+SERVICE_ACCOUNT_PATH = Path(CONFIG_DIR) / "credentials.json"
+FIELD_MAPPING_PATH = Path(CONFIG_DIR) / "field_mappings.json"
 
 APP_ENV = os.getenv("APP_ENV", "development")
 
@@ -81,9 +89,6 @@ EDIT_EMAIL_BODY_ALLOWED_TAGS = [
     "h6",
 ]
 EDIT_EMAIL_BODY_ALLOWED_ATTRIBS = {"a": ["href", "title"]}
-
-
-FIELD_MAPPING_PATH = Path(BASE_DIR) / "field_mappings.json"
 
 
 def get_field_mappings():

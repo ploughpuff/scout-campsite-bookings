@@ -1,8 +1,10 @@
-/logs
-/data
-/email_templates
-*.pyc
 .env
-credentials.json
+/config
+/email_templates
+/data
+
+/logs
+
 /.vscode
-field_mappings.json
+*.pyc
+*.tar

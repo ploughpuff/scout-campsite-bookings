@@ -292,6 +292,7 @@ class Bookings:
                 continue
 
             changes = False
+            send_email = False
             for key in original.model_fields:
                 if key == "notes":
                     continue
@@ -303,6 +304,7 @@ class Bookings:
 
                     # Optionally format datetime changes nicely
                     if isinstance(new_value, datetime):
+                        send_email = True
                         old_value = get_timestamp_for_notes(old_value)
                         new_value = get_timestamp_for_notes(new_value)
 
@@ -314,6 +316,9 @@ class Bookings:
 
         if changes:
             save_json(self.live, DATA_FILE_PATH)
+            if send_email:
+                send_email_notification(booking)
+            update_calendar_entry(booking)
 
         return changes
 

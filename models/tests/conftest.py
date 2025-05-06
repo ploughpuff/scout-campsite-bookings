@@ -17,7 +17,8 @@ def set_test_env():
     del os.environ["APP_ENV"]  # Optionally clean up after the test
 
 
-FIELD_MAPPING_PATH = Path("field_mappings.json")
+BASE_DIR = Path(__file__).resolve().parent
+FIELD_MAPPING_PATH = Path(BASE_DIR) / "config" / "field_mappings.json"
 
 
 def pytest_sessionstart(session):  # pylint: disable=unused-argument

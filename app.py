@@ -35,6 +35,7 @@ from config import (
     LOG_FILE_PATH,
     SITENAME,
     TEMPLATE_DIR,
+    APP_VERSION,
 )
 from models.bookings import Bookings
 from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
@@ -313,7 +314,7 @@ def show_archived_bookings():
 @app.route("/admin")
 def admin():
     """Show the Admin dashboard"""
-    return render_template("admin.html", current="admin")
+    return render_template("admin.html", current="admin", version=APP_VERSION)
 
 
 @app.errorhandler(404)

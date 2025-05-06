@@ -71,7 +71,11 @@ def update_calendar_entry(booking: SitePlusLeader):
         booking.site.google_calendar_id = _del_event(booking)
 
     else:
-        logger.debug("No calendar changes for booking: %s", booking.site.status)
+        logger.debug(
+            "Not updating calendar for booking %s as status is %s",
+            booking.site.id,
+            booking.site.status,
+        )
 
 
 def _build_service():
