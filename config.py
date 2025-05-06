@@ -25,13 +25,16 @@ APP_SECRET_KEY = os.getenv("SECRET_KEY")
 SITENAME = os.getenv("SITENAME")
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATE_DIR = Path(BASE_DIR) / "templates"
-LOG_DIR = Path(BASE_DIR) / "logs"
+
+APP_DIR = Path(BASE_DIR) / "app"
+TEMPLATE_DIR = Path(APP_DIR) / "templates"
+STATIC_DIR = Path(APP_DIR) / "static"
+
+
 DATA_DIR = Path(BASE_DIR) / "data"
 CONFIG_DIR = Path(BASE_DIR) / "config"
 EMAIL_TEMP_DIR = Path(BASE_DIR) / "email_templates"
 
-LOG_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 EMAIL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,7 +43,7 @@ EMAIL_BODY_FILE_PATH = Path(EMAIL_TEMP_DIR) / "confirmed_body.html"
 EMAIL_BODY_BACKUP_DIR = Path(EMAIL_TEMP_DIR) / "backups"
 EMAIL_BODY_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
-LOG_FILE_PATH = Path(LOG_DIR) / "app.log"
+LOG_FILE_PATH = Path(DATA_DIR) / "app.log"
 DATA_FILE_PATH = Path(DATA_DIR) / "bookings.json"
 ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
 

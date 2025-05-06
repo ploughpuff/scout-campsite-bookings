@@ -9,8 +9,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from config import SERVICE_ACCOUNT_PATH, get_field_mappings
-from models.booking_types import BookingType
-from models.utils import normalize_key, now_uk
+from app.models.booking_types import BookingType
+from app.models.utils import normalize_key, now_uk
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 

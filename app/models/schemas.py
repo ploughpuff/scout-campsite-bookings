@@ -6,8 +6,8 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from config import UK_TZ
-from models.booking_types import BookingType
-from models.utils import (
+from app.models.booking_types import BookingType
+from app.models.utils import (
     now_uk,
 )
 
