@@ -21,7 +21,6 @@ else:
 
 APP_VERSION = os.environ.get("APP_VERSION", "dev")
 
-
 APP_SECRET_KEY = os.getenv("SECRET_KEY")
 SITENAME = os.getenv("SITENAME")
 
