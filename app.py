@@ -26,6 +26,7 @@ from werkzeug.exceptions import HTTPException
 
 from config import (
     APP_SECRET_KEY,
+    APP_VERSION,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
     EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
@@ -35,7 +36,6 @@ from config import (
     LOG_FILE_PATH,
     SITENAME,
     TEMPLATE_DIR,
-    APP_VERSION,
 )
 from models.bookings import Bookings
 from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
