@@ -15,3 +15,10 @@ __pycache__/
 Dockerfile
 docker-compose.yml
 *.log
+
+/data
+/email_templates
+/config
+/logs
+/.venv
+/.vscode
