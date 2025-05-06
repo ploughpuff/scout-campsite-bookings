@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  scout-campsite-bookings:
+    image: scout-campsite-bookings:latest
+    container_name: scout-campsite-bookings-container
+    ports:
+      - "8080:80"
+    volumes:
+      - /volume1/docker/scout-campsite-bookings/data:/app/data
+      - /volume1/docker/scout-campsite-bookings/email_templates:/app/email_templates
+      - /volume1/docker/scout-campsite-bookings/config:/app/config
+    env_file:
+      - /volume1/docker/scout-campsite-bookings/config/.env
+    restart: always
+    environment:
+      - ENV=production
