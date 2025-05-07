@@ -10,12 +10,10 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 APP_ENV = os.getenv("APP_ENV", "development")
 
 if APP_ENV == "production":
-    load_dotenv(".env.production")
+    load_dotenv(".env.production", override=True)
 else:
     load_dotenv(".env")
 

@@ -4,6 +4,9 @@ FROM python:3.13-slim
 ARG APP_VERSION
 ENV APP_VERSION=$APP_VERSION
 
+ARG APP_ENV
+ENV APP_ENV=$APP_ENV
+
 # Don't build bytecode
 ENV PYTHONDONTWRITEBYTECODE=1
 # Flush logs immediately
