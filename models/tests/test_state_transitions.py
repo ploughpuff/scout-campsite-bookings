@@ -8,7 +8,7 @@ from typing import get_args
 
 import pytest
 
-from app.models.bookings import SiteData, status_transitions
+from models.bookings import SiteData, status_transitions
 
 
 def get_valid_statuses():

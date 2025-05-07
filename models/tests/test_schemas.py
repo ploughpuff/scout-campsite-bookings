@@ -10,8 +10,8 @@ import pytest
 from pydantic import ValidationError
 
 from config import UK_TZ
-from app.models.booking_types import BookingType
-from app.models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
+from models.booking_types import BookingType
+from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
 
 valid_leader = {"name": "Alice", "email": "alice@example.com", "phone": "07123456789"}
 

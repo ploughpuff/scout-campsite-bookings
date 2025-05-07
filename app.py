@@ -35,14 +35,14 @@ from config import (
     EMAIL_BODY_FILE_PATH,
     LOG_FILE_PATH,
     SITENAME,
-    TEMPLATE_DIR,
     STATIC_DIR,
+    TEMPLATE_DIR,
 )
-from app.models.bookings import Bookings
-from app.models.calendar import del_cal_events, get_cal_events, update_calendar_entry
-from app.models.logger import setup_logger
-from app.models.sheets import get_sheet_data
-from app.models.utils import get_pretty_date_str, now_uk
+from models.bookings import Bookings
+from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
+from models.logger import setup_logger
+from models.sheets import get_sheet_data
+from models.utils import get_pretty_date_str, now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.secret_key = APP_SECRET_KEY

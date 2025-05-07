@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from config import CALENDAR_ID, SERVICE_ACCOUNT_PATH
-from app.models.schemas import SitePlusLeader
+from models.schemas import SitePlusLeader
 
 logger = logging.getLogger("app_logger")
 

@@ -25,13 +25,9 @@ APP_SECRET_KEY = os.getenv("SECRET_KEY")
 SITENAME = os.getenv("SITENAME")
 
 BASE_DIR = Path(__file__).resolve().parent
-
-APP_DIR = Path(BASE_DIR) / "app"
-TEMPLATE_DIR = Path(APP_DIR) / "templates"
-STATIC_DIR = Path(APP_DIR) / "static"
-
-
 DATA_DIR = Path(BASE_DIR) / "data"
+TEMPLATE_DIR = Path(BASE_DIR) / "templates"
+STATIC_DIR = Path(BASE_DIR) / "static"
 CONFIG_DIR = Path(BASE_DIR) / "config"
 EMAIL_TEMP_DIR = Path(BASE_DIR) / "email_templates"
 

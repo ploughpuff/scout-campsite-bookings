@@ -13,8 +13,8 @@ from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
-from app.models.schemas import SitePlusLeader
-from app.models.utils import get_pretty_date_str, now_uk
+from models.schemas import SitePlusLeader
+from models.utils import get_pretty_date_str, now_uk
 
 logger = logging.getLogger("app_logger")
 

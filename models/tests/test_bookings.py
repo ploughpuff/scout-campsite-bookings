@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.models.booking_types import BookingType
-from app.models.bookings import Bookings, SiteData
-from app.models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
+from models.booking_types import BookingType
+from models.bookings import Bookings, SiteData
+from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
 
 valid_leader = {"name": "Alice", "email": "alice@example.com", "phone": "07123456789"}
 
