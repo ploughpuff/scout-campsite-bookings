@@ -10,7 +10,6 @@ import pytest
 from pydantic import ValidationError
 
 from config import UK_TZ
-from models.booking_types import BookingType
 from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
 
 valid_leader = {"name": "Alice", "email": "alice@example.com", "phone": "07123456789"}
@@ -19,7 +18,7 @@ valid_site = {
     "idx": 1,
     "id": "abc123",
     "original_sheet_md5": "somehash",
-    "booking_type": BookingType.SCHOOL,
+    "group_type": "chelmsford_district",
     "group_name": "1st Scouts",
     "group_size": 20,
     "status": "Confirmed",
@@ -46,7 +45,7 @@ def test_invalid_leader_data_missing_field():
 def test_valid_site_data():
     site = SiteData(**valid_site)
     assert site.group_name == "1st Scouts"
-    assert site.booking_type == BookingType.SCHOOL
+    assert site.group_type == BookingType.SCHOOL
 
 
 def test_invalid_site_data_missing_required():
@@ -58,7 +57,7 @@ def test_invalid_site_data_missing_required():
 
 def test_invalid_site_data_bad_enum():
     bad_data = valid_site.copy()
-    bad_data["booking_type"] = "not_a_type"
+    bad_data["group_type"] = "not_a_type"
     with pytest.raises(Exception):
         SiteData(**bad_data)
 

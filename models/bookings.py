@@ -466,7 +466,7 @@ class Bookings:
                     if not self._find_booking_by_md5(new_booking_md5):
 
                         new_booking = self.create_rec_from_sheet_row(
-                            row, single_sheet.get("booking_type")
+                            row, single_sheet.get("group_type")
                         )
 
                         self._add_to_notes(new_booking, "Pulled from sheets")
@@ -478,7 +478,7 @@ class Bookings:
             save_json(self.live, DATA_FILE_PATH)
         return added
 
-    def create_rec_from_sheet_row(self, row: dict, booking_type: str) -> SiteData:
+    def create_rec_from_sheet_row(self, row: dict, group_type: str) -> SiteData:
         """Create a booking record from a row of data from Google sheet using field mappings
         from JSON file"""
 
@@ -504,17 +504,13 @@ class Bookings:
             for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("site").items()
         }
 
-        if not booking_type:
-            # work out type
-            booking_type = "unknown"
-
         # Construct SiteData and LeaderData separately
         site_data = {
             **site_fields,
             "idx": self.live.next_idx,
-            "id": f"{get_booking_prefix(booking_type)}-{start_dt.year}-{self.live.next_idx:04d}",
+            "id": f"{get_booking_prefix(group_type)}-{start_dt.year}-{self.live.next_idx:04d}",
             "original_sheet_md5": self._md5_of_dict(row),
-            "booking_type": booking_type,
+            "group_type": row["group_type"] if row["group_type"] else group_type,
             "status": "New",
             "invoice": False,
             "notes": "",

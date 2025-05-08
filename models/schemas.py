@@ -26,7 +26,7 @@ class SiteData(BaseModel):
     idx: int = Field(frozen=True)
     id: str = Field(frozen=True)
     original_sheet_md5: str = Field(frozen=True)
-    booking_type: str
+    group_type: str
     group_name: str
     group_size: int
     status: Literal["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
