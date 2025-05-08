@@ -294,7 +294,7 @@ def list_cal_events():
 @app.route("/admin/add_to_calendar")
 def add_to_calendar(booking):
     """Add a booking id to google calendar"""
-    update_calendar_entry(booking)
+    update_calendar_entry(booking.site)
     return render_template("list_cal_events.html", events=get_cal_events())
 
 

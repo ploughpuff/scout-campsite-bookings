@@ -238,14 +238,14 @@ class Bookings:
 
             if new_status == "Cancelled":
                 booking.site.cancel_reason = description
-                self._add_to_notes(booking, f"Cancel Reason: {description}")
+                self._add_to_notes(booking.site, f"Cancel Reason: {description}")
             else:
                 booking.site.pend_question = description
-                self._add_to_notes(booking, f"Pend Question: {description}")
+                self._add_to_notes(booking.site, f"Pend Question: {description}")
 
         send_email_notification(booking)
-        update_calendar_entry(booking)
-        self._add_to_notes(booking, f"Status changed [{old_status}] > [{new_status}]")
+        update_calendar_entry(booking.site)
+        self._add_to_notes(booking.site, f"Status changed [{old_status}] > [{new_status}]")
         save_json(self.live, DATA_FILE_PATH)
         return True
 
@@ -305,14 +305,14 @@ class Bookings:
                     self.logger.info("Updated booking %s: %s = %s", booking_id, key, new_value)
 
                     self._add_to_notes(
-                        booking, f"{key} changed from [{old_value}] to [{new_value}]"
+                        booking.site, f"{key} changed from [{old_value}] to [{new_value}]"
                     )
 
         if changes:
             save_json(self.live, DATA_FILE_PATH)
             if send_email:
                 send_email_notification(booking)
-            update_calendar_entry(booking)
+            update_calendar_entry(booking.site)
 
         return changes
 
@@ -343,13 +343,13 @@ class Bookings:
         save_json(self.live, DATA_FILE_PATH)
         return True
 
-    def _add_to_notes(self, booking, new_note):
+    def _add_to_notes(self, site_data: SiteData, new_note: str):
 
         timestamp = get_timestamp_for_notes(include_seconds=True)
         new_note_entry = f"[{timestamp}]: {new_note}"
 
-        old_value = booking.site.notes
-        booking.site.notes = new_note_entry + ("\n" + old_value if old_value else "")
+        old_value = site_data.notes
+        site_data.notes = new_note_entry + ("\n" + old_value if old_value else "")
 
     def auto_update_statuses(self):
         """Look for bookings to automatically change the status of"""
@@ -372,7 +372,7 @@ class Bookings:
                 new_status = "Invoice" if booking.site.invoice else "Completed"
                 booking.site.status = new_status
                 self._add_to_notes(
-                    booking, f"Auto Status Change: [{booking.site.status}] > [{new_status}]"
+                    booking.site, f"Auto Status Change: [{booking.site.status}] > [{new_status}]"
                 )
                 save_json(self.live, DATA_FILE_PATH)
                 flash(
@@ -393,19 +393,17 @@ class Bookings:
             if booking.site.status == "Completed" and archive_date < now_uk():
 
                 # Take a deep copy of this booking and remove all GDPR data
-                archive_copy = copy.deepcopy(booking)
-                archive_copy.pop("original_sheet_data", None)
-                archive_copy.pop("Leader", None)
-                archive_copy["Status"] = "Archived"
+                archive_copy = copy.deepcopy(booking.site)
+                archive_copy.status = "Archived"
+                update_calendar_entry(archive_copy)
+
                 self._add_to_notes(
                     archive_copy, f"Auto Status Change: [{booking.site.status}] > [Archived]"
                 )
                 to_archive.append(archive_copy)
 
                 # Remove this booking from the main data table
-                self.live.site.bookings = [
-                    b for b in self.live.site.bookings if b.site.id != booking.site.id
-                ]
+                self.live.bookings = [b for b in self.live.bookings if b.site.id != booking.site.id]
 
                 self.logger.info("%s archived", booking.site.id)
 
@@ -469,7 +467,7 @@ class Bookings:
                             row, single_sheet.get("group_type")
                         )
 
-                        self._add_to_notes(new_booking, "Pulled from sheets")
+                        self._add_to_notes(new_booking.site, "Pulled from sheets")
                         self.live.bookings.append(new_booking)
                         self.live.next_idx += 1
                         self.logger.info("New booking added: %s", new_booking.site.id)
