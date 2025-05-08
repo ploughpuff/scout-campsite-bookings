@@ -6,7 +6,7 @@ import logging
 import re
 from datetime import datetime
 
-from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ, FIELD_MAPPINGS_DICT
+from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, FIELD_MAPPINGS_DICT, UK_TZ
 
 
 def now_uk() -> datetime:

@@ -19,14 +19,14 @@ from config import (
     ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
-    UK_TZ,
     FIELD_MAPPINGS_DICT,
+    UK_TZ,
 )
 from models.calendar import update_calendar_entry
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
-from models.utils import get_timestamp_for_notes, now_uk, secs_to_hr, get_booking_prefix
+from models.utils import get_booking_prefix, get_timestamp_for_notes, now_uk, secs_to_hr
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 

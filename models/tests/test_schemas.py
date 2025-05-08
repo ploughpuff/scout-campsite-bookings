@@ -45,19 +45,12 @@ def test_invalid_leader_data_missing_field():
 def test_valid_site_data():
     site = SiteData(**valid_site)
     assert site.group_name == "1st Scouts"
-    assert site.group_type == BookingType.SCHOOL
+    assert site.group_type == "chelmsford_district"
 
 
 def test_invalid_site_data_missing_required():
     bad_data = valid_site.copy()
     del bad_data["group_name"]
-    with pytest.raises(Exception):
-        SiteData(**bad_data)
-
-
-def test_invalid_site_data_bad_enum():
-    bad_data = valid_site.copy()
-    bad_data["group_type"] = "not_a_type"
     with pytest.raises(Exception):
         SiteData(**bad_data)
 

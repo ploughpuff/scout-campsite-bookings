@@ -8,7 +8,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import SERVICE_ACCOUNT_PATH, FIELD_MAPPINGS_DICT
+from config import FIELD_MAPPINGS_DICT, SERVICE_ACCOUNT_PATH
 from models.utils import normalize_key, now_uk
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
