@@ -6,7 +6,6 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from config import UK_TZ
-from models.booking_types import BookingType
 from models.utils import (
     now_uk,
 )
@@ -27,7 +26,7 @@ class SiteData(BaseModel):
     idx: int = Field(frozen=True)
     id: str = Field(frozen=True)
     original_sheet_md5: str = Field(frozen=True)
-    booking_type: BookingType
+    booking_type: str
     group_name: str
     group_size: int
     status: Literal["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
