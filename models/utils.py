@@ -6,7 +6,7 @@ import logging
 import re
 from datetime import datetime
 
-from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
+from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ, FIELD_MAPPINGS_DICT
 
 
 def now_uk() -> datetime:
@@ -162,3 +162,9 @@ def normalize_key(key: str) -> str:
     key = re.sub(r"[^\w\s]", "", key)  # Remove punctuation
     key = re.sub(r"\s+", "_", key)  # Replace spaces with underscores
     return key.lower()
+
+
+def get_booking_prefix(booking_type: str) -> str:
+    """Return prefix for this booking type"""
+    _data = FIELD_MAPPINGS_DICT.get("booking_types")
+    return _data.get(booking_type).get("prefix")
