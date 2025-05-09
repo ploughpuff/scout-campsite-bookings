@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from config import CALENDAR_ID, SERVICE_ACCOUNT_PATH
-from models.schemas import SiteData
+from models.schemas import LiveData
 
 logger = logging.getLogger("app_logger")
 
@@ -54,27 +54,27 @@ def del_cal_events(event_resource):
             print(f"Failed to delete {event_id}: {e}")
 
 
-def update_calendar_entry(site: SiteData):
+def update_calendar_entry(rec: LiveData):
     """Adds new, modifies existing, or deleted cal entry"""
 
     #
     ## New, Pending, Invoice, Completed, Archived - No action
     ## Confirmed - Add or modify cal entry
     ## Cancelled - Delete cal entry
-    if not site.status:
-        logger.error("Unable to add event.  Status not found: %s", site.id)
+    if not rec.tracking.status:
+        logger.error("Unable to add event.  Status not found: %s", rec.booking.id)
 
-    elif site.status == "Confirmed":
-        site.google_calendar_id = _add_or_mod_event(site)
+    elif rec.tracking.status == "Confirmed":
+        rec.tracking.google_calendar_id = _add_or_mod_event(rec)
 
-    elif site.status == "Cancelled" or site.status == "Archived":
-        site.google_calendar_id = _del_event(site)
+    elif rec.tracking.status == "Cancelled" or rec.tracking.status == "Archived":
+        rec.tracking.google_calendar_id = _del_event(rec)
 
     else:
         logger.debug(
             "Not updating calendar for booking %s as status is %s",
-            site.id,
-            site.status,
+            rec.booking.id,
+            rec.tracking.status,
         )
 
 
@@ -85,15 +85,15 @@ def _build_service():
     return build("calendar", "v3", credentials=creds)
 
 
-def _build_event(site: SiteData, extra_text: str = None) -> dict:
+def _build_event(rec: LiveData, extra_text: str = None) -> dict:
     summary = "EVE: Scouts"
 
     extra_text = extra_text or ""
 
     description = textwrap.dedent(
         f"""
-        {site.id}
-        Number of people: {site.group_size}
+        {rec.booking.id}
+        Number of people: {rec.booking.group_size}
         {extra_text}
     """
     ).strip()
@@ -101,30 +101,34 @@ def _build_event(site: SiteData, extra_text: str = None) -> dict:
     return {
         "summary": summary,
         "description": description,
-        "start": {"dateTime": site.arriving.isoformat()},
-        "end": {"dateTime": site.departing.isoformat()},
-        "extendedProperties": {"private": {"booking_id": site.id}},
+        "start": {"dateTime": rec.booking.arriving.isoformat()},
+        "end": {"dateTime": rec.booking.departing.isoformat()},
+        "extendedProperties": {"private": {"booking_id": rec.booking.id}},
     }
 
 
-def _add_or_mod_event(site: SiteData):
+def _add_or_mod_event(rec: LiveData):
     """Add a new calendar event."""
 
     try:
         service = _build_service()
-        event = _build_event(site)
+        event = _build_event(rec)
 
         # pylint: disable=no-member
-        if not site.google_calendar_id:
+        if not rec.tracking.google_calendar_id:
             event_resource = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-            logger.info("Calendar event created: %s: %s", site.id, event_resource.get("htmlLink"))
+            logger.info(
+                "Calendar event created: %s: %s", rec.booking.id, event_resource.get("htmlLink")
+            )
         else:
             event_resource = (
                 service.events()
-                .update(calendarId=CALENDAR_ID, eventId=site.google_calendar_id, body=event)
+                .update(calendarId=CALENDAR_ID, eventId=rec.tracking.google_calendar_id, body=event)
                 .execute()
             )
-            logger.info("Calendar event modified: %s: %s", site.id, event_resource.get("htmlLink"))
+            logger.info(
+                "Calendar event modified: %s: %s", rec.booking.id, event_resource.get("htmlLink")
+            )
 
         return event_resource["id"]
 
@@ -133,7 +137,7 @@ def _add_or_mod_event(site: SiteData):
         return None
 
 
-def _del_event(site: SiteData):
+def _del_event(rec: LiveData):
     """Delete an event from the calendar
 
     Args:
@@ -145,13 +149,15 @@ def _del_event(site: SiteData):
     try:
         service = _build_service()
 
-        if not site.google_calendar_id:
-            logger.info("Unable to delete calendar event as no ID available: %s", site.id)
-            return site.google_calendar_id
+        if not rec.tracking.google_calendar_id:
+            logger.info("Unable to delete calendar event as no ID available: %s", rec.booking.id)
+            return rec.tracking.google_calendar_id
 
         # pylint: disable=no-member
-        service.events().delete(calendarId=CALENDAR_ID, eventId=site.google_calendar_id).execute()
+        service.events().delete(
+            calendarId=CALENDAR_ID, eventId=rec.tracking.google_calendar_id
+        ).execute()
         return None
     except HttpError as e:
-        logger.error("Failed to delete calendar event for booking: %s %s", site.id, str(e))
-        return site.google_calendar_id
+        logger.error("Failed to delete calendar event for booking: %s %s", rec.booking.id, str(e))
+        return rec.tracking.google_calendar_id

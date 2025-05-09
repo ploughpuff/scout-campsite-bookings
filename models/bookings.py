@@ -25,7 +25,7 @@ from config import (
 from models.calendar import update_calendar_entry
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
-from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
+from models.schemas import LiveData, ArchiveData, LeaderData, BookingData, TrackingData, LiveBooking
 from models.utils import get_booking_prefix, get_timestamp_for_notes, now_uk, secs_to_hr
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
@@ -102,13 +102,15 @@ class Bookings:
         """Helper function via decorator to check the integrity of booking data"""
         problems = []
 
-        for raw_booking in self.live.bookings + self.archive.bookings:
-            entry = SiteData(**raw_booking)
-            if not entry.is_valid():
+        for rec in self.live.items + self.archive.items:
+            booking = (
+                BookingData(**rec) if isinstance(rec, BookingData) else BookingData(**rec.booking)
+            )
+            if not booking.is_valid():
                 problems.append(
                     {
-                        "booking": raw_booking.id,
-                        "errors": entry.get_problematic_data(),
+                        "booking": booking.id,
+                        "errors": booking.get_problematic_data(),
                     }
                 )
 
@@ -122,14 +124,14 @@ class Bookings:
         self.archive = archive
 
     # @integrity_check
-    def load(self, use_checksum=False):
+    def load(self, use_checksum: bool = False):
         """Reload the bookings json file from disk. Create empty structure if file not found"""
         self.live = load_json(DATA_FILE_PATH, LiveData, use_checksum)
         self.archive = load_json(ARCHIVE_FILE_PATH, ArchiveData, use_checksum)
 
-    def _get_booking_by_id(self, booking_id: str) -> SitePlusLeader:
+    def _get_booking_by_id(self, booking_id: str) -> LiveData:
         """Return booking with the matching booking id"""
-        return next((b for b in self.live.bookings if b.site.id == booking_id), None)
+        return next((rec for rec in self.live.items if rec.booking.id == booking_id), None)
 
     def get_states(self):
         """Reveal the various status names and their valid transitions.
@@ -139,7 +141,7 @@ class Bookings:
         """
         # Programmatically extract the options from a Literal field in a Pydantic model
         # using the __annotations__ and typing.get_args
-        status_type = SiteData.__annotations__["status"]
+        status_type = TrackingData.__annotations__["status"]
 
         return {"names": get_args(status_type), "transitions": status_transitions}
 
@@ -174,27 +176,27 @@ class Bookings:
         """
         results = []
 
-        for booking in self.live.bookings:
-            if booking_id and booking.site.id != booking_id:
+        for rec in self.live.items:
+            if booking_id and rec.booking.id != booking_id:
                 continue
-            if booking_state and booking.site.status != booking_state:
+            if booking_state and rec.tracking.status != booking_state:
                 continue
             if date_range:
-                arriving = booking.site.arriving
-                departing = booking.site.departing
+                arriving = rec.booking.arriving
+                departing = rec.booking.departing
                 if not arriving or not departing:
                     continue
                 start, end = date_range
                 if not (start < departing and end > arriving):
                     continue
-            booking_copy = copy.deepcopy(booking)
-            results.append(booking_copy)
+            rec_copy = copy.deepcopy(rec)
+            results.append(rec_copy)
 
         # Sort by status index then arrival datetime
         results.sort(
-            key=lambda b: (
-                status_options.index(b.site.status),
-                b.site.arriving or datetime.min,
+            key=lambda rec: (
+                status_options.index(rec.tracking.status),
+                rec.booking.arriving or datetime.min,
             )
         )
 
@@ -204,7 +206,7 @@ class Bookings:
         """Returns the list of archived bookings"""
         return self.archive
 
-    def change_status(self, booking_id, new_status, description=None):
+    def change_status(self, booking_id: str, new_status: str, description: str = None):
         """Change the status of a single booking.
 
         Args:
@@ -215,15 +217,15 @@ class Bookings:
         Returns:
             Boolean: True if change made, else False
         """
-        booking = self._get_booking_by_id(booking_id)
+        rec = self._get_booking_by_id(booking_id)
 
-        if not booking:
+        if not rec:
             self.logger.warning("Booking ID return no records: [%s]", booking_id)
             return False
 
-        old_status = booking.site.status
+        old_status = rec.tracking.status
 
-        if not self._apply_status_change(booking, new_status):
+        if not self._apply_status_change(rec, new_status):
             return False
 
         if new_status in ("Cancelled", "Pending"):
@@ -237,15 +239,15 @@ class Bookings:
                 return False
 
             if new_status == "Cancelled":
-                booking.site.cancel_reason = description
-                self._add_to_notes(booking.site, f"Cancel Reason: {description}")
+                rec.tracking.cancel_reason = description
+                self._add_to_notes(rec.tracking, f"Cancel Reason: {description}")
             else:
-                booking.site.pend_question = description
-                self._add_to_notes(booking.site, f"Pend Question: {description}")
+                rec.tracking.pend_question = description
+                self._add_to_notes(rec.tracking, f"Pend Question: {description}")
 
-        send_email_notification(booking)
-        update_calendar_entry(booking.site)
-        self._add_to_notes(booking.site, f"Status changed [{old_status}] > [{new_status}]")
+        send_email_notification(rec)
+        update_calendar_entry(rec)
+        self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [{new_status}]")
         save_json(self.live, DATA_FILE_PATH)
         return True
 
@@ -260,9 +262,9 @@ class Bookings:
             bool: True is successful
         """
 
-        booking = self._get_booking_by_id(booking_id)
+        rec = self._get_booking_by_id(booking_id)
 
-        if not booking:
+        if not rec:
             flash(
                 f"Cannot update booking {booking_id} as not found in database.",
                 "danger",
@@ -270,11 +272,11 @@ class Bookings:
             return False
 
         for section, fields in update_data.items():
-            if not hasattr(booking, section):
+            if not hasattr(rec, section):
                 self.logger.warning("Unknown section '%s' in update data", section)
                 continue
 
-            original = getattr(booking, section)
+            original = getattr(rec, section)
 
             try:
                 # Merge and re-validate in one go
@@ -305,26 +307,26 @@ class Bookings:
                     self.logger.info("Updated booking %s: %s = %s", booking_id, key, new_value)
 
                     self._add_to_notes(
-                        booking.site, f"{key} changed from [{old_value}] to [{new_value}]"
+                        rec.tracking, f"{key} changed from [{old_value}] to [{new_value}]"
                     )
 
         if changes:
             save_json(self.live, DATA_FILE_PATH)
             if send_email:
-                send_email_notification(booking)
-            update_calendar_entry(booking.site)
+                send_email_notification(rec)
+            update_calendar_entry(rec)
 
         return changes
 
-    def _apply_status_change(self, booking, to_status):
+    def _apply_status_change(self, rec: LiveData, to_status: str):
 
-        if not booking:
+        if not rec:
             return False
 
-        from_status = booking.site.status
+        from_status = rec.tracking.status
 
         if not self._can_transition(from_status, to_status):
-            msg = f"Invalid transition for {booking.site.id}: {from_status} > {to_status}"
+            msg = f"Invalid transition for {rec.booking.id}: {from_status} > {to_status}"
             flash(msg, "danger")
             self.logger.warning(msg)
             return False
@@ -333,50 +335,50 @@ class Bookings:
         ## Before blindly transitioning to the new state, if its Cancel>New check the arrival time
         ## is still in the future.  We don't want to resurrest past bookings
         if from_status == "Cancelled" and to_status == "New":
-            if booking.site.arriving < now_uk():
-                msg = f"Unable to resurrect booking {booking.site.id}: arrival date is in the past!"
+            if rec.booking.arriving < now_uk():
+                msg = f"Unable to resurrect booking {rec.booking.id}: arrival date is in the past!"
                 flash(msg, "warning")
                 return False
 
-        booking.site.status = to_status
+        rec.booking.status = to_status
 
         save_json(self.live, DATA_FILE_PATH)
         return True
 
-    def _add_to_notes(self, site_data: SiteData, new_note: str):
+    def _add_to_notes(self, tracking: TrackingData, new_note: str):
 
         timestamp = get_timestamp_for_notes(include_seconds=True)
         new_note_entry = f"[{timestamp}]: {new_note}"
 
-        old_value = site_data.notes
-        site_data.notes = new_note_entry + ("\n" + old_value if old_value else "")
+        old_value = tracking.notes
+        tracking.notes = new_note_entry + ("\n" + old_value if old_value else "")
 
     def auto_update_statuses(self):
         """Look for bookings to automatically change the status of"""
 
-        for booking in self.live.bookings:
+        for rec in self.live.items:
             #
             ## Move confirmed bookings to completed/invoice once departure dates has passed
             if (
-                booking.site.departing.tzinfo is None
-                or booking.site.departing.tzinfo.utcoffset(booking.site.departing) is None
+                rec.booking.departing.tzinfo is None
+                or rec.booking.departing.tzinfo.utcoffset(rec.booking.departing) is None
             ):
                 self.logger.warning(
                     "Departing time for %s is offset-naive [%s]",
-                    booking.site.id,
-                    booking.site.departing,
+                    rec.booking.id,
+                    rec.booking.departing,
                 )
                 continue
 
-            if booking.site.status == "Confirmed" and booking.site.departing < now_uk():
-                new_status = "Invoice" if booking.site.invoice else "Completed"
-                booking.site.status = new_status
+            if rec.tracking.status == "Confirmed" and rec.booking.departing < now_uk():
+                new_status = "Invoice" if rec.tracking.invoice else "Completed"
+                rec.tracking.status = new_status
                 self._add_to_notes(
-                    booking.site, f"Auto Status Change: [{booking.site.status}] > [{new_status}]"
+                    rec.tracking, f"Auto Status Change: [{rec.tracking.status}] > [{new_status}]"
                 )
                 save_json(self.live, DATA_FILE_PATH)
                 flash(
-                    f"{booking.site.id} automatically change from {booking.site.status} "
+                    f"{rec.booking.id} automatically change from {rec.tracking.status} "
                     f"to {new_status} now booking has passed",
                     "warning",
                 )
@@ -385,27 +387,24 @@ class Bookings:
         """Move bookings with status 'Archived' to archive.json and remove from bookings.json."""
         to_archive = []
 
-        for booking in self.live.bookings:
-            archive_date = booking.site.departing + timedelta(
+        for rec in self.live.items:
+            archive_date = rec.booking.departing + timedelta(
                 days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
             )
 
-            if booking.site.status == "Completed" and archive_date < now_uk():
+            if rec.tracking.status == "Completed" and archive_date < now_uk():
 
                 # Take a deep copy of this booking and remove all GDPR data
-                archive_copy = copy.deepcopy(booking.site)
-                archive_copy.status = "Archived"
-                update_calendar_entry(archive_copy)
-
-                self._add_to_notes(
-                    archive_copy, f"Auto Status Change: [{booking.site.status}] > [Archived]"
-                )
+                archive_copy = copy.deepcopy(rec.booking)
+                delete_calendar_entry(archive_copy)
                 to_archive.append(archive_copy)
 
                 # Remove this booking from the main data table
-                self.live.bookings = [b for b in self.live.bookings if b.site.id != booking.site.id]
+                self.live.items = [
+                    rec for rec in self.live.items if rec.booking.id != archive_copy.booking.id
+                ]
 
-                self.logger.info("%s archived", booking.site.id)
+                self.logger.info("%s archived", rec.booking.id)
 
         if not to_archive:
             self.logger.info("No bookings to archive.")
@@ -413,9 +412,9 @@ class Bookings:
 
         # Handle archive file
         if ARCHIVE_FILE_PATH.exists():
-            self.archive.bookings.extend(to_archive)
+            self.archive.items.extend(to_archive)
         else:
-            self.archive.bookings = to_archive
+            self.archive.items = to_archive
 
         # Save the modified data files to json
         save_json(self.live, DATA_FILE_PATH)
@@ -430,9 +429,9 @@ class Bookings:
 
     def _find_booking_by_md5(self, target_md5: str) -> bool:
         """Look in main table and archive for matching md5"""
-        if any(b.site.original_sheet_md5 == target_md5 for b in self.live.bookings):
+        if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.live.items):
             return True
-        if any(b.original_sheet_md5 == target_md5 for b in self.archive.bookings):
+        if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.archive.items):
             return True
         return False
 
@@ -463,20 +462,18 @@ class Bookings:
 
                     if not self._find_booking_by_md5(new_booking_md5):
 
-                        new_booking = self.create_rec_from_sheet_row(
-                            row, single_sheet.get("group_type")
-                        )
+                        rec = self.create_rec_from_sheet_row(row, single_sheet.get("group_type"))
 
-                        self._add_to_notes(new_booking.site, "Pulled from sheets")
-                        self.live.bookings.append(new_booking)
+                        self._add_to_notes(rec.tracking, "Pulled from sheets")
+                        self.live.items.append(rec)
                         self.live.next_idx += 1
-                        self.logger.info("New booking added: %s", new_booking.site.id)
+                        self.logger.info("New booking added: %s", rec.booking.id)
                         added += 1
 
             save_json(self.live, DATA_FILE_PATH)
         return added
 
-    def create_rec_from_sheet_row(self, row: dict, group_type: str) -> SiteData:
+    def create_rec_from_sheet_row(self, row: dict, group_type: str) -> LiveBooking:
         """Create a booking record from a row of data from Google sheet using field mappings
         from JSON file"""
 
@@ -497,32 +494,44 @@ class Bookings:
             key: row[src_field]
             for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("leader").items()
         }
-        site_fields = {
+        booking_fields = {
             key: row[src_field]
-            for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("site").items()
+            for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("booking").items()
         }
 
-        # Construct SiteData and LeaderData separately
-        site_data = {
-            **site_fields,
-            "idx": self.live.next_idx,
+        # Overide the global group_type if available from the row
+        if row.get("group_type"):
+            group_type = row.get("group_type")
+
+        # Need to add group_type to sheets. Default for now if not set
+        if not group_type:
+            group_type = "chelmsford_district"
+
+        # Construct BookingData, LeaderData and TrackingData separately
+        booking_data = {
+            **booking_fields,
             "id": f"{get_booking_prefix(group_type)}-{start_dt.year}-{self.live.next_idx:04d}",
             "original_sheet_md5": self._md5_of_dict(row),
-            "group_type": row["group_type"] if row["group_type"] else group_type,
-            "status": "New",
-            "invoice": False,
-            "notes": "",
-            "google_calendar_id": "",
+            "group_type": group_type,
             "submitted": submitted_dt,
             "arriving": start_dt,
             "departing": end_dt,
         }
 
+        tracking_data = {
+            "status": "New",
+            "invoice": False,
+            "notes": "",
+            "google_calendar_id": "",
+        }
+
         # Now build full SitePlusLeader record
         try:
-            site_entry = SiteData.model_validate(site_data)
-            leader_data = LeaderData.model_validate(leader_fields)
-            return SitePlusLeader(site=site_entry, leader=leader_data)
+            booking_entry = BookingData.model_validate(booking_data)
+            leader_entry = LeaderData.model_validate(leader_fields)
+            tracking_entry = TrackingData.model_validate(tracking_data)
+
+            return LiveBooking(booking=booking_entry, leader=leader_entry, tracking=tracking_entry)
         except ValidationError as e:
             self.logger.error("Validation failed for booking data: %s", e.json())
             self.logger.debug(e.json())  # Or use e.errors() for structured error list
