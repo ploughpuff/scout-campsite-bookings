@@ -22,7 +22,7 @@ from config import (
     FIELD_MAPPINGS_DICT,
     UK_TZ,
 )
-from models.calendar import update_calendar_entry, delete_calendar_entry
+from models.calendar import delete_calendar_entry, update_calendar_entry
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
