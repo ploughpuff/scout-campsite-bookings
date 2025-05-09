@@ -62,7 +62,7 @@ def pytest_sessionstart(session):  # pylint: disable=unused-argument
                     "use": True,
                     "id": "0123456789ABCDEF0123456789ABCDEF0123456789AB",
                     "range": "2025!A:E",
-                    "booking_type": "district_day_visit",
+                    "group_type": "district_day_visit",
                 },
             ],
         }

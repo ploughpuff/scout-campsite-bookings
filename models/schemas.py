@@ -6,7 +6,6 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from config import UK_TZ
-from models.booking_types import BookingType
 from models.utils import (
     now_uk,
 )
@@ -20,24 +19,44 @@ class LeaderData(BaseModel):
     phone: str
 
 
-class SiteData(BaseModel):
-    """The core class for booking information, including booking-specific details like the booking
-    type, group name, status, and dates"""
+class BookingData(BaseModel):
+    """Class encapsulates the booking data which is kept and archived"""
 
-    idx: int = Field(frozen=True)
     id: str = Field(frozen=True)
     original_sheet_md5: str = Field(frozen=True)
-    booking_type: BookingType
+    group_type: str
     group_name: str
     group_size: int
+    submitted: datetime = Field(frozen=True)
+    arriving: datetime
+    departing: datetime
+
+    @field_validator(
+        "submitted",
+        "arriving",
+        "departing",
+        mode="before",
+    )
+    @classmethod
+    def ensure_uk_timezone(cls, value):
+        """This class method ensured the datetime object has a UK timezone."""
+        if isinstance(value, str):
+            dt = datetime.fromisoformat(value)
+        elif isinstance(value, datetime):
+            dt = value
+        else:
+            return value  # Leave None or unexpected types alone
+
+        return dt.astimezone(UK_TZ) if dt.tzinfo else dt.replace(tzinfo=UK_TZ)
+
+
+class TrackingData(BaseModel):
+    """Class holding tracking and private data which is discarded once archived"""
+
     status: Literal["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
     invoice: bool
     notes: str
     google_calendar_id: Optional[str] = None
-
-    submitted: datetime = Field(frozen=True)
-    arriving: datetime
-    departing: datetime
     pending_email_sent: Optional[datetime] = None
     confirm_email_sent: Optional[datetime] = None
     cancel_email_sent: Optional[datetime] = None
@@ -45,9 +64,6 @@ class SiteData(BaseModel):
     cancel_reason: Optional[str] = None
 
     @field_validator(
-        "submitted",
-        "arriving",
-        "departing",
         "pending_email_sent",
         "confirm_email_sent",
         "cancel_email_sent",
@@ -82,11 +98,12 @@ class SiteData(BaseModel):
             return e.errors()
 
 
-class SitePlusLeader(BaseModel):
+class LiveBooking(BaseModel):
     """A composite class that binds SiteData with LeaderData, keeping them tightly coupled."""
 
-    site: SiteData
+    booking: BookingData
     leader: LeaderData
+    tracking: TrackingData
 
 
 class LiveData(BaseModel):
@@ -94,11 +111,11 @@ class LiveData(BaseModel):
 
     updated: datetime = Field(default_factory=now_uk)
     next_idx: int = Field(default=1)
-    bookings: List[SitePlusLeader] = Field(default_factory=list)
+    items: List[LiveBooking] = Field(default_factory=list)
 
 
 class ArchiveData(BaseModel):
     """Holds expired or archived bookings"""
 
     updated: datetime = Field(default_factory=now_uk)
-    bookings: List[SiteData] = Field(default_factory=list)
+    items: List[BookingData] = Field(default_factory=list)

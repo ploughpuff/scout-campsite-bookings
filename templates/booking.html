@@ -8,24 +8,24 @@ Booking Details
 
 
 <div class="card">
-  <div class="card-header badge-status {{ booking.site.status|lower }}">
+  <div class="card-header badge-status {{ rec.tracking.status|lower }}">
     <h5 class="mb-0">
-      <span>Booking ID: {{ booking.site.id }}</span>
+      <span>Booking ID: {{ rec.booking.id }}</span>
       <span class="text-muted mx-2">•</span>
-      <span>{{ booking.site.status }}</span>
+      <span>{{ rec.tracking.status }}</span>
     </h5>
   </div>
 
   <div class="row g-2">
-    {% if booking.site.status in ['Pending', 'Cancelled'] %}
+    {% if rec.tracking.status in ['Pending', 'Cancelled'] %}
     <div class="col-md-12">
       <div class="input-group">
-        {% if booking.site.status == 'Pending' %}
+        {% if rec.tracking.status == 'Pending' %}
         <span class="input-group-text">Question Asked</span>
-        <span class="form-control custom-bg">{{ booking.site.pend_question }}</span>
+        <span class="form-control custom-bg">{{ rec.tracking.pend_question }}</span>
         {% else %}
         <span class="input-group-text">Cancel Reason</span>
-        <span class="form-control custom-bg">{{ booking.site.cancel_reason }}</span>
+        <span class="form-control custom-bg">{{ rec.tracking.cancel_reason }}</span>
         {% endif %}
       </div>
     </div>
@@ -35,13 +35,13 @@ Booking Details
     <div class="col-md-7">
       <div class="input-group">
         <span class="input-group-text">Group</span>
-        <span class="form-control custom-bg">{{ booking.site.group_name }}</span>
+        <span class="form-control custom-bg">{{ rec.booking.group_name }}</span>
       </div>
     </div>
     <div class="col-md-5">
       <div class="input-group">
         <span class="input-group-text">Leader</span>
-        <span class="form-control custom-bg">{{ booking.leader.name }}</span>
+        <span class="form-control custom-bg">{{ rec.leader.name }}</span>
       </div>
     </div>
 
@@ -49,7 +49,7 @@ Booking Details
       <div class="input-group">
         <span class="input-group-text">Phone Number</span>
         <span class="form-control custom-bg">
-          {{ booking.leader.phone | default('')}}
+          {{ rec.leader.phone | default('')}}
         </span>
       </div>
     </div>
@@ -57,21 +57,21 @@ Booking Details
     <div class="col-md-6">
       <div class="input-group">
         <span class="input-group-text">Booking Request Submitted</span>
-        <span class="form-control custom-bg">{{ booking.site.submitted|pretty_date }}</span>
+        <span class="form-control custom-bg">{{ rec.booking.submitted|pretty_date }}</span>
       </div>
     </div>
 
     <div class="col-md-6">
       <div class="input-group">
         <span class="input-group-text">Email</span>
-        <span class="form-control custom-bg">{{ booking.leader.email }}</span>
+        <span class="form-control custom-bg">{{ rec.leader.email }}</span>
       </div>
     </div>
 
     <div class="col-md-6">
       <div class="input-group">
         <span class="input-group-text">Booking Type</span>
-        <span class="form-control custom-bg">{{ booking.site.booking_type }}</span>
+        <span class="form-control custom-bg">{{ rec.booking.group_type }}</span>
       </div>
     </div>
   </div>
@@ -79,29 +79,29 @@ Booking Details
 
 <hr>
 
-<form method="POST" action="{{ url_for('modify_fields', booking_id=booking.site.id) }}">
+<form method="POST" action="{{ url_for('modify_fields', booking_id=rec.booking.id) }}">
   <div class="card">
     <div class="row g-3">
-      {% if booking.site.status in ['New', 'Pending', 'Confirmed'] %}
+      {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
       <div class="col-md-4">
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
-          <input id="arriving" type="text" name="site.arriving" class="form-control"
-            value="{{ booking.site.arriving|datetime_local_value }}" readonly />
+          <input id="arriving" type="text" name="booking.arriving" class="form-control"
+            value="{{ rec.booking.arriving|datetime_local_value }}" readonly />
         </div>
       </div>
       <div class="col-md-2">
         <div class="input-group">
           <span class="input-group-text">Number</span>
-          <input type="number" name="site.group_size" class="form-control" value="{{ booking.site.group_size }}" min="1"
-            required>
+          <input type="number" name="booking.group_size" class="form-control" value="{{ rec.booking.group_size }}"
+            min="1" required>
         </div>
       </div>
       <div class="col-md-4">
         <div class="input-group">
           <span class="input-group-text">Departing</span>
-          <input id="departing" type="text" name="site.departing" class="form-control"
-            value="{{ booking.site.departing|datetime_local_value }}" />
+          <input id="departing" type="text" name="booking.departing" class="form-control"
+            value="{{ rec.booking.departing|datetime_local_value }}" />
         </div>
       </div>
       <div class="col-md-2">
@@ -111,19 +111,19 @@ Booking Details
       <div class=" col-md-4">
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
-          <span class="form-control custom-bg">{{ booking.site.arriving|pretty_date }}</span>
+          <span class="form-control custom-bg">{{ rec.booking.arriving|pretty_date }}</span>
         </div>
       </div>
       <div class="col-md-2">
         <div class="input-group">
           <span class="input-group-text">Number</span>
-          <span class="form-control custom-bg">{{ booking.site.group_size }}</span>
+          <span class="form-control custom-bg">{{ rec.booking.group_size }}</span>
         </div>
       </div>
       <div class="col-md-4">
         <div class="input-group">
           <span class="input-group-text">Departing</span>
-          <span class="form-control custom-bg">{{ booking.site.departing|pretty_date }}</span>
+          <span class="form-control custom-bg">{{ rec.booking.departing|pretty_date }}</span>
         </div>
       </div>
       <div class="col-md-2">
@@ -141,24 +141,24 @@ Booking Details
     <div class="col-md-4">
       <ul class="list-group list-group-flush">
         <li class="list-group-item">
-          {% if booking.site.pending_email_sent %}
-          <span class="text-success">&#10003; Pending {{ booking.site.pending_email_sent | pretty_date
+          {% if rec.tracking.pending_email_sent %}
+          <span class="text-success">&#10003; Pending {{ rec.tracking.pending_email_sent | pretty_date
             }}</span>
           {% else %}
           <span class="text-danger">&#10007; Pending Not Sent</span>
           {% endif %}
         </li>
         <li class="list-group-item">
-          {% if booking.site.confirm_email_sent %}
-          <span class="text-success">&#10003; Confirmation {{ booking.site.confirm_email_sent | pretty_date
+          {% if rec.tracking.confirm_email_sent %}
+          <span class="text-success">&#10003; Confirmation {{ rec.tracking.confirm_email_sent | pretty_date
             }}</span>
           {% else %}
           <span class="text-danger">&#10007; Confirmation Not Sent</span>
           {% endif %}
         </li>
         <li class="list-group-item">
-          {% if booking.site.cancel_email_sent %}
-          <span class="text-success">&#10003; Cancellation {{ booking.site.cancel_email_sent | pretty_date
+          {% if rec.tracking.cancel_email_sent %}
+          <span class="text-success">&#10003; Cancellation {{ rec.tracking.cancel_email_sent | pretty_date
             }}</span>
           {% else %}
           <span class="text-danger">&#10007; Cancellation Not Sent</span>
@@ -169,19 +169,19 @@ Booking Details
 
     <div class="col-md-6">
       <span class="badge text-bg-warning">Danger</span>
-      {% if booking_list_clash is not none %}
+      {% if rec_list_clash is not none %}
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text">Calendar is FREE?</span>
-          {% if not booking_list_clash %}
+          {% if not rec_list_clash %}
           <span class="form-control custom-bg">
             <span class="text-success">&#10003;</span>
           </span>
           {% else %}
           <span class="form-control custom-bg">
             <span class="text-danger">&#10007; Clashes with:
-              {% for clash in booking_list_clash %}
-              <a href="{{ url_for('booking_detail', booking_id=clash.site.id) }}">{{ clash.id }}</a>{% if not
+              {% for rec in rec_list_clash %}
+              <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}">{{ rec.booking.id }}</a>{% if not
               loop.last
               %}, {%
               endif %}
@@ -203,8 +203,8 @@ Booking Details
       {% for next_status in valid_transitions %}
       {# Cancelled → New only if booking in the future #}
       {% if next_status == 'New' %}
-      {% if booking.site.arriving > time_now %}
-      <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=booking.site.id) }}"
+      {% if rec.booking.arriving > time_now %}
+      <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=rec.booking.id) }}"
         class="d-inline">
         <button type="submit" class="btn btn-warning">🔄 Resurrect Booking</button>
       </form>
@@ -213,15 +213,15 @@ Booking Details
       {% endif %}
 
       {# Invoice → Completed #}
-      {% elif next_status == 'Completed' and booking.site.status == 'Invoice' %}
-      <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=booking.site.id) }}"
+      {% elif next_status == 'Completed' and rec.tracking.status == 'Invoice' %}
+      <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=rec.booking.id) }}"
         class="d-inline">
         <button type="submit" class="btn btn-success">✔️ Set Complete Once Xero Invoice Raised</button>
       </form>
 
       {# New → Confirmed #}
       {% elif next_status == 'Confirmed' %}
-      <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=booking.site.id) }}"
+      <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=rec.booking.id) }}"
         class="d-inline" onsubmit="showLoadingOverlay()">
         <button id="confirmButton" type="submit" class="btn btn-success">✔️ Confirm Booking</button>
       </form>
@@ -238,7 +238,7 @@ Booking Details
       {# Fallback: Generic transitions #}
       {% else %}
       <form method="POST"
-        action="{{ url_for('change_status', new_status=next_status|lower, booking_id=booking.site.id) }}"
+        action="{{ url_for('change_status', new_status=next_status|lower, booking_id=rec.booking.id) }}"
         class="d-inline">
         <button type="submit" class="btn btn-outline-primary">▶ {{ next_status }}</button>
       </form>
@@ -249,7 +249,7 @@ Booking Details
     <hr />
     <h6 class="text-muted">Notes</h6>
     <div class="mb-3">
-      <pre class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ booking.site.notes }}</pre>
+      <pre class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ rec.tracking.notes }}</pre>
     </div>
   </div>
 
@@ -270,7 +270,7 @@ Booking Details
   <!-- Pend Booking Modal -->
   <div class="modal fade" id="pendModal" tabindex="-1" aria-labelledby="pendModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-      <form method="POST" action="{{ url_for('change_status', new_status='Pending', booking_id=booking.site.id) }}"
+      <form method="POST" action="{{ url_for('change_status', new_status='Pending', booking_id=rec.booking.id) }}"
         onsubmit="showLoadingOverlay()">
         <div class="modal-content">
           <div class="modal-header">
@@ -293,7 +293,7 @@ Booking Details
   <!-- Cancel Booking Modal -->
   <div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-      <form method="POST" action="{{ url_for('change_status', new_status='Cancelled', booking_id=booking.site.id) }}"
+      <form method="POST" action="{{ url_for('change_status', new_status='Cancelled', booking_id=rec.booking.id) }}"
         onsubmit="showLoadingOverlay()">
         <div class="modal-content">
           <div class="modal-header">

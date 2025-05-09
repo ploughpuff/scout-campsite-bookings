@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-from models.booking_types import BookingType
 from models.bookings import Bookings, SiteData
 from models.schemas import ArchiveData, LeaderData, LiveData, SiteData, SitePlusLeader
 
@@ -17,7 +16,7 @@ valid_site_data = {
     "idx": 1,
     "id": "abc123",
     "original_sheet_md5": "somehash",
-    "booking_type": BookingType.SCHOOL,
+    "group_type": "chelmsford_district",
     "group_name": "1st Scouts",
     "group_size": 20,
     "status": "Confirmed",

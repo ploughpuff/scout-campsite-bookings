@@ -6,7 +6,7 @@ import logging
 import re
 from datetime import datetime
 
-from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, UK_TZ
+from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, FIELD_MAPPINGS_DICT, UK_TZ
 
 
 def now_uk() -> datetime:
@@ -162,3 +162,14 @@ def normalize_key(key: str) -> str:
     key = re.sub(r"[^\w\s]", "", key)  # Remove punctuation
     key = re.sub(r"\s+", "_", key)  # Replace spaces with underscores
     return key.lower()
+
+
+def get_booking_prefix(group_type: str) -> str:
+    """Return prefix for this group type"""
+    _data = FIELD_MAPPINGS_DICT.get("group_types")
+    try:
+        return _data.get(group_type).get("prefix")
+    except AttributeError as e:
+        logger = logging.getLogger("app_logger")
+        logger.warning("Unknown group type [%s]: [%s]", group_type, str(e))
+        return None

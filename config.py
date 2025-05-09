@@ -87,8 +87,6 @@ EDIT_EMAIL_BODY_ALLOWED_TAGS = [
 EDIT_EMAIL_BODY_ALLOWED_ATTRIBS = {"a": ["href", "title"]}
 
 
-def get_field_mappings():
-    """Loads the JSON field mappings file"""
-    if not FIELD_MAPPING_PATH.exists():
-        raise RuntimeError(f"Missing required config file: {FIELD_MAPPING_PATH}")
-    return json.loads(FIELD_MAPPING_PATH.read_text())
+if not FIELD_MAPPING_PATH.exists():
+    raise RuntimeError(f"Missing required config file: {FIELD_MAPPING_PATH}")
+FIELD_MAPPINGS_DICT = json.loads(FIELD_MAPPING_PATH.read_text())

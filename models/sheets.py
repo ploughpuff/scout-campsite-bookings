@@ -8,8 +8,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import SERVICE_ACCOUNT_PATH, get_field_mappings
-from models.booking_types import BookingType
+from config import FIELD_MAPPINGS_DICT, SERVICE_ACCOUNT_PATH
 from models.utils import normalize_key, now_uk
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -32,29 +31,25 @@ def get_sheet_data() -> dict:
     logger = logging.getLogger("app_logger")
     all_data = []
 
-    for sheet_cfg in get_field_mappings()["sheets"]:
+    for sheet_cfg in FIELD_MAPPINGS_DICT.get("sheets"):
         if not sheet_cfg.get("use"):
             logger.info("Skipping sheet %s (disabled via 'use' flag).", sheet_cfg.get("id"))
             continue
 
-        if (
-            not sheet_cfg.get("id")
-            or not sheet_cfg.get("range")
-            or not sheet_cfg.get("booking_type")
-        ):
+        if not sheet_cfg.get("id") or not sheet_cfg.get("range"):
             logger.warning("Skipping sheet due to missing ID or range: %s", sheet_cfg)
             continue
 
         sheet_id = sheet_cfg.get("id")
         sheet_range = sheet_cfg.get("range")
-        booking_type = BookingType.from_label(sheet_cfg.get("booking_type"))
+        group_type = sheet_cfg.get("group_type")
 
         new_data = _fetch_google_sheets_data(sheet_id, sheet_range)
 
         # Normalize column headers for each row
         normalized_sheet_data = [{normalize_key(k): v for k, v in rec.items()} for rec in new_data]
 
-        all_data.append({"booking_type": booking_type, "sheet_data": normalized_sheet_data})
+        all_data.append({"sheet_data": normalized_sheet_data, "group_type": group_type})
 
     return {
         "updated": now_uk(),

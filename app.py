@@ -39,7 +39,7 @@ from config import (
     TEMPLATE_DIR,
 )
 from models.bookings import Bookings
-from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
+from models.calendar import del_cal_events, get_cal_events
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -65,7 +65,7 @@ def all_bookings():
     """Render the main bookings table page."""
     bookings.auto_update_statuses()
     return render_template(
-        "all_bookings.html", bookings=bookings.get_bookings_list(), age=bookings.age()
+        "all_bookings.html", list=bookings.get_bookings_list(), age=bookings.age()
     )
 
 
@@ -74,30 +74,30 @@ def booking_detail(booking_id):
     """Render the booking detail page for a specific booking ID."""
     bookings_list = bookings.get_bookings_list(booking_id=booking_id)
     # Returns a list[] of one dict{}
-    booking = bookings_list[0] if bookings_list else None
+    rec = bookings_list[0] if bookings_list else None
 
-    if not booking:
+    if not rec:
         flash(f"Booking {booking_id} not found ", "danger")
         return redirect(url_for("all_bookings"))
 
     transitions = bookings.get_states()["transitions"]
 
     # Only need to check if calendar is free when state is New or Pending
-    bookings_list_clash = None
-    if booking.site.status in ["New", "Pending"]:
-        bookings_list_clash = bookings.get_bookings_list(
-            date_range=(booking.site.arriving, booking.site.departing)
+    rec_list_clash = None
+    if rec.tracking.status in ["New", "Pending"]:
+        rec_list_clash = bookings.get_bookings_list(
+            date_range=(rec.booking.arriving, rec.booking.departing)
         )
 
         # Remove ourself from list of clashes
-        bookings_list_clash = [b for b in bookings_list_clash if b.site.id != booking_id]
+        rec_list_clash = [rec for rec in rec_list_clash if rec.booking.id != booking_id]
 
     return render_template(
         "booking.html",
-        booking=booking,
-        valid_transitions=transitions.get(booking.site.status, []),
+        rec=rec,
+        valid_transitions=transitions.get(rec.tracking.status, []),
         time_now=now_uk(),
-        bookings_list_clash=bookings_list_clash,
+        rec_list_clash=rec_list_clash,
     )
 
 
@@ -114,7 +114,7 @@ def modify_fields(booking_id):
     """Handle modifying fields from details page."""
     nested = defaultdict(dict)
 
-    # names in post data are like site.group_size, leader.name
+    # names in post data are like booking.group_size, leader.name
     # Create dict with left-side of dot as key, right-side of dot as value
     for full_key, value in request.form.items():
         if "." in full_key:
@@ -284,18 +284,18 @@ def list_cal_events():
     extra = []
     event_ids = [event["id"] for event in event_resource.get("items", [])]
 
-    for booking in bookings.get_bookings_list(booking_state="Confirmed"):
-        if booking.site.google_calendar_id not in event_ids:
-            missing.append(booking)
+    for rec in bookings.get_bookings_list(booking_state="Confirmed"):
+        if rec.tracking.google_calendar_id not in event_ids:
+            missing.append(rec)
 
     return render_template("list_cal_events.html", missing=missing, extra=extra)
 
 
-@app.route("/admin/add_to_calendar")
-def add_to_calendar(booking):
-    """Add a booking id to google calendar"""
-    update_calendar_entry(booking)
-    return render_template("list_cal_events.html", events=get_cal_events())
+# @app.route("/admin/add_to_calendar")
+# def add_to_calendar(booking):
+#    """Add a booking id to google calendar"""
+#    update_calendar_entry(booking)
+#    return render_template("list_cal_events.html", events=get_cal_events())
 
 
 @app.route("/admin/delete_cal_events")

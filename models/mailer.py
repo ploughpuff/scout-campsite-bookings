@@ -13,7 +13,7 @@ from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
-from models.schemas import SitePlusLeader
+from models.schemas import LiveBooking
 from models.utils import get_pretty_date_str, now_uk
 
 logger = logging.getLogger("app_logger")
@@ -22,7 +22,7 @@ logger = logging.getLogger("app_logger")
 env = Environment(loader=FileSystemLoader([config.EMAIL_TEMP_DIR]))
 
 
-def send_email_notification(booking: SitePlusLeader):
+def send_email_notification(rec: LiveBooking):
     """
     Send an email notification based on the booking status.
 
@@ -32,37 +32,37 @@ def send_email_notification(booking: SitePlusLeader):
     Returns:
         bool: True if the email was sent successfully, False otherwise.
     """
-    if booking.site.status not in {"Confirmed", "Cancelled", "Pending"}:
+    if rec.tracking.status not in {"Confirmed", "Cancelled", "Pending"}:
         return False
 
-    context = _build_email_context(booking)
-    msg = _create_email_message(context, booking)
+    context = _build_email_context(rec)
+    msg = _create_email_message(context, rec)
 
     if not msg:
         return False
 
-    if booking.site.status == "Pending":
-        booking.site.pending_email_sent = now_uk()
-    elif booking.site.status == "Confirmed":
-        booking.site.confirm_email_sent = now_uk()
+    if rec.tracking.status == "Pending":
+        rec.tracking.pending_email_sent = now_uk()
+    elif rec.tracking.status == "Confirmed":
+        rec.tracking.confirm_email_sent = now_uk()
     else:
-        booking.site.cancel_email_sent = now_uk()
+        rec.tracking.cancel_email_sent = now_uk()
 
-    return _send_email(msg, booking.leader.email)
+    return _send_email(msg, rec.leader.email)
 
 
-def _build_email_context(booking: SitePlusLeader):
+def _build_email_context(rec: LiveBooking):
     """
     Confirmed
     Cancelled
     Pending
     """
 
-    arriving_str = get_pretty_date_str(booking.site.arriving)
+    arriving_str = get_pretty_date_str(rec.booking.arriving)
     summary = f"Your campsite booking for {arriving_str} "
     body = "TBD"
 
-    if booking.site.status == "Confirmed":
+    if rec.tracking.status == "Confirmed":
         summary += "is <strong>CONFIRMED</strong>."
 
         file_path = Path(os.path.join(config.EMAIL_TEMP_DIR, "confirmed_body.html"))
@@ -71,24 +71,24 @@ def _build_email_context(booking: SitePlusLeader):
             with file_path.open("r", encoding="utf-8") as file:
                 body = file.read()
 
-    elif booking.site.status == "Cancelled":
+    elif rec.tracking.status == "Cancelled":
         summary += "is <strong>CANCELLED</strong>."
-        body = f"Reason: {booking.site.cancel_reason}"
-    elif booking.site.status == "Pending":
+        body = f"Reason: {rec.tracking.cancel_reason}"
+    elif rec.tracking.status == "Pending":
         summary += (
             "has been set to <strong>PENDING</strong> with the following note to answer please:"
         )
-        body = f"Pending Question: {booking.site.pend_question}"
+        body = f"Pending Question: {rec.tracking.pend_question}"
 
     return {
-        "leader": booking.leader.name,
-        "booking_id": booking.site.id,
+        "leader": rec.leader.name,
+        "booking_id": rec.booking.id,
         "summary": summary,
         "body": body,
     }
 
 
-def _create_email_message(context, booking: SitePlusLeader):
+def _create_email_message(context, rec: LiveBooking):
     """
     Generate the email message object with both plain text and HTML content.
 
@@ -104,17 +104,17 @@ def _create_email_message(context, booking: SitePlusLeader):
     try:
         body = env.get_template("base_email.html").render(context)
     except TemplateError as e:
-        logger.error("%s trouble rendering email templates: %s: %s", booking.site.id, booking, e)
+        logger.error("%s trouble rendering email templates: %s: %s", rec.booking.id, rec, e)
         return None
 
-    arriving_str = get_pretty_date_str(booking.site.arriving)
+    arriving_str = get_pretty_date_str(rec.booking.arriving)
     msg = EmailMessage()
     msg["Subject"] = (
         f"{config.SITENAME} Booking - {arriving_str} - "
-        f"{booking.site.id} - {booking.site.status.upper()}"
+        f"{rec.booking.id} - {rec.tracking.status.upper()}"
     )
     msg["From"] = config.EMAIL_USER
-    msg["To"] = booking.leader.email
+    msg["To"] = rec.leader.email
 
     h = html2text.HTML2Text()
     h.body = body
