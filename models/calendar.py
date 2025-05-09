@@ -67,7 +67,7 @@ def update_calendar_entry(rec: LiveData):
     elif rec.tracking.status == "Confirmed":
         rec.tracking.google_calendar_id = _add_or_mod_event(rec)
 
-    elif rec.tracking.status == "Cancelled" or rec.tracking.status == "Archived":
+    elif rec.tracking.status in ["Cancelled", "Archived"]:
         rec.tracking.google_calendar_id = _del_event(rec)
 
     else:
