@@ -39,7 +39,7 @@ from config import (
     TEMPLATE_DIR,
 )
 from models.bookings import Bookings
-from models.calendar import del_cal_events, get_cal_events, update_calendar_entry
+from models.calendar import del_cal_events, get_cal_events
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk

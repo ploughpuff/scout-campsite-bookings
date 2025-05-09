@@ -78,6 +78,11 @@ def update_calendar_entry(rec: LiveData):
         )
 
 
+def delete_calendar_entry(rec: LiveData):
+    """Delete the google calendar event for the supplied rec"""
+    rec.tracking.google_calendar_id = _del_event(rec)
+
+
 def _build_service():
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_PATH, scopes=SCOPES

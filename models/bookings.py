@@ -22,10 +22,10 @@ from config import (
     FIELD_MAPPINGS_DICT,
     UK_TZ,
 )
-from models.calendar import update_calendar_entry
+from models.calendar import update_calendar_entry, delete_calendar_entry
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
-from models.schemas import LiveData, ArchiveData, LeaderData, BookingData, TrackingData, LiveBooking
+from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 from models.utils import get_booking_prefix, get_timestamp_for_notes, now_uk, secs_to_hr
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
