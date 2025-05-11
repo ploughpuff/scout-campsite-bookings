@@ -129,7 +129,7 @@ class Bookings:
         self.live = load_json(DATA_FILE_PATH, LiveData, use_checksum)
         self.archive = load_json(ARCHIVE_FILE_PATH, ArchiveData, use_checksum)
 
-    def _get_booking_by_id(self, booking_id: str) -> LiveData:
+    def _get_booking_by_id(self, booking_id: str) -> LiveBooking:
         """Return booking with the matching booking id"""
         return next((rec for rec in self.live.items if rec.booking.id == booking_id), None)
 
@@ -202,9 +202,9 @@ class Bookings:
 
         return results
 
-    def get_archive_list(self):
+    def get_archive_list(self) -> List[BookingData]:
         """Returns the list of archived bookings"""
-        return self.archive
+        return self.archive.items
 
     def change_status(self, booking_id: str, new_status: str, description: str = None):
         """Change the status of a single booking.
@@ -318,7 +318,7 @@ class Bookings:
 
         return changes
 
-    def _apply_status_change(self, rec: LiveData, to_status: str):
+    def _apply_status_change(self, rec: LiveBooking, to_status: str):
 
         if not rec:
             return False
@@ -340,7 +340,7 @@ class Bookings:
                 flash(msg, "warning")
                 return False
 
-        rec.booking.status = to_status
+        rec.tracking.status = to_status
 
         save_json(self.live, DATA_FILE_PATH)
         return True
@@ -394,17 +394,18 @@ class Bookings:
 
             if rec.tracking.status == "Completed" and archive_date < now_uk():
 
+                delete_calendar_entry(rec)
+
                 # Take a deep copy of this booking and remove all GDPR data
                 archive_copy = copy.deepcopy(rec.booking)
-                delete_calendar_entry(archive_copy)
                 to_archive.append(archive_copy)
+
+                self.logger.info("%s archived", rec.booking.id)
 
                 # Remove this booking from the main data table
                 self.live.items = [
-                    rec for rec in self.live.items if rec.booking.id != archive_copy.booking.id
+                    this for this in self.live.items if this.booking.id != rec.booking.id
                 ]
-
-                self.logger.info("%s archived", rec.booking.id)
 
         if not to_archive:
             self.logger.info("No bookings to archive.")
@@ -431,7 +432,7 @@ class Bookings:
         """Look in main table and archive for matching md5"""
         if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.live.items):
             return True
-        if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.archive.items):
+        if any(rec.original_sheet_md5 == target_md5 for rec in self.archive.items):
             return True
         return False
 

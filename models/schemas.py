@@ -81,6 +81,14 @@ class TrackingData(BaseModel):
 
         return dt.astimezone(UK_TZ) if dt.tzinfo else dt.replace(tzinfo=UK_TZ)
 
+
+class LiveBooking(BaseModel):
+    """A composite class that binds SiteData with LeaderData, keeping them tightly coupled."""
+
+    booking: BookingData
+    leader: LeaderData
+    tracking: TrackingData
+
     def is_valid(self) -> bool:
         """Helper function to check if if a data set is valid"""
         try:
@@ -96,14 +104,6 @@ class TrackingData(BaseModel):
             return None
         except ValidationError as e:
             return e.errors()
-
-
-class LiveBooking(BaseModel):
-    """A composite class that binds SiteData with LeaderData, keeping them tightly coupled."""
-
-    booking: BookingData
-    leader: LeaderData
-    tracking: TrackingData
 
 
 class LiveData(BaseModel):

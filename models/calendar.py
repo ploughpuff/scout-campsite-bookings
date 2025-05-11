@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from config import CALENDAR_ID, SERVICE_ACCOUNT_PATH
-from models.schemas import LiveData
+from models.schemas import LiveBooking
 
 logger = logging.getLogger("app_logger")
 
@@ -54,7 +54,7 @@ def del_cal_events(event_resource):
             print(f"Failed to delete {event_id}: {e}")
 
 
-def update_calendar_entry(rec: LiveData):
+def update_calendar_entry(rec: LiveBooking):
     """Adds new, modifies existing, or deleted cal entry"""
 
     #
@@ -78,7 +78,7 @@ def update_calendar_entry(rec: LiveData):
         )
 
 
-def delete_calendar_entry(rec: LiveData):
+def delete_calendar_entry(rec: LiveBooking):
     """Delete the google calendar event for the supplied rec"""
     rec.tracking.google_calendar_id = _del_event(rec)
 
@@ -90,7 +90,7 @@ def _build_service():
     return build("calendar", "v3", credentials=creds)
 
 
-def _build_event(rec: LiveData, extra_text: str = None) -> dict:
+def _build_event(rec: LiveBooking, extra_text: str = None) -> dict:
     summary = "EVE: Scouts"
 
     extra_text = extra_text or ""
@@ -112,7 +112,7 @@ def _build_event(rec: LiveData, extra_text: str = None) -> dict:
     }
 
 
-def _add_or_mod_event(rec: LiveData):
+def _add_or_mod_event(rec: LiveBooking):
     """Add a new calendar event."""
 
     try:
@@ -142,7 +142,7 @@ def _add_or_mod_event(rec: LiveData):
         return None
 
 
-def _del_event(rec: LiveData):
+def _del_event(rec: LiveBooking):
     """Delete an event from the calendar
 
     Args:

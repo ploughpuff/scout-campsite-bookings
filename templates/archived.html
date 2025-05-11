@@ -3,26 +3,25 @@
 {% block content %}
 <h2>Archived Bookings</h2>
 
-{% if bookings %}
+{% if list %}
 <table class="table table-striped">
     <thead>
         <tr>
             <th>ID</th>
             <th>Group</th>
-            <th>Leader</th>
+            <th>Size</th>
             <th>Arriving</th>
             <th>Departing</th>
-            <th>Status</th>
         </tr>
     </thead>
     <tbody>
-        {% for booking in bookings %}
+        {% for booking in list %}
         <tr>
             <td>{{ booking.id }}</td>
-            <td>{{ booking.Group }}</td>
-            <td>{{ booking.Arriving.strftime('%d/%m/%Y %H:%M') if booking.Arriving }}</td>
-            <td>{{ booking.Departing.strftime('%d/%m/%Y %H:%M') if booking.Departing }}</td>
-            <td>{{ booking.Status }}</td>
+            <td>{{ booking.group_name }}</td>
+            <td>{{ booking.group_size }}</td>
+            <td>{{ booking.arriving.strftime('%d/%m/%Y %H:%M') if booking.arriving }}</td>
+            <td>{{ booking.departing.strftime('%d/%m/%Y %H:%M') if booking.departing }}</td>
         </tr>
         {% endfor %}
     </tbody>

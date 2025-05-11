@@ -262,7 +262,7 @@ def reload_json():
     "Route to reload the bookings JSON file bypassing the checksum validation"
     bookings.load(use_checksum=False)
     return render_template(
-        "all_bookings.html", bookings=bookings.get_bookings_list(), age=bookings.age()
+        "all_bookings.html", list=bookings.get_bookings_list(), age=bookings.age()
     )
 
 
@@ -271,7 +271,7 @@ def archive_old_bookings():
     "Route to archive old bookings"
     bookings.archive_old_bookings()
     return render_template(
-        "all_bookings.html", bookings=bookings.get_bookings_list(), age=bookings.age()
+        "all_bookings.html", list=bookings.get_bookings_list(), age=bookings.age()
     )
 
 
@@ -308,8 +308,7 @@ def delete_cal_events():
 @app.route("/bookings/archived")
 def show_archived_bookings():
     """Show archived bookings in list table"""
-    archived_bookings = bookings.get_archive_list()
-    return render_template("archived.html", bookings=archived_bookings)
+    return render_template("archived.html", list=bookings.get_archive_list())
 
 
 @app.route("/admin")
