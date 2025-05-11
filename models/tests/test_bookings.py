@@ -4,17 +4,12 @@ test_bookings.py
 
 # pylint: disable=all
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 import pytest
 
 from models.bookings import Bookings
-from models.schemas import ArchiveData, BookingData, LiveBooking, LiveData, LeaderData, TrackingData
-
-import pytest
-from unittest.mock import MagicMock
-
-import pytest
-from datetime import datetime
+from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 
 
 # Sample data for testing
