@@ -11,8 +11,8 @@ import pytest
 from pydantic import ValidationError
 
 from config import UK_TZ
-from models.schemas import BookingData  # adjust import path if needed
-from models.schemas import ArchiveData, LeaderData, LiveBooking, LiveData, TrackingData
+from models.schemas import BookingData, LeaderData, LiveBooking, LiveData, ArchiveData, TrackingData
+from models.utils import now_uk
 
 
 def test_valid_leader_data():
@@ -284,7 +284,7 @@ def test_live_data_default_values(live_booking):
     live_data = LiveData(items=[live_booking])
 
     # Check if updated field is correctly initialized to the current UK time
-    assert live_data.updated <= datetime.now().replace(tzinfo=UK_TZ)
+    assert now_uk() - timedelta(seconds=5) <= live_data.updated <= now_uk()
 
     # Check if next_idx is initialized to 1 by default
     assert live_data.next_idx == 1
