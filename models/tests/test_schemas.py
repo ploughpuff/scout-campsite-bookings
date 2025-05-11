@@ -324,7 +324,7 @@ def test_archive_data_default_values(booking_data):
     archive_data = ArchiveData(items=[booking_data])
 
     # Check if updated field is correctly initialized to the current UK time
-    assert archive_data.updated <= datetime.now().replace(tzinfo=UK_TZ)
+    assert now_uk() - timedelta(seconds=5) <= archive_data.updated <= now_uk()
 
     # Check if items is a list containing the booking data
     assert isinstance(archive_data.items, list)
