@@ -8,11 +8,12 @@ from typing import get_args
 
 import pytest
 
-from models.bookings import SiteData, status_transitions
+from models.bookings import status_transitions
+from models.schemas import TrackingData
 
 
 def get_valid_statuses():
-    return list(get_args(SiteData.__annotations__["status"]))
+    return list(get_args(TrackingData.__annotations__["status"]))
 
 
 def test_status_transitions_valid():

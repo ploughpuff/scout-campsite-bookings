@@ -432,7 +432,7 @@ class Bookings:
         """Look in main table and archive for matching md5"""
         if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.live.items):
             return True
-        if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.archive.items):
+        if any(rec.original_sheet_md5 == target_md5 for rec in self.archive.items):
             return True
         return False
 
