@@ -45,6 +45,7 @@ LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "False")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 
 #

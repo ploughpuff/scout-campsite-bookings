@@ -138,26 +138,29 @@ def _send_email(msg, recipient):
     Returns:
         bool: True if email was sent/logged successfully, False if sending failed.
     """
-    if config.APP_ENV == "production":
-        try:
-            with smtplib.SMTP("smtp.office365.com", 587) as server:
-                server.starttls()
-                server.login(config.EMAIL_USER, config.EMAIL_PASS)
-                server.send_message(msg)
-        except smtplib.SMTPException as e:
-            logger.error("Failed to send email to %s: %s", recipient, e)
-            flash(f"Failed to send email to {recipient}: {e}", "danger")
-            return False
+    if config.EMAIL_ENABLED == "True":
+        if config.APP_ENV == "production":
+            try:
+                with smtplib.SMTP("smtp.office365.com", 587) as server:
+                    server.starttls()
+                    server.login(config.EMAIL_USER, config.EMAIL_PASS)
+                    server.send_message(msg)
+            except smtplib.SMTPException as e:
+                logger.error("Failed to send email to %s: %s", recipient, e)
+                flash(f"Failed to send email to {recipient}: {e}", "danger")
+                return False
+        else:
+            try:
+                with smtplib.SMTP("localhost", 25) as server:
+                    server.send_message(msg)
+            except smtplib.SMTPException as e:
+                logger.error("Failed to send email to %s: %s", recipient, e)
+                flash(f"Failed to send email to {recipient}: {e}", "danger")
+                return False
+            except ConnectionRefusedError as e:
+                logger.error("Failed to send email to %s: %s", recipient, e)
+                flash(f"Failed to send email to {recipient}: {e}", "danger")
+                return False
     else:
-        try:
-            with smtplib.SMTP("localhost", 25) as server:
-                server.send_message(msg)
-        except smtplib.SMTPException as e:
-            logger.error("Failed to send email to %s: %s", recipient, e)
-            flash(f"Failed to send email to {recipient}: {e}", "danger")
-            return False
-        except ConnectionRefusedError as e:
-            logger.error("Failed to send email to %s: %s", recipient, e)
-            flash(f"Failed to send email to {recipient}: {e}", "danger")
-            return False
+        flash(f"Email sending disabled by env var EMAIL_ENABLED: {recipient}:", "info")
     return True

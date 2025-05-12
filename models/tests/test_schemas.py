@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from config import UK_TZ
-from models.schemas import BookingData, LeaderData, LiveBooking, LiveData, ArchiveData, TrackingData
+from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 from models.utils import now_uk
 
 
