@@ -9,13 +9,14 @@ click==8.1.8
 colorama==0.4.6
 dill==0.4.0
 dotenv==0.9.9
-Flask==3.1.0
+Flask==3.1.1
 google-api-core==2.24.2
 google-api-python-client==2.169.0
 google-auth==2.40.1
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.2
 googleapis-common-protos==1.70.0
+gunicorn==23.0.0
 html2text==2025.4.15
 httplib2==0.22.0
 idna==3.10
