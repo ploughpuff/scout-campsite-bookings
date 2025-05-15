@@ -388,7 +388,7 @@ def datetime_local_value(value):
 
 
 @app.template_filter("pretty_date")
-def pretty_date(value):
+def pretty_date(value, inc_time=False):
     """Create a pretty formatted date string from any input."""
     if not value:
         logger.warning("Asked to pretty a None value!")
@@ -407,7 +407,7 @@ def pretty_date(value):
             logger.warning("Unknown format so unable to create pretty string: [%s]", str(value))
             return value
 
-    return Markup(get_pretty_date_str(dt))
+    return Markup(get_pretty_date_str(dt, inc_time))
 
 
 if __name__ == "__main__":

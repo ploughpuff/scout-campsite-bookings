@@ -43,9 +43,14 @@ ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
 
 LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
 EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "False")
+# SMTP server login credentials
+EMAIL_LOGIN_USERNAME = os.getenv("EMAIL_LOGIN_USERNAME")
+EMAIL_LOGIN_PASSWD = os.getenv("EMAIL_LOGIN_PASSWD")
+# How to form the FROM field "DISPLAY_USERNAME <FROM_ADDRESS>"
+EMAIL_DISPLAY_USERNAME = os.getenv("EMAIL_DISPLAY_USERNAME")
+EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS")
+
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 
 #

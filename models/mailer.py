@@ -58,12 +58,14 @@ def _build_email_context(rec: LiveBooking):
     Pending
     """
 
-    arriving_str = get_pretty_date_str(rec.booking.arriving)
-    summary = f"Your campsite booking for {arriving_str} "
-    body = "TBD"
+    arriving_str = get_pretty_date_str(rec.booking.arriving, inc_time=True, full_month=True)
+    departing_str = get_pretty_date_str(rec.booking.departing, inc_time=True, full_month=True)
+
+    status_str = rec.tracking.status.upper()
 
     if rec.tracking.status == "Confirmed":
-        summary += "is <strong>CONFIRMED</strong>."
+        status_colour = "green"
+        body = ""
 
         file_path = Path(os.path.join(config.EMAIL_TEMP_DIR, "confirmed_body.html"))
 
@@ -72,18 +74,22 @@ def _build_email_context(rec: LiveBooking):
                 body = file.read()
 
     elif rec.tracking.status == "Cancelled":
-        summary += "is <strong>CANCELLED</strong>."
-        body = f"Reason: {rec.tracking.cancel_reason}"
+        status_colour = "red"
+        body = f"Cancel Reason: {rec.tracking.cancel_reason}"
     elif rec.tracking.status == "Pending":
-        summary += (
-            "has been set to <strong>PENDING</strong> with the following note to answer please:"
-        )
-        body = f"Pending Question: {rec.tracking.pend_question}"
+        status_colour = "#FF8C00"  # Dark Orange
+        body = f"Pend Question: {rec.tracking.pend_question}"
+    else:
+        status_colour = "black"
+        body = ""
 
     return {
         "leader": rec.leader.name,
         "booking_id": rec.booking.id,
-        "summary": summary,
+        "arriving_str": arriving_str,
+        "departing_str": departing_str,
+        "status_str": status_str,
+        "status_colour": status_colour,
         "body": body,
     }
 
@@ -109,11 +115,8 @@ def _create_email_message(context, rec: LiveBooking):
 
     arriving_str = get_pretty_date_str(rec.booking.arriving)
     msg = EmailMessage()
-    msg["Subject"] = (
-        f"{config.SITENAME} Booking - {arriving_str} - "
-        f"{rec.booking.id} - {rec.tracking.status.upper()}"
-    )
-    msg["From"] = config.EMAIL_USER
+    msg["Subject"] = f"Booking for {arriving_str}: {rec.booking.id} {rec.tracking.status.upper()}"
+    msg["From"] = f"{config.EMAIL_DISPLAY_USERNAME} <{config.EMAIL_FROM_ADDRESS}"
     msg["To"] = rec.leader.email
 
     h = html2text.HTML2Text()
@@ -143,7 +146,7 @@ def _send_email(msg, recipient):
             try:
                 with smtplib.SMTP("smtp.office365.com", 587) as server:
                     server.starttls()
-                    server.login(config.EMAIL_USER, config.EMAIL_PASS)
+                    server.login(config.EMAIL_LOGIN_USERNAME, config.EMAIL_LOGIN_PASSWD)
                     server.send_message(msg)
             except smtplib.SMTPException as e:
                 logger.error("Failed to send email to %s: %s", recipient, e)

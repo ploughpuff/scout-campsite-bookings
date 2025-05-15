@@ -126,21 +126,27 @@ def get_timestamp_for_notes(value=None, include_seconds=False):
         return value
 
 
-def get_pretty_date_str(dt):
+def get_pretty_date_str(dt, inc_time=False, full_month=False):
     """Return pretty date string from passed dt object"""
     try:
+        day_name = dt.strftime("%A")
         day = dt.day
         suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-        month = dt.strftime("%b")
+        month = dt.strftime("%B") if full_month else dt.strftime("%b")
         time_part = dt.strftime("%H:%M")
         year = dt.year
         current_year = now_uk().year
 
-        date_str = f"{day}{suffix} {month}"
+        date_str = f"{day_name}, {day}{suffix} {month}"
+
+        if inc_time:
+            date_str += f"@{time_part}"
+
         if year != current_year:
             date_str += f" {year}"
 
-        return f"{date_str} {time_part}"
+        return date_str
+
     except (TypeError, ValueError) as e:
         logger = logging.getLogger("app_logger")
         logger.warning("Failed to create pretty date string %s", e)
