@@ -278,17 +278,30 @@ def archive_old_bookings():
 @app.route("/admin/list_cal_events")
 def list_cal_events():
     "Route to list all calendar events"
+    # recs + event ids + on cal = good
+    # recs + event ids - on cal = missing
+    # recs - event ids          = less
+    #        event ids - rec    = extra
     event_resource = get_cal_events()
-
-    missing = []
-    extra = []
     event_ids = [event["id"] for event in event_resource.get("items", [])]
 
-    for rec in bookings.get_bookings_list(booking_state="Confirmed"):
-        if rec.tracking.google_calendar_id not in event_ids:
-            missing.append(rec)
+    good = []
+    missing = []
+    less = []
 
-    return render_template("list_cal_events.html", missing=missing, extra=extra)
+    for rec in bookings.get_bookings_list():
+        if rec.tracking.google_calendar_id:
+            if rec.tracking.google_calendar_id in event_ids:
+                good.append(rec)
+                event_ids.remove(rec.tracking.google_calendar_id)
+            else:
+                missing.append(rec)
+        else:
+            less.append(rec)
+
+    return render_template(
+        "list_cal_events.html", good=good, missing=missing, less=less, extra=event_ids
+    )
 
 
 # @app.route("/admin/add_to_calendar")

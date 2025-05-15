@@ -8,12 +8,55 @@ Calendar Events
 
 <div class="card" style="width: 18rem;">
     <div class="card-header">
-        Missing from Google Calendar
+        Good
     </div>
     <ul class="list-group list-group-flush">
-        {% for booking in missing %}
+        {% for rec in good %}
         <li class="list-group-item">
-            <a href="">{{ booking.id }}</a>
+            <a href="">{{ rec.booking.id }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+
+
+<div class="card" style="width: 18rem;">
+    <div class="card-header">
+        Missing
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for rec in missing %}
+        <li class="list-group-item">
+            <a href="">{{ rec.booking.id }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+
+<div class="card" style="width: 18rem;">
+    <div class="card-header">
+        Less
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for rec in less %}
+        <li class="list-group-item">
+            <a href="">{{ rec.booking.id }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+
+<div class="card" style="width: 18rem;">
+    <div class="card-header">
+        Extra
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for rec in extra %}
+        <li class="list-group-item">
+            <a href="">{{ rec }}</a>
         </li>
         {% endfor %}
     </ul>
