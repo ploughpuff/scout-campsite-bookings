@@ -6,6 +6,8 @@ Calendar Events
 
 {% block content %}
 
+<p><a href="{{ url_for('list_cal_events', dry_run=False) }}">Fix-It!!</a></p>
+
 <div class="card" style="width: 18rem;">
     <div class="card-header">
         Good
@@ -13,7 +15,8 @@ Calendar Events
     <ul class="list-group list-group-flush">
         {% for rec in good %}
         <li class="list-group-item">
-            <a href="">{{ rec.booking.id }}</a>
+            <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}"
+                class="text-decoration-none fw-semibold">{{ rec.booking.id }}</a>
         </li>
         {% endfor %}
     </ul>
@@ -23,12 +26,13 @@ Calendar Events
 
 <div class="card" style="width: 18rem;">
     <div class="card-header">
-        Missing
+        Records Missing Cal Events
     </div>
     <ul class="list-group list-group-flush">
         {% for rec in missing %}
         <li class="list-group-item">
-            <a href="">{{ rec.booking.id }}</a>
+            <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}"
+                class="text-decoration-none fw-semibold">{{ rec.booking.id }}</a>
         </li>
         {% endfor %}
     </ul>
@@ -37,12 +41,13 @@ Calendar Events
 
 <div class="card" style="width: 18rem;">
     <div class="card-header">
-        Less
+        Records with Cal Events that should not
     </div>
     <ul class="list-group list-group-flush">
-        {% for rec in less %}
+        {% for rec in delete %}
         <li class="list-group-item">
-            <a href="">{{ rec.booking.id }}</a>
+            <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}"
+                class="text-decoration-none fw-semibold">{{ rec.booking.id }}</a>
         </li>
         {% endfor %}
     </ul>

@@ -9,7 +9,7 @@ import os
 import shutil
 import zipfile
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import bleach
 from flask import (
@@ -27,6 +27,7 @@ from werkzeug.exceptions import HTTPException
 from config import (
     APP_SECRET_KEY,
     APP_VERSION,
+    ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
     EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
@@ -39,7 +40,13 @@ from config import (
     TEMPLATE_DIR,
 )
 from models.bookings import Bookings
-from models.calendar import del_cal_events, get_cal_events
+from models.calendar import (
+    del_cal_events,
+    del_event,
+    delete_calendar_entry,
+    get_cal_events,
+    update_calendar_entry,
+)
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -285,29 +292,66 @@ def archive_old_bookings():
 @app.route("/admin/list_cal_events")
 def list_cal_events():
     "Route to list all calendar events"
-    # recs + event ids + on cal = good
-    # recs + event ids - on cal = missing
-    # recs - event ids          = less
-    #        event ids - rec    = extra
-    event_resource = get_cal_events()
-    event_ids = [event["id"] for event in event_resource.get("items", [])]
+    dry_run = request.args.get("dry_run", "true").lower() == "true"
 
-    good = []
-    missing = []
-    less = []
+    event_resource = get_cal_events()
+    event_ids = set(event["id"] for event in event_resource.get("items", []))
+
+    good, missing, delete, extra = [], [], [], []
+
+    now = now_uk()
+
+    def should_have_event(rec):
+        if rec.tracking.status in ["Confirmed", "Invoice"]:
+            return True
+        if rec.tracking.status == "Completed":
+            archive_date = rec.booking.departing + timedelta(
+                days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+            )
+            return archive_date > now
+        return False
+
+    def should_delete_event(rec):
+        if rec.tracking.status in ["New", "Pending", "Archived", "Cancelled"]:
+            return True
+        if rec.tracking.status == "Completed":
+            archive_date = rec.booking.departing + timedelta(
+                days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+            )
+            return archive_date <= now
+        return False
 
     for rec in bookings.get_bookings_list():
-        if rec.tracking.google_calendar_id:
-            if rec.tracking.google_calendar_id in event_ids:
+        cal_id = rec.tracking.google_calendar_id
+        has_event = cal_id in event_ids
+
+        if should_have_event(rec):
+            if has_event:
                 good.append(rec)
-                event_ids.remove(rec.tracking.google_calendar_id)
+                event_ids.remove(cal_id)
             else:
-                missing.append(rec)
+                if dry_run:
+                    missing.append(rec)
+                else:
+                    update_calendar_entry(rec)
+
+        elif should_delete_event(rec):
+            if has_event:
+                event_ids.remove(cal_id)
+                if dry_run:
+                    delete.append(rec)
+                else:
+                    delete_calendar_entry(rec)
+
+    # Remaining event_ids are "extra"
+    for event_id in event_ids:
+        if dry_run:
+            extra.append(event_id)
         else:
-            less.append(rec)
+            del_event(event_id, f"Raw id {event_id}")
 
     return render_template(
-        "list_cal_events.html", good=good, missing=missing, less=less, extra=event_ids
+        "list_cal_events.html", good=good, missing=missing, delete=delete, extra=extra
     )
 
 

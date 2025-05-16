@@ -64,11 +64,11 @@ def update_calendar_entry(rec: LiveBooking):
     if not rec.tracking.status:
         logger.error("Unable to add event.  Status not found: %s", rec.booking.id)
 
-    elif rec.tracking.status == "Confirmed":
+    elif rec.tracking.status in ["Confirmed", "Completed", "Invoiced"]:
         rec.tracking.google_calendar_id = _add_or_mod_event(rec)
 
     elif rec.tracking.status in ["Cancelled", "Archived"]:
-        rec.tracking.google_calendar_id = _del_event(rec)
+        rec.tracking.google_calendar_id = _del_from_rec(rec)
 
     else:
         logger.debug(
@@ -80,7 +80,7 @@ def update_calendar_entry(rec: LiveBooking):
 
 def delete_calendar_entry(rec: LiveBooking):
     """Delete the google calendar event for the supplied rec"""
-    rec.tracking.google_calendar_id = _del_event(rec)
+    rec.tracking.google_calendar_id = _del_from_rec(rec)
 
 
 def _build_service():
@@ -142,7 +142,11 @@ def _add_or_mod_event(rec: LiveBooking):
         return None
 
 
-def _del_event(rec: LiveBooking):
+def _del_from_rec(rec: LiveBooking):
+    return del_event(rec.tracking.google_calendar_id, rec.booking.id)
+
+
+def del_event(google_calendar_id: str, booking_id: str):
     """Delete an event from the calendar
 
     Args:
@@ -154,15 +158,13 @@ def _del_event(rec: LiveBooking):
     try:
         service = _build_service()
 
-        if not rec.tracking.google_calendar_id:
-            logger.info("Unable to delete calendar event as no ID available: %s", rec.booking.id)
-            return rec.tracking.google_calendar_id
+        if not google_calendar_id:
+            logger.info("Unable to delete calendar event as no ID available: %s", booking_id)
+            return google_calendar_id
 
         # pylint: disable=no-member
-        service.events().delete(
-            calendarId=CALENDAR_ID, eventId=rec.tracking.google_calendar_id
-        ).execute()
+        service.events().delete(calendarId=CALENDAR_ID, eventId=google_calendar_id).execute()
         return None
     except HttpError as e:
-        logger.error("Failed to delete calendar event for booking: %s %s", rec.booking.id, str(e))
-        return rec.tracking.google_calendar_id
+        logger.error("Failed to delete calendar event for booking: %s %s", booking_id, str(e))
+        return google_calendar_id
