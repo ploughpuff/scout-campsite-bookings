@@ -142,7 +142,6 @@ def _send_email(msg, recipient):
     Returns:
         bool: True if email was sent/logged successfully, False if sending failed.
     """
-    print(f"In email: {config.APP_ENV}")
     if config.EMAIL_ENABLED == "True":
         try:
             if config.APP_ENV == "production":
