@@ -116,8 +116,7 @@ def _create_email_message(context, rec: LiveBooking):
     arriving_str = get_pretty_date_str(rec.booking.arriving)
     msg = EmailMessage()
     msg["Subject"] = f"Booking for {arriving_str}: {rec.booking.id} {rec.tracking.status.upper()}"
-    #    msg["From"] = f"{config.EMAIL_DISPLAY_USERNAME} <{config.EMAIL_FROM_ADDRESS}>"
-    msg["From"] = "Riffhams <riffhams@chelmsfordscouts.org.uk>"
+    msg["From"] = f"{config.EMAIL_DISPLAY_USERNAME} <{config.EMAIL_FROM_ADDRESS}>"
 
     msg["To"] = rec.leader.email
 
