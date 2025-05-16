@@ -11,11 +11,41 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 APP_ENV = os.getenv("APP_ENV", "development")
+print(f"APP_ENV: {APP_ENV}")
 
 if APP_ENV == "production":
     load_dotenv(".env.production", override=True)
+    required_vars = [
+        "APP_ENV",
+        "SECRET_KEY",
+        "SITENAME",
+        "LOG_LEVEL",
+        "EMAIL_ENABLED",
+        "EMAIL_LOGIN_USERNAME",
+        "EMAIL_LOGIN_PASSWD",
+        "EMAIL_DISPLAY_USERNAME",
+        "EMAIL_FROM_ADDRESS",
+        "GOOGLE_CALENDAR_ID",
+    ]
+
 else:
     load_dotenv(".env")
+
+    required_vars = [
+        "APP_ENV",
+        "SECRET_KEY",
+        "SITENAME",
+        "LOG_LEVEL",
+        "EMAIL_ENABLED",
+        "EMAIL_DISPLAY_USERNAME",
+        "EMAIL_FROM_ADDRESS",
+        "GOOGLE_CALENDAR_ID",
+    ]
+
+missing = [var for var in required_vars if not os.getenv(var)]
+if missing:
+    raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
 
 APP_VERSION = os.environ.get("APP_VERSION", "dev")
 
@@ -57,8 +87,6 @@ CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 ## Config data
 SERVICE_ACCOUNT_PATH = Path(CONFIG_DIR) / "credentials.json"
 FIELD_MAPPING_PATH = Path(CONFIG_DIR) / "field_mappings.json"
-
-APP_ENV = os.getenv("APP_ENV", "development")
 
 UK_TZ = ZoneInfo("Europe/London")
 

@@ -233,6 +233,9 @@ Booking Details
 
       {# Any → Cancelled (via modal) #}
       {% elif next_status == 'Cancelled' %}
+      <form method="POST" action="{{ url_for('resend_email', booking_id=rec.booking.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-warning">✔️ Resend Email</button>
+      </form>
       <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">❌ Cancel Booking</button>
 
       {# Fallback: Generic transitions #}

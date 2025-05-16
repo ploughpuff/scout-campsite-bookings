@@ -109,6 +109,13 @@ def change_status(new_status, booking_id):
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
+@app.route("/booking/resend_email/<booking_id>", methods=["POST"])
+def resend_email(booking_id):
+    """Resend whatever is the latest email"""
+    bookings.resend_email(booking_id)
+    return redirect(url_for("booking_detail", booking_id=booking_id))
+
+
 @app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
 def modify_fields(booking_id):
     """Handle modifying fields from details page."""

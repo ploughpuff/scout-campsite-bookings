@@ -251,6 +251,10 @@ class Bookings:
         save_json(self.live, DATA_FILE_PATH)
         return True
 
+    def resend_email(self, booking_id):
+        """Resend the last type of email again"""
+        send_email_notification(self._get_booking_by_id(booking_id))
+
     def modify_fields(self, booking_id, update_data: dict) -> bool:
         """Modify fields in the booking from the html page.
 
