@@ -10,8 +10,16 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
-APP_ENV = os.getenv("APP_ENV", "development")
-print(f"APP_ENV: {APP_ENV}")
+
+def _get_and_print(k: str, d: str = "", show: bool = True) -> str:
+    """Get, show, and return envar"""
+    v = os.getenv(k, d)
+    if show:
+        print(f"{k}: {v}")
+    return v
+
+
+APP_ENV = _get_and_print("APP_ENV", "development")
 
 if APP_ENV == "production":
     load_dotenv(".env.production", override=True)
@@ -35,10 +43,10 @@ if APP_ENV == "production":
 else:
     load_dotenv(".env")
 
-APP_VERSION = os.environ.get("APP_VERSION", "dev")
+APP_VERSION = _get_and_print("APP_VERSION", "dev")
 
-APP_SECRET_KEY = os.getenv("SECRET_KEY")
-SITENAME = os.getenv("SITENAME")
+APP_SECRET_KEY = _get_and_print("SECRET_KEY", show=False)
+SITENAME = _get_and_print("SITENAME", "Paddington")
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(BASE_DIR) / "data"
@@ -59,17 +67,17 @@ LOG_FILE_PATH = Path(DATA_DIR) / "app.log"
 DATA_FILE_PATH = Path(DATA_DIR) / "bookings.json"
 ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
 
-LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_LEVEL_STR = _get_and_print("LOG_LEVEL", "INFO").upper()
 
-EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "False")
+EMAIL_ENABLED = _get_and_print("EMAIL_ENABLED", "False")
 # SMTP server login credentials
-EMAIL_LOGIN_USERNAME = os.getenv("EMAIL_LOGIN_USERNAME")
-EMAIL_LOGIN_PASSWD = os.getenv("EMAIL_LOGIN_PASSWD")
+EMAIL_LOGIN_USERNAME = _get_and_print("EMAIL_LOGIN_USERNAME", show=False)
+EMAIL_LOGIN_PASSWD = _get_and_print("EMAIL_LOGIN_PASSWD", show=False)
 # How to form the FROM field "DISPLAY_USERNAME <FROM_ADDRESS>"
-EMAIL_DISPLAY_USERNAME = os.getenv("EMAIL_DISPLAY_USERNAME")
-EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS")
+EMAIL_DISPLAY_USERNAME = _get_and_print("EMAIL_DISPLAY_USERNAME")
+EMAIL_FROM_ADDRESS = _get_and_print("EMAIL_FROM_ADDRESS")
 
-CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
+CALENDAR_ID = _get_and_print("GOOGLE_CALENDAR_ID")
 
 #
 ## Config data
