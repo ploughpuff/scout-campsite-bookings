@@ -98,7 +98,7 @@ def _build_event(rec: LiveBooking, extra_text: str = None) -> dict:
     description = textwrap.dedent(
         f"""
         {rec.booking.id}
-        Number of people: {rec.booking.group_size}
+        {rec.booking.group_size} - {rec.booking.group_name}
         {extra_text}
     """
     ).strip()
