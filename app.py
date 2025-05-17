@@ -293,6 +293,7 @@ def archive_old_bookings():
 def list_cal_events():
     "Route to list all calendar events"
     dry_run = request.args.get("dry_run", "true").lower() == "true"
+    dry_run = True  # Hardcode to True whilst the real cal is updated
 
     event_resource = get_cal_events()
     event_ids = set(event["id"] for event in event_resource.get("items", []))
@@ -338,6 +339,7 @@ def list_cal_events():
         elif should_delete_event(rec):
             if has_event:
                 event_ids.remove(cal_id)
+
                 if dry_run:
                     delete.append(rec)
                 else:
