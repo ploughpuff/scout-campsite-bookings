@@ -28,24 +28,12 @@ if APP_ENV == "production":
         "GOOGLE_CALENDAR_ID",
     ]
 
+    missing = [var for var in required_vars if not os.getenv(var)]
+    if missing:
+        raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
 else:
     load_dotenv(".env")
-
-    required_vars = [
-        "APP_ENV",
-        "SECRET_KEY",
-        "SITENAME",
-        "LOG_LEVEL",
-        "EMAIL_ENABLED",
-        "EMAIL_DISPLAY_USERNAME",
-        "EMAIL_FROM_ADDRESS",
-        "GOOGLE_CALENDAR_ID",
-    ]
-
-missing = [var for var in required_vars if not os.getenv(var)]
-if missing:
-    raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
-
 
 APP_VERSION = os.environ.get("APP_VERSION", "dev")
 
