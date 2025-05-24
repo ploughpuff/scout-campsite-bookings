@@ -3,6 +3,11 @@
   /* Light gray */
 }
 
+.unsaved {
+  background-color: #fff3cd;
+  /* Bootstrap's warning background */
+}
+
 .badge-status {
   color: white;
 }

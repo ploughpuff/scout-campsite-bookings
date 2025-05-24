@@ -47,7 +47,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Leader</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="leader.name" class="form-control" value="{{ rec.leader.name }}" min="1" required>
+          <input type="text" name="leader.name" class="form-control track-changes" value="{{ rec.leader.name }}" min="1"
+            required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.leader.name }}</span>
           {% endif %}
@@ -57,8 +58,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Group</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="booking.group_name" class="form-control" value="{{ rec.booking.group_name }}" min="1"
-            required>
+          <input type="text" name="booking.group_name" class="form-control track-changes"
+            value="{{ rec.booking.group_name }}" min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.group_name }}</span>
           {% endif %}
@@ -70,7 +71,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Phone</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="leader.phone" class="form-control" value="{{ rec.leader.phone }}" min="1" required>
+          <input type="text" name="leader.phone" class="form-control track-changes" value="{{ rec.leader.phone }}"
+            min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.leader.phone | default('')}}</span>
           {% endif %}
@@ -80,8 +82,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Group Type</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="booking.group_type" class="form-control" value="{{ rec.booking.group_type }}" min="1"
-            required>
+          <input type="text" name="booking.group_type" class="form-control track-changes"
+            value="{{ rec.booking.group_type }}" min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.group_type }}</span>
           {% endif %}
@@ -93,7 +95,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Email</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="leader.email" class="form-control" value="{{ rec.leader.email }}" min="1" required>
+          <input type="text" name="leader.email" class="form-control track-changes" value="{{ rec.leader.email }}"
+            min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.leader.email }}</span>
           {% endif %}
@@ -111,8 +114,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Facilities (also Calendar Title)</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="booking.facilities" class="form-control" value="{{ rec.booking.facilities }}" min="1"
-            required>
+          <input type="text" name="booking.facilities" class="form-control track-changes"
+            value="{{ rec.booking.facilities }}" min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.facilities }}</span>
           {% endif %}
@@ -124,7 +127,7 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input id="arriving" type="text" name="booking.arriving" class="form-control"
+          <input id="arriving" type="text" name="booking.arriving" class="form-control track-changes"
             value="{{ rec.booking.arriving|datetime_local_value }}" readonly />
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.arriving|pretty_date(True) }}</span>
@@ -135,8 +138,8 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Number</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="number" name="booking.group_size" class="form-control" value="{{ rec.booking.group_size }}"
-            min="1" required>
+          <input type="number" name="booking.group_size" class="form-control track-changes"
+            value="{{ rec.booking.group_size }}" min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.group_size }}</span>
           {% endif %}
@@ -146,7 +149,7 @@ Booking Details
         <div class="input-group">
           <span class="input-group-text">Departing</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input id="departing" type="text" name="booking.departing" class="form-control"
+          <input id="departing" type="text" name="booking.departing" class="form-control track-changes"
             value="{{ rec.booking.departing|datetime_local_value }}" />
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.departing|pretty_date(True) }}</span>

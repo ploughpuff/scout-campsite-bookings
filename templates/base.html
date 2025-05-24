@@ -87,6 +87,18 @@
 
   <script>
 
+    document.querySelectorAll('.track-changes').forEach(function (input) {
+      input.dataset.originalValue = input.value;
+
+      input.addEventListener('input', function () {
+        if (input.value !== input.dataset.originalValue) {
+          input.classList.add('unsaved');
+        } else {
+          input.classList.remove('unsaved');
+        }
+      });
+    });
+
 
     function showLoadingOverlay() {
       const overlay = document.getElementById('loadingOverlay');
