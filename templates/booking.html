@@ -160,76 +160,57 @@ Booking Details
   </div>
 </form>
 
-<hr>
+<!-- End First Card -->
 
 <div class="card">
-  <div class="row">
-    <div class="col-md-4">
-      <ul class="list-group list-group-flush">
-        <li class="list-group-item">
-          {% if rec.tracking.pending_email_sent %}
-          <span class="text-success">&#10003; Pending {{ rec.tracking.pending_email_sent | pretty_date(True)
-            }}</span>
-          {% else %}
-          <span class="text-danger">&#10007; Pending Not Sent</span>
-          {% endif %}
-        </li>
-        <li class="list-group-item">
-          {% if rec.tracking.confirm_email_sent %}
-          <span class="text-success">&#10003; Confirmation {{ rec.tracking.confirm_email_sent | pretty_date(True)
-            }}</span>
-          {% else %}
-          <span class="text-danger">&#10007; Confirmation Not Sent</span>
-          {% endif %}
-        </li>
-        <li class="list-group-item">
-          {% if rec.tracking.cancel_email_sent %}
-          <span class="text-success">&#10003; Cancellation {{ rec.tracking.cancel_email_sent | pretty_date(True)
-            }}</span>
-          {% else %}
-          <span class="text-danger">&#10007; Cancellation Not Sent</span>
-          {% endif %}
-        </li>
-      </ul>
-    </div>
-
-    <div class="col-md-6">
-      <span class="badge text-bg-warning">Danger</span>
-      {% if rec_list_clash is not none %}
-      <div class="col-md-6">
-        <div class="input-group">
-          <span class="input-group-text">Calendar is FREE?</span>
-          {% if not rec_list_clash %}
-          <span class="form-control custom-bg">
-            <span class="text-success">&#10003;</span>
-          </span>
-          {% else %}
-          <span class="form-control custom-bg">
-            <span class="text-danger">&#10007; Clashes with:
-              {% for rec in rec_list_clash %}
-              <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}">{{ rec.booking.id }} - {{
-                rec.booking.facilities }}</a>{% if not
-              loop.last
-              %}, {%
-              endif %}
-              {% endfor %}
-            </span>
-            {% endif %}
-        </div>
+  <div class="card-header bg-secondary text-white">
+    <div class="d-flex align-items-center justify-content-between w-100">
+      <div>
+        <h5 class="mb-0">
+          <span>Calendar Event</span>
+        </h5>
       </div>
-      {% endif %}
+      <div class="ms-auto d-flex gap-2">
+        {% if 'Confirmed' in valid_transitions %}
+        <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=rec.booking.id) }}"
+          class="d-inline" onsubmit="showLoadingOverlay()">
+          <button id="confirmButton" type="submit" class="btn btn-success">✔️ Confirm</button>
+        </form>
+        {% endif %}
+        {% if 'Cancelled' in valid_transitions %}
+        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">❌ Cancel</button>
+        {% endif %}
+      </div>
     </div>
   </div>
 
-  <hr>
+  <div class="row g-2">
+    {% if not rec_list_clash %}
+    <div class="col-md-12">
+      <div class="input-group">
+        <span class="input-group-text">Calendar is FREE</span>
+        <span class="form-control custom-bg">✔️</span>
+      </div>
+    </div>
+    {% else %}
+    {% for rec in rec_list_clash %}
+    <div class="col-md-12">
+      <div class="input-group">
+        <span class="input-group-text"><a
+            href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}">{{rec.booking.id}}</a></span>
+        <span class="form-control custom-bg">
+          {{ rec.booking.arriving |
+          pretty_date(True) }} to {{ rec.booking.departing | pretty_date(True)}} -
+          {{rec.booking.facilities }}
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
 
-  <div class="row">
-
-
-    <div class="text-end mt-4">
-      {% for next_status in valid_transitions %}
+    <div class="text-end mt-12">
       {# Cancelled → New only if booking in the future #}
-      {% if next_status == 'New' %}
+      {% if 'New' in valid_transitions %}
       {% if rec.booking.arriving > time_now %}
       <form method="POST" action="{{ url_for('change_status', new_status='New', booking_id=rec.booking.id) }}"
         class="d-inline">
@@ -238,46 +219,29 @@ Booking Details
       {% else %}
       <button class="btn btn-danger" disabled>❌ Past Bookings Cannot Be Resurrected</button>
       {% endif %}
+      {% endif %}
 
       {# Invoice → Completed #}
-      {% elif next_status == 'Completed' and rec.tracking.status == 'Invoice' %}
+      {% if 'Completed' in valid_transitions and rec.tracking.status == 'Invoice' %}
       <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=rec.booking.id) }}"
         class="d-inline">
-        <button type="submit" class="btn btn-success">✔️ Set Complete Once Xero Invoice Raised</button>
+        <button type="submit" class="btn btn-success">✔️ Invoice Raised in Xero</button>
       </form>
-
-      {# New → Confirmed #}
-      {% elif next_status == 'Confirmed' %}
-      <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=rec.booking.id) }}"
-        class="d-inline" onsubmit="showLoadingOverlay()">
-        <button id="confirmButton" type="submit" class="btn btn-success">✔️ Confirm Booking</button>
-      </form>
+      {% endif %}
 
       {# New → Pending #}
-      {% elif next_status == 'Pending' %}
-      <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#pendModal">❓ Send query about booking (and
-        pend)</button>
+      {% if 'Pending' in valid_transitions %}
+      <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#pendModal">❓ Send Query and Pend</button>
+      {% endif %}
 
-      {# Any → Cancelled (via modal) #}
-      {% elif next_status == 'Cancelled' %}
+      {% if rec.tracking.status in ['Pending', 'Confirmed'] %}
       <form method="POST" action="{{ url_for('resend_email', booking_id=rec.booking.id) }}" class="d-inline">
         <button type="submit" class="btn btn-warning">✔️ Resend Email</button>
       </form>
-      <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">❌ Cancel Booking</button>
-
-      {# Fallback: Generic transitions #}
-      {% else %}
-      <form method="POST"
-        action="{{ url_for('change_status', new_status=next_status|lower, booking_id=rec.booking.id) }}"
-        class="d-inline">
-        <button type="submit" class="btn btn-outline-primary">▶ {{ next_status }}</button>
-      </form>
       {% endif %}
-      {% endfor %}
     </div>
 
-    <hr />
-    <h6 class="text-muted">Notes</h6>
+    <h6 class="text-muted">History</h6>
     <div class="mb-3">
       <pre class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ rec.tracking.notes }}</pre>
     </div>
