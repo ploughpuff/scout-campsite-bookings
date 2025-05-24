@@ -8,12 +8,22 @@ Booking Details
 
 <form method="POST" action="{{ url_for('modify_fields', booking_id=rec.booking.id) }}">
   <div class="card">
+
     <div class="card-header badge-status {{ rec.tracking.status|lower }}">
-      <h5 class="mb-0">
-        <span>Booking ID: {{ rec.booking.id }}</span>
-        <span class="text-muted mx-2">•</span>
-        <span>{{ rec.tracking.status }}</span>
-      </h5>
+      <div class="d-flex align-items-center justify-content-between w-100">
+        <div>
+          <h5 class="mb-0">
+            <span>Booking ID: {{ rec.booking.id }}</span>
+            <span class="text-muted mx-2">•</span>
+            <span>{{ rec.tracking.status }}</span>
+          </h5>
+        </div>
+        {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+        {% else %}
+        <button type="submit" class="btn btn-primary" disabled>📌 Read Only</button>
+        {% endif %}
+      </div>
     </div>
 
     <div class="row g-2">
@@ -94,14 +104,21 @@ Booking Details
           <span class="form-control custom-bg">{{ rec.booking.submitted|pretty_date(True) }}</span>
         </div>
       </div>
-    </div>
-  </div>
 
-  <hr>
+      <!-- Row Four -->
+      <div class="col-md-12">
+        <div class="input-group">
+          <span class="input-group-text">Facilities (also Calendar Title)</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="text" name="booking.facilities" class="form-control" value="{{ rec.booking.facilities }}" min="1"
+            required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.booking.facilities }}</span>
+          {% endif %}
+        </div>
+      </div>
 
-
-  <div class="card">
-    <div class="row g-3">
+      <!-- Row Five -->
       <div class="col-md-4">
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
@@ -135,13 +152,10 @@ Booking Details
           {% endif %}
         </div>
       </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary" {% if rec.tracking.status not in ['New', 'Pending' , 'Confirmed' ]
-          %}disabled{% endif %}>💾 Save Changes</button>
-      </div>
     </div>
   </div>
 </form>
+
 <hr>
 
 <div class="card">

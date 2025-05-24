@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from pathlib import Path
 from typing import List, Optional, Tuple, get_args
 
@@ -550,6 +550,18 @@ class Bookings:
             save_json(self.live, DATA_FILE_PATH)
         return added
 
+    def _get_facilities_prefix(self, start_dt: datetime, end_dt: datetime, my_str: str = "") -> str:
+        """Generate a facilities prefix (EVE, OVERNIGHT) from two dates"""
+        if start_dt.date() != end_dt.date():
+            rc = "OVERNIGHT"
+        elif end_dt.time() < time(16, 5):
+            # Booking which end before 16:05 we class as DAY
+            rc = "DAY"
+        else:
+            rc = "EVE"
+
+        return f"{rc}: {my_str}"
+
     def create_rec_from_sheet_row(self, row: dict, group_type: str, contains: str) -> LiveBooking:
         """Create a booking record from a row of data from Google sheet using field mappings
         from JSON file"""
@@ -567,12 +579,12 @@ class Bookings:
         if contains == "day_visits":
             dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
             end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
-            facilities = "EVE: Scouts"
+            facilities = self._get_facilities_prefix(start_dt, end_dt, "Scouts")
         else:
             end_dt = datetime.strptime(row["departure_date_time"], "%d/%m/%Y %H:%M:%S").replace(
                 tzinfo=UK_TZ
             )
-            facilities = "OVERNIGHT: " if (start_dt.date() != end_dt.date()) else "DAY: "
+            facilities = self._get_facilities_prefix(start_dt, end_dt)
             facilities += " + ".join(part.strip() for part in row.get("facilities").split(","))
 
         #
