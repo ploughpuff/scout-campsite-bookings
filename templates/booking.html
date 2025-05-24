@@ -6,134 +6,142 @@ Booking Details
 
 {% block content %}
 
-
-<div class="card">
-  <div class="card-header badge-status {{ rec.tracking.status|lower }}">
-    <h5 class="mb-0">
-      <span>Booking ID: {{ rec.booking.id }}</span>
-      <span class="text-muted mx-2">•</span>
-      <span>{{ rec.tracking.status }}</span>
-    </h5>
-  </div>
-
-  <div class="row g-2">
-    {% if rec.tracking.status in ['Pending', 'Cancelled'] %}
-    <div class="col-md-12">
-      <div class="input-group">
-        {% if rec.tracking.status == 'Pending' %}
-        <span class="input-group-text">Question Asked</span>
-        <span class="form-control custom-bg">{{ rec.tracking.pend_question }}</span>
-        {% else %}
-        <span class="input-group-text">Cancel Reason</span>
-        <span class="form-control custom-bg">{{ rec.tracking.cancel_reason }}</span>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Row One -->
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Leader</span>
-        <span class="form-control custom-bg">{{ rec.leader.name }}</span>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Group</span>
-        <span class="form-control custom-bg">{{ rec.booking.group_name }}</span>
-      </div>
-    </div>
-
-    <!-- Row Two -->
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Phone</span>
-        <span class="form-control custom-bg">
-          {{ rec.leader.phone | default('')}}
-        </span>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Booking Type</span>
-        <span class="form-control custom-bg">{{ rec.booking.group_type }}</span>
-      </div>
-    </div>
-
-    <!-- Row Three -->
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Email</span>
-        <span class="form-control custom-bg">{{ rec.leader.email }}</span>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Request Submitted</span>
-        <span class="form-control custom-bg">{{ rec.booking.submitted|pretty_date(True) }}</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<hr>
-
 <form method="POST" action="{{ url_for('modify_fields', booking_id=rec.booking.id) }}">
   <div class="card">
-    <div class="row g-3">
-      {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-      <div class="col-md-4">
+    <div class="card-header badge-status {{ rec.tracking.status|lower }}">
+      <h5 class="mb-0">
+        <span>Booking ID: {{ rec.booking.id }}</span>
+        <span class="text-muted mx-2">•</span>
+        <span>{{ rec.tracking.status }}</span>
+      </h5>
+    </div>
+
+    <div class="row g-2">
+      {% if rec.tracking.status in ['Pending', 'Cancelled'] %}
+      <div class="col-md-12">
         <div class="input-group">
-          <span class="input-group-text">Arriving</span>
-          <input id="arriving" type="text" name="booking.arriving" class="form-control"
-            value="{{ rec.booking.arriving|datetime_local_value }}" readonly />
+          {% if rec.tracking.status == 'Pending' %}
+          <span class="input-group-text">Question Asked</span>
+          <span class="form-control custom-bg">{{ rec.tracking.pend_question }}</span>
+          {% else %}
+          <span class="input-group-text">Cancel Reason</span>
+          <span class="form-control custom-bg">{{ rec.tracking.cancel_reason }}</span>
+          {% endif %}
         </div>
-      </div>
-      <div class="col-md-2">
-        <div class="input-group">
-          <span class="input-group-text">Number</span>
-          <input type="number" name="booking.group_size" class="form-control" value="{{ rec.booking.group_size }}"
-            min="1" required>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="input-group">
-          <span class="input-group-text">Departing</span>
-          <input id="departing" type="text" name="booking.departing" class="form-control"
-            value="{{ rec.booking.departing|datetime_local_value }}" />
-        </div>
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
-      </div>
-      {% else %}
-      <div class=" col-md-4">
-        <div class="input-group">
-          <span class="input-group-text">Arriving</span>
-          <span class="form-control custom-bg">{{ rec.booking.arriving|pretty_date(True) }}</span>
-        </div>
-      </div>
-      <div class="col-md-2">
-        <div class="input-group">
-          <span class="input-group-text">Number</span>
-          <span class="form-control custom-bg">{{ rec.booking.group_size }}</span>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="input-group">
-          <span class="input-group-text">Departing</span>
-          <span class="form-control custom-bg">{{ rec.booking.departing|pretty_date(True) }}</span>
-        </div>
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary" disabled>💾 Save Changes</button>
       </div>
       {% endif %}
+
+      <!-- Row One -->
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Leader</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="text" name="leader.name" class="form-control" value="{{ rec.leader.name }}" min="1" required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.leader.name }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Group</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="text" name="booking.group_name" class="form-control" value="{{ rec.booking.group_name }}" min="1"
+            required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.booking.group_name }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Row Two -->
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Phone</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="text" name="leader.phone" class="form-control" value="{{ rec.leader.phone }}" min="1" required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.leader.phone | default('')}}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Group Type</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="text" name="booking.group_type" class="form-control" value="{{ rec.booking.group_type }}" min="1"
+            required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.booking.group_type }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Row Three -->
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Email</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="text" name="leader.email" class="form-control" value="{{ rec.leader.email }}" min="1" required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.leader.email }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Request Submitted</span>
+          <span class="form-control custom-bg">{{ rec.booking.submitted|pretty_date(True) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+
+  <div class="card">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">Arriving</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input id="arriving" type="text" name="booking.arriving" class="form-control"
+            value="{{ rec.booking.arriving|datetime_local_value }}" readonly />
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.booking.arriving|pretty_date(True) }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="input-group">
+          <span class="input-group-text">Number</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="number" name="booking.group_size" class="form-control" value="{{ rec.booking.group_size }}"
+            min="1" required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.booking.group_size }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text">Departing</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input id="departing" type="text" name="booking.departing" class="form-control"
+            value="{{ rec.booking.departing|datetime_local_value }}" />
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.booking.departing|pretty_date(True) }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary" {% if rec.tracking.status not in ['New', 'Pending' , 'Confirmed' ]
+          %}disabled{% endif %}>💾 Save Changes</button>
+      </div>
     </div>
   </div>
 </form>
-
 <hr>
 
 <div class="card">

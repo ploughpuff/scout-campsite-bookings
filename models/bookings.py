@@ -280,6 +280,9 @@ class Bookings:
             )
             return False
 
+        changes = False
+        send_email = False
+
         for section, fields in update_data.items():
             if not hasattr(rec, section):
                 self.logger.warning("Unknown section '%s' in update data", section)
@@ -296,8 +299,6 @@ class Bookings:
                 self.logger.warning("Validation failed for %s update: %s", section, e)
                 continue
 
-            changes = False
-            send_email = False
             for key in original.model_fields:
                 if key == "notes":
                     continue
