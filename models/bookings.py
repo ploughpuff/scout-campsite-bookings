@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple, get_args
 
@@ -23,10 +23,10 @@ from config import (
     UK_TZ,
 )
 from models.calendar import (
-    delete_calendar_entry,
-    update_calendar_entry,
-    get_cal_events,
     del_cal_event,
+    delete_calendar_entry,
+    get_cal_events,
+    update_calendar_entry,
 )
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
