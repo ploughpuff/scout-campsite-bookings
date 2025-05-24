@@ -309,11 +309,12 @@ class Bookings:
                 new_value = getattr(updated, key)
                 if old_value != new_value:
                     changes = True
+                    if key in ["arriving", "departing", "group_size", "facilities"]:
+                        send_email = True
                     setattr(original, key, new_value)
 
                     # Optionally format datetime changes nicely
                     if isinstance(new_value, datetime):
-                        send_email = True
                         old_value = get_timestamp_for_notes(old_value)
                         new_value = get_timestamp_for_notes(new_value)
 
@@ -325,8 +326,10 @@ class Bookings:
 
         if changes:
             if send_email:
-                send_email_notification(rec, "MODIFIED")
-                self._add_to_notes(rec.tracking, f"Email Sent: modified_fields: {rec.leader.email}")
+                if send_email_notification(rec, "MODIFIED"):
+                    self._add_to_notes(
+                        rec.tracking, f"Email Sent: modified_fields: {rec.leader.email}"
+                    )
             update_calendar_entry(rec)
             save_json(self.live, DATA_FILE_PATH)
 
