@@ -11,7 +11,7 @@ services:
       - /volume1/docker/scout-campsite-bookings/email_templates:/app/email_templates
       - /volume1/docker/scout-campsite-bookings/config:/app/config
     env_file:
-      - /volume1/docker/scout-campsite-bookings/config/.env
+      - /volume1/docker/scout-campsite-bookings/config/.env.production
     restart: always
     environment:
       - ENV=production
