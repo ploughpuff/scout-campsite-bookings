@@ -32,48 +32,51 @@ Booking Details
     {% endif %}
 
     <!-- Row One -->
-    <div class="col-md-7">
-      <div class="input-group">
-        <span class="input-group-text">Group</span>
-        <span class="form-control custom-bg">{{ rec.booking.group_name }}</span>
-      </div>
-    </div>
-    <div class="col-md-5">
+    <div class="col-md-6">
       <div class="input-group">
         <span class="input-group-text">Leader</span>
         <span class="form-control custom-bg">{{ rec.leader.name }}</span>
       </div>
     </div>
-
     <div class="col-md-6">
       <div class="input-group">
-        <span class="input-group-text">Phone Number</span>
+        <span class="input-group-text">Group</span>
+        <span class="form-control custom-bg">{{ rec.booking.group_name }}</span>
+      </div>
+    </div>
+
+
+    <!-- Row Two -->
+    <div class="col-md-6">
+      <div class="input-group">
+        <span class="input-group-text">Phone</span>
         <span class="form-control custom-bg">
           {{ rec.leader.phone | default('')}}
         </span>
       </div>
     </div>
-
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Booking Request Submitted</span>
-        <span class="form-control custom-bg">{{ rec.booking.submitted|pretty_date(True) }}</span>
-      </div>
-    </div>
-
-    <div class="col-md-6">
-      <div class="input-group">
-        <span class="input-group-text">Email</span>
-        <span class="form-control custom-bg">{{ rec.leader.email }}</span>
-      </div>
-    </div>
-
     <div class="col-md-6">
       <div class="input-group">
         <span class="input-group-text">Booking Type</span>
         <span class="form-control custom-bg">{{ rec.booking.group_type }}</span>
       </div>
     </div>
+
+    <!-- Row Three -->
+    <div class="col-md-6">
+      <div class="input-group">
+        <span class="input-group-text">Email</span>
+        <span class="form-control custom-bg">{{ rec.leader.email }}</span>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="input-group">
+        <span class="input-group-text">Request Submitted</span>
+        <span class="form-control custom-bg">{{ rec.booking.submitted|pretty_date(True) }}</span>
+      </div>
+    </div>
+
+
   </div>
 </div>
 
