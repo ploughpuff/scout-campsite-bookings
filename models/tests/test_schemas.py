@@ -56,6 +56,7 @@ def test_valid_booking_data():
         submitted="2025-05-01T10:00:00",
         arriving="2025-05-10T15:00:00",
         departing="2025-05-12T11:00:00",
+        facilities="Eve: Scouts",
     )
     assert booking.id == "abc123"
     assert booking.group_size == 25
@@ -73,6 +74,7 @@ def test_invalid_group_size():
             submitted="2025-05-01T10:00:00",
             arriving="2025-05-10T15:00:00",
             departing="2025-05-12T11:00:00",
+            facilities="Eve: Scouts",
         )
     assert "group_size" in str(exc_info.value)
 
@@ -88,6 +90,7 @@ def test_missing_required_field():
             submitted="2025-05-01T10:00:00",
             arriving="2025-05-10T15:00:00",
             # missing 'departing'
+            facilities="Eve: Scouts",
         )
     assert "departing" in str(exc_info.value)
 
@@ -102,6 +105,7 @@ def test_timezone_added():
         submitted=datetime(2025, 5, 1, 10, 0),  # naive datetime
         arriving=datetime(2025, 5, 10, 14, 0),
         departing=datetime(2025, 5, 12, 11, 0),
+        facilities="Eve: Scouts",
     )
     assert booking.submitted.tzinfo is not None
     assert booking.arriving.tzinfo is not None
@@ -118,6 +122,7 @@ def test_frozen_fields():
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
+        facilities="Eve: Scouts",
     )
 
     # Test original_sheet_md5 is frozen
@@ -195,6 +200,7 @@ def booking_data():
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
+        facilities="Eve: Scouts",
     )
 
 
@@ -259,6 +265,7 @@ def test_invalid_live_booking():
                 submitted="2025-05-02T09:30:00",
                 arriving="2025-05-10T16:00:00",
                 departing="2025-05-12T10:00:00",
+                facilities="Eve: Scouts",
             ),
             leader=None,  # Invalid leader data
             tracking=TrackingData(
@@ -315,6 +322,7 @@ def booking_data():
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
+        facilities="Eve: Scouts",
     )
 
 

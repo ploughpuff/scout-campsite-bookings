@@ -630,11 +630,11 @@ class Bookings:
 
         # Now build full SitePlusLeader record
         try:
-            booking_entry = BookingData.model_validate(booking_data)
-            leader_entry = LeaderData.model_validate(leader_fields)
-            tracking_entry = TrackingData.model_validate(tracking_data)
-
-            return LiveBooking(booking=booking_entry, leader=leader_entry, tracking=tracking_entry)
+            return LiveBooking(
+                booking=BookingData.model_validate(booking_data),
+                leader=LeaderData.model_validate(leader_fields),
+                tracking=TrackingData.model_validate(tracking_data),
+            )
         except ValidationError as e:
             self.logger.error("Validation failed for booking data: %s", e.json())
             self.logger.debug(e.json())  # Or use e.errors() for structured error list

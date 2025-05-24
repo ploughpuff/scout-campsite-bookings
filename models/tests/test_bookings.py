@@ -24,6 +24,7 @@ def live_booking_data():
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
+        facilities="Eve: Scouts",
     )
 
 
@@ -38,6 +39,7 @@ def archive_booking_data():
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
+        facilities="Eve: Scouts",
     )
 
 
