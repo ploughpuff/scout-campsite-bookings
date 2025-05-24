@@ -250,15 +250,18 @@ class Bookings:
                 rec.tracking.pend_question = description
                 self._add_to_notes(rec.tracking, f"Pend Question: {description}")
 
-        send_email_notification(rec)
-        update_calendar_entry(rec)
         self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [{new_status}]")
+        send_email_notification(rec)
+        self._add_to_notes(rec.tracking, f"Email Sent: change_status: {rec.leader.email}")
+        update_calendar_entry(rec)
         save_json(self.live, DATA_FILE_PATH)
         return True
 
     def resend_email(self, booking_id):
         """Resend the last type of email again"""
-        send_email_notification(self._get_booking_by_id(booking_id))
+        rec = self._get_booking_by_id(booking_id)
+        send_email_notification(rec, "RESEND")
+        self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
 
     def modify_fields(self, booking_id, update_data: dict) -> bool:
         """Modify fields in the booking from the html page.
@@ -321,10 +324,11 @@ class Bookings:
                     )
 
         if changes:
-            save_json(self.live, DATA_FILE_PATH)
             if send_email:
-                send_email_notification(rec)
+                send_email_notification(rec, "MODIFIED")
+                self._add_to_notes(rec.tracking, f"Email Sent: modified_fields: {rec.leader.email}")
             update_calendar_entry(rec)
+            save_json(self.live, DATA_FILE_PATH)
 
         return changes
 
@@ -388,8 +392,8 @@ class Bookings:
                 )
                 save_json(self.live, DATA_FILE_PATH)
                 flash(
-                    f"{rec.booking.id} automatically change from {rec.tracking.status} "
-                    f"to {new_status} now booking has passed",
+                    f"{rec.booking.id} Auto Status Change: From: {rec.tracking.status} "
+                    f"To: {new_status} now booking has passed",
                     "warning",
                 )
 

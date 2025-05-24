@@ -19,7 +19,8 @@ Booking Details
           </h5>
         </div>
         {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+        <button type="submit" class="btn btn-primary" title="Clicking Save triggers an email send">💾 Save
+          Changes</button>
         {% else %}
         <button type="submit" class="btn btn-primary" disabled>📌 Read Only</button>
         {% endif %}
@@ -119,7 +120,7 @@ Booking Details
       </div>
 
       <!-- Row Five -->
-      <div class="col-md-4">
+      <div class="col-md-5">
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
@@ -141,7 +142,7 @@ Booking Details
           {% endif %}
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-5">
         <div class="input-group">
           <span class="input-group-text">Departing</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
@@ -203,7 +204,8 @@ Booking Details
           <span class="form-control custom-bg">
             <span class="text-danger">&#10007; Clashes with:
               {% for rec in rec_list_clash %}
-              <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}">{{ rec.booking.id }}</a>{% if not
+              <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}">{{ rec.booking.id }} - {{
+                rec.booking.facilities }}</a>{% if not
               loop.last
               %}, {%
               endif %}

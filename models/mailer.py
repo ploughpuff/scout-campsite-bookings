@@ -22,7 +22,7 @@ logger = logging.getLogger("app_logger")
 env = Environment(loader=FileSystemLoader([config.EMAIL_TEMP_DIR]))
 
 
-def send_email_notification(rec: LiveBooking):
+def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
     """
     Send an email notification based on the booking status.
 
@@ -36,7 +36,7 @@ def send_email_notification(rec: LiveBooking):
         return False
 
     context = _build_email_context(rec)
-    msg = _create_email_message(context, rec)
+    msg = _create_email_message(context, rec, subject_append_str)
 
     if not msg:
         return False
@@ -94,7 +94,7 @@ def _build_email_context(rec: LiveBooking):
     }
 
 
-def _create_email_message(context, rec: LiveBooking):
+def _create_email_message(context, rec: LiveBooking, subject_append_str: str = ""):
     """
     Generate the email message object with both plain text and HTML content.
 
@@ -116,6 +116,8 @@ def _create_email_message(context, rec: LiveBooking):
     arriving_str = get_pretty_date_str(rec.booking.arriving)
     msg = EmailMessage()
     msg["Subject"] = f"Booking for {arriving_str}: {rec.booking.id} {rec.tracking.status.upper()}"
+    if subject_append_str:
+        msg["Subject"] += " (subject_append_str)"
     msg["From"] = f"{config.EMAIL_DISPLAY_USERNAME} <{config.EMAIL_FROM_ADDRESS}>"
 
     msg["To"] = rec.leader.email
