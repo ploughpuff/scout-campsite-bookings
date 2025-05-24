@@ -43,13 +43,16 @@ def get_sheet_data() -> dict:
         sheet_id = sheet_cfg.get("id")
         sheet_range = sheet_cfg.get("range")
         group_type = sheet_cfg.get("group_type")
+        contains = sheet_cfg.get("contains")
 
         new_data = _fetch_google_sheets_data(sheet_id, sheet_range)
 
         # Normalize column headers for each row
         normalized_sheet_data = [{normalize_key(k): v for k, v in rec.items()} for rec in new_data]
 
-        all_data.append({"sheet_data": normalized_sheet_data, "group_type": group_type})
+        all_data.append(
+            {"sheet_data": normalized_sheet_data, "group_type": group_type, "contains": contains}
+        )
 
     return {
         "updated": now_uk(),
