@@ -17,6 +17,7 @@ class LeaderData(BaseModel):
     name: str
     email: str
     phone: str
+    address: Optional[str] = None
 
 
 class BookingData(BaseModel):
@@ -30,6 +31,7 @@ class BookingData(BaseModel):
     submitted: datetime = Field(frozen=True)
     arriving: datetime
     departing: datetime
+    facilities: str  # This is also our calendar event title
 
     @field_validator(
         "submitted",
