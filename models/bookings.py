@@ -41,9 +41,7 @@ status_transitions = {
     "New": ["Pending", "Confirmed", "Cancelled"],
     "Pending": ["Confirmed", "Cancelled"],
     "Confirmed": ["Cancelled"],
-    "Invoice": [
-        "Completed",
-    ],
+    "Invoice": ["Completed"],
     "Completed": [],
     "Archived": [],
     "Cancelled": ["New"],
