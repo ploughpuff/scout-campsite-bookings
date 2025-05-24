@@ -170,12 +170,13 @@ def normalize_key(key: str) -> str:
     return key.lower()
 
 
-def get_booking_prefix(group_type: str) -> str:
-    """Return prefix for this group type"""
-    _data = FIELD_MAPPINGS_DICT.get("group_types")
+def get_booking_prefix(description: str) -> str:
+    """Return prefix for this group description"""
     try:
-        return _data.get(group_type).get("prefix")
-    except AttributeError as e:
-        logger = logging.getLogger("app_logger")
-        logger.warning("Unknown group type [%s]: [%s]", group_type, str(e))
-        return None
+        return next(
+            item["prefix"]
+            for item in FIELD_MAPPINGS_DICT.get("group_types")
+            if item["description"] == description
+        )
+    except StopIteration as exc:
+        raise ValueError(f"Group description '{description}' not found.") from exc

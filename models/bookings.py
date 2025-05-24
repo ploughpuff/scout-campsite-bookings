@@ -22,7 +22,12 @@ from config import (
     FIELD_MAPPINGS_DICT,
     UK_TZ,
 )
-from models.calendar import delete_calendar_entry, update_calendar_entry
+from models.calendar import (
+    delete_calendar_entry,
+    update_calendar_entry,
+    get_cal_events,
+    del_cal_event,
+)
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
@@ -387,6 +392,70 @@ class Bookings:
                     "warning",
                 )
 
+    def fix_cal_events(self, dry_run: bool = True) -> dict:
+        """Attempt to fix the calendar entries using latest live data"""
+
+        event_resource = get_cal_events()
+        event_ids = set(event["id"] for event in event_resource.get("items", []))
+        good, missing, delete, extra = [], [], [], []
+        now = now_uk()
+
+        def should_have_event(rec):
+            if rec.tracking.status in ["Confirmed", "Invoice"]:
+                return True
+            if rec.tracking.status == "Completed":
+                archive_date = rec.booking.departing + timedelta(
+                    days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+                )
+                return archive_date > now
+            return False
+
+        def should_delete_event(rec):
+            if rec.tracking.status in ["New", "Pending", "Archived", "Cancelled"]:
+                return True
+            if rec.tracking.status == "Completed":
+                archive_date = rec.booking.departing + timedelta(
+                    days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
+                )
+                return archive_date <= now
+            return False
+
+        for rec in self.live.items:
+            cal_id = rec.tracking.google_calendar_id
+            has_event = cal_id in event_ids
+
+            if should_have_event(rec):
+                if has_event:
+                    good.append(rec)
+                    event_ids.remove(cal_id)
+                else:
+                    if dry_run:
+                        missing.append(rec)
+                    else:
+                        rec.tracking.google_calendar_id = ""
+                        update_calendar_entry(rec)
+                        save_json(self.live, DATA_FILE_PATH)
+
+            elif should_delete_event(rec):
+                if has_event:
+                    event_ids.remove(cal_id)
+
+                    if dry_run:
+                        delete.append(rec)
+                    else:
+                        delete_calendar_entry(rec)
+                        rec.tracking.google_calendar_id = ""
+                        save_json(self.live, DATA_FILE_PATH)
+
+        # Remaining event_ids are "extra"
+        for event_id in event_ids:
+            if dry_run:
+                extra.append(event_id)
+            else:
+                del_cal_event(event_id, f"Raw id {event_id}")
+
+        return {"good": good, "missing": missing, "delete": delete, "extra": extra}
+
     def archive_old_bookings(self):
         """Move bookings with status 'Archived' to archive.json and remove from bookings.json."""
         to_archive = []
@@ -467,7 +536,9 @@ class Bookings:
 
                     if not self._find_booking_by_md5(new_booking_md5):
 
-                        rec = self.create_rec_from_sheet_row(row, single_sheet.get("group_type"))
+                        rec = self.create_rec_from_sheet_row(
+                            row, single_sheet.get("group_type"), single_sheet.get("contains")
+                        )
 
                         self._add_to_notes(rec.tracking, "Pulled from sheets")
                         self.live.items.append(rec)
@@ -478,7 +549,7 @@ class Bookings:
             save_json(self.live, DATA_FILE_PATH)
         return added
 
-    def create_rec_from_sheet_row(self, row: dict, group_type: str) -> LiveBooking:
+    def create_rec_from_sheet_row(self, row: dict, group_type: str, contains: str) -> LiveBooking:
         """Create a booking record from a row of data from Google sheet using field mappings
         from JSON file"""
 
@@ -486,12 +557,22 @@ class Bookings:
             tzinfo=UK_TZ
         )
 
+        # Arrival date/time is common
         start_dt = datetime.strptime(row["arrival_date_time"], "%d/%m/%Y %H:%M:%S").replace(
             tzinfo=UK_TZ
         )
 
-        dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
-        end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
+        # Depart time is not common
+        if contains == "day_visits":
+            dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
+            end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
+            facilities = "EVE: Scouts"
+        else:
+            end_dt = datetime.strptime(row["departure_date_time"], "%d/%m/%Y %H:%M:%S").replace(
+                tzinfo=UK_TZ
+            )
+            facilities = "OVERNIGHT: " if (start_dt.date() != end_dt.date()) else "DAY: "
+            facilities += " + ".join(part.strip() for part in row.get("facilities").split(","))
 
         #
         ## Map the google sheet fields to the Bookings class keys in one hit
@@ -504,13 +585,9 @@ class Bookings:
             for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("booking").items()
         }
 
-        # Overide the global group_type if available from the row
-        if row.get("group_type"):
-            group_type = row.get("group_type")
-
-        # Need to add group_type to sheets. Default for now if not set
-        if not group_type:
-            group_type = "chelmsford_district"
+        # Overide the global group_type if available from the row, or default to passed in type
+        # which comes from the field mappings file
+        group_type = row.get("group_type") or group_type
 
         # Construct BookingData, LeaderData and TrackingData separately
         booking_data = {
@@ -521,6 +598,7 @@ class Bookings:
             "submitted": submitted_dt,
             "arriving": start_dt,
             "departing": end_dt,
+            "facilities": facilities,
         }
 
         tracking_data = {

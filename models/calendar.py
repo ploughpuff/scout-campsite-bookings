@@ -91,8 +91,6 @@ def _build_service():
 
 
 def _build_event(rec: LiveBooking, extra_text: str = None) -> dict:
-    summary = "EVE: Scouts"
-
     extra_text = extra_text or ""
 
     description = textwrap.dedent(
@@ -104,7 +102,7 @@ def _build_event(rec: LiveBooking, extra_text: str = None) -> dict:
     ).strip()
 
     return {
-        "summary": summary,
+        "summary": rec.booking.facilities,
         "description": description,
         "start": {"dateTime": rec.booking.arriving.isoformat()},
         "end": {"dateTime": rec.booking.departing.isoformat()},
@@ -143,10 +141,10 @@ def _add_or_mod_event(rec: LiveBooking):
 
 
 def _del_from_rec(rec: LiveBooking):
-    return del_event(rec.tracking.google_calendar_id, rec.booking.id)
+    return del_cal_event(rec.tracking.google_calendar_id, rec.booking.id)
 
 
-def del_event(google_calendar_id: str, booking_id: str):
+def del_cal_event(google_calendar_id: str, booking_id: str):
     """Delete an event from the calendar
 
     Args:
