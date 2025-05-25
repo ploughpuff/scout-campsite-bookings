@@ -39,10 +39,6 @@ from config import (
     TEMPLATE_DIR,
 )
 from models.bookings import Bookings
-from models.calendar import (
-    del_cal_events,
-    get_cal_events,
-)
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, now_uk
@@ -300,20 +296,6 @@ def list_cal_events():
         delete=data["delete"],
         extra=data["extra"],
     )
-
-
-# @app.route("/admin/add_to_calendar")
-# def add_to_calendar(booking):
-#    """Add a booking id to google calendar"""
-#    update_calendar_entry(booking)
-#    return render_template("list_cal_events.html", events=get_cal_events())
-
-
-@app.route("/admin/delete_cal_events")
-def delete_cal_events():
-    "Route to delete all calendar events"
-    del_cal_events(get_cal_events())
-    return render_template("list_cal_events.html", events=get_cal_events())
 
 
 @app.route("/bookings/archived")
