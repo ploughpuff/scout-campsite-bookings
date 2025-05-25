@@ -129,6 +129,7 @@ def get_timestamp_for_notes(value=None, include_seconds=False):
 def get_pretty_date_str(dt, inc_time=False, full_month=False):
     """Return pretty date string from passed dt object"""
     try:
+        # https://strftime.org/
         day_name = dt.strftime("%A")
         day = dt.day
         suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
