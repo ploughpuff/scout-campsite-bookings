@@ -323,7 +323,9 @@ class Bookings:
                     )
 
         if changes:
-            if send_email:
+            # Only send modified emails if the booking is confirmed.
+            # This avoids sending emails for pending, and then another staight after for comfirmed
+            if send_email and rec.tracking.status == "Confirmed":
                 if send_email_notification(rec, "MODIFIED"):
                     self._add_to_notes(
                         rec.tracking, f"Email Sent: modified_fields: {rec.leader.email}"
