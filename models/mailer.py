@@ -153,10 +153,12 @@ def _send_email(msg, recipient):
     if config.EMAIL_ENABLED == "True":
         try:
             if config.APP_ENV == "production":
+                # Add bcc to site owner
+                all_recipients = [recipient, config.EMAIL_FROM_ADDRESS]
                 with smtplib.SMTP("smtp.office365.com", 587) as server:
                     server.starttls()
                     server.login(config.EMAIL_LOGIN_USERNAME, config.EMAIL_LOGIN_PASSWD)
-                    server.send_message(msg)
+                    server.send_message(msg, to_addrs=all_recipients)
             else:
                 with smtplib.SMTP("localhost", 25) as server:
                     server.send_message(msg)
