@@ -19,15 +19,24 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 # https://developers.google.com/workspace/calendar/api/v3/reference
 
 
-def get_cal_events():
-    """Return a list of all calendar events, or between two dates"""
+def get_cal_events() -> list:
+    events = []
+    page_token = None
+
     try:
         service = _build_service()
 
-        # pylint: disable=no-member
-        event_resource = service.events().list(calendarId=CALENDAR_ID).execute()
+        while True:
+            # pylint: disable=no-member
+            response = service.events().list(calendarId=CALENDAR_ID, pageToken=page_token).execute()
 
-        return event_resource
+            events.extend(response.get("items", []))
+
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+
+        return events
 
     except HttpError as e:
         logger.error("Failed to list events: %s", str(e))
@@ -115,10 +124,12 @@ def _add_or_mod_event(rec: LiveBooking):
 
     try:
         service = _build_service()
+        calendar_list = service.calendarList().list().execute()
         event = _build_event(rec)
 
         # pylint: disable=no-member
         if not rec.tracking.google_calendar_id:
+
             event_resource = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
             logger.info(
                 "Calendar event created: %s: %s", rec.booking.id, event_resource.get("htmlLink")

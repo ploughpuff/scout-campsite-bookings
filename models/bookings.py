@@ -401,8 +401,8 @@ class Bookings:
     def fix_cal_events(self, dry_run: bool = True) -> dict:
         """Attempt to fix the calendar entries using latest live data"""
 
-        event_resource = get_cal_events()
-        event_ids = set(event["id"] for event in event_resource.get("items", []))
+        cal_events = get_cal_events()
+        event_ids = set(event["id"] for event in cal_events)
         good, missing, delete, extra = [], [], [], []
         now = now_uk()
 
