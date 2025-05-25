@@ -115,7 +115,10 @@ def _create_email_message(context, rec: LiveBooking, subject_append_str: str = "
 
     arriving_str = get_pretty_date_str(rec.booking.arriving)
     msg = EmailMessage()
-    subject = f"{config.SITENAME} Booking for {arriving_str}: {rec.booking.id} {rec.tracking.status.upper()}"
+    subject = (
+        f"{config.SITENAME} Booking for {arriving_str}: "
+        f"{rec.booking.id} {rec.tracking.status.upper()}"
+    )
     if subject_append_str:
         subject += f" ({subject_append_str})"
     msg["Subject"] = subject

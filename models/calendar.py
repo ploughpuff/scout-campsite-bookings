@@ -20,6 +20,7 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 
 def get_cal_events() -> list:
+    """Query google cal for all events"""
     events = []
     page_token = None
 
@@ -124,7 +125,6 @@ def _add_or_mod_event(rec: LiveBooking):
 
     try:
         service = _build_service()
-        calendar_list = service.calendarList().list().execute()
         event = _build_event(rec)
 
         # pylint: disable=no-member
