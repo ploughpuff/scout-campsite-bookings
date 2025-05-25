@@ -88,6 +88,8 @@ def _build_email_context(rec: LiveBooking):
         "booking_id": rec.booking.id,
         "arriving_str": arriving_str,
         "departing_str": departing_str,
+        "group_size": rec.booking.group_size,
+        "facilities": rec.booking.facilities,
         "status_str": status_str,
         "status_colour": status_colour,
         "body": body,
