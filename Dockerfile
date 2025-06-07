@@ -32,4 +32,4 @@ COPY . .
 EXPOSE 80
 
 # Run the app
-CMD ["gunicorn", "-b", "0.0.0.0:80", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:80", "app:app", "--access-logfile", "-", "--error-logfile", "-"]
