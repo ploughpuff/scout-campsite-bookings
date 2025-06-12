@@ -140,11 +140,11 @@ def get_pretty_date_str(dt, inc_time=False, full_month=False):
 
         date_str = f"{day_name}, {day}{suffix} {month}"
 
-        if inc_time:
-            date_str += f"@{time_part}"
-
         if year != current_year:
             date_str += f" {year}"
+
+        if inc_time:
+            date_str += f" @ {time_part}"
 
         return date_str
 
