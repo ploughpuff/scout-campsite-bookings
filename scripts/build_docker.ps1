@@ -31,4 +31,3 @@ $outputFilename = "${ImageName}-${DateTag}.tar"
 docker save -o $outputFilename "${ImageName}:${DateTag}"
 
 robocopy . "\\jam\docker\scout-campsite-bookings" $outputFilename
-robocopy "scripts" "\\jam\docker\scout-campsite-bookings" "docker-compose.yml"
