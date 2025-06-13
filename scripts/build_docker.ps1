@@ -30,4 +30,4 @@ Write-Host "Tag: $TagVersion"
 $outputFilename = "${ImageName}-${DateTag}.tar"
 docker save -o $outputFilename "${ImageName}:${DateTag}"
 
-robocopy . "\\jam\docker\scout-campsite-bookings" $outputFilename
+robocopy . "\\jam\docker\riffhams-site-data" $outputFilename
