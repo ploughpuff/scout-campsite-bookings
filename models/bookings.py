@@ -545,7 +545,10 @@ class Bookings:
                     if not self._find_booking_by_md5(new_booking_md5):
 
                         rec = self.create_rec_from_sheet_row(
-                            row, single_sheet.get("group_type"), single_sheet.get("contains")
+                            row,
+                            new_booking_md5,
+                            single_sheet.get("group_type"),
+                            single_sheet.get("contains"),
                         )
 
                         self._add_to_notes(rec.tracking, "Pulled from sheets")
@@ -569,7 +572,9 @@ class Bookings:
 
         return f"{rc}: {my_str}"
 
-    def create_rec_from_sheet_row(self, row: dict, group_type: str, contains: str) -> LiveBooking:
+    def create_rec_from_sheet_row(
+        self, row: dict, original_sheet_md5: str, group_type: str, contains: str
+    ) -> LiveBooking:
         """Create a booking record from a row of data from Google sheet using field mappings
         from JSON file"""
 
@@ -615,7 +620,7 @@ class Bookings:
         booking_data = {
             **booking_fields,
             "id": f"{get_booking_prefix(group_type)}-{start_dt.year}-{self.live.next_idx:04d}",
-            "original_sheet_md5": self._md5_of_dict(row),
+            "original_sheet_md5": original_sheet_md5,
             "group_type": group_type,
             "submitted": submitted_dt,
             "arriving": start_dt,
