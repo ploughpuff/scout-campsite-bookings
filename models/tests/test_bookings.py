@@ -21,10 +21,11 @@ def live_booking_data():
         group_type="Explorers",
         group_name="3rd Sheffield",
         group_size=12,
+        event_type="eve",
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
 
 
@@ -36,10 +37,11 @@ def archive_booking_data():
         group_type="Explorers",
         group_name="3rd Sheffield",
         group_size=12,
+        event_type="eve",
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
 
 
@@ -52,7 +54,7 @@ def leader_data():
 def tracking_data():
     return TrackingData(
         status="Pending",
-        invoice=False,
+        cost_estimate=100,
         notes="Test booking",
         google_calendar_id="test-id-123",
         pending_email_sent="2025-05-01T09:30:00",

@@ -12,7 +12,15 @@ from typing import Type
 
 from pydantic import BaseModel
 
-from config import MAX_BACKUPS_TO_KEEP
+from config import FIELD_MAPPINGS_DICT, MAX_BACKUPS_TO_KEEP
+from models.schemas import (
+    SCHEMA_VERSION,
+    ArchiveData,
+    BookingData,
+    LiveData,
+    TrackingData,
+)
+from models.utils import estimate_cost, get_event_type
 
 logger = logging.getLogger("app_logger")
 
@@ -30,6 +38,70 @@ def save_json(data: BaseModel, path: Path) -> None:
     write_checksum(path)
 
 
+def migrate_live_data(data: dict) -> dict:
+    """Migrate dict schema versions"""
+
+    version = data.get("schema_version", 1)
+
+    while version < SCHEMA_VERSION:
+        if version == 1:
+            version = 2
+            # Add "schema_version" key to root dict
+            data["schema_version"] = 2
+
+            # With BookingData:
+            #    Add "event_type"
+            #    Mod "facilities from str to List"
+            # With TrackingData:
+            #    Del "invoice"
+            #    Add "cost_estimate"
+            for item in data.get("items", []):
+                tracking = item.get("tracking")
+                booking = item.get("booking")
+                if booking and tracking:
+                    start_dt = datetime.fromisoformat(booking.get("arriving"))
+                    end_dt = datetime.fromisoformat(booking.get("departing"))
+                    booking["event_type"] = get_event_type(start_dt, end_dt)
+
+                    # Convert facilities from str → list if needed
+                    facilities = booking.get("facilities")
+                    if isinstance(facilities, str):
+                        booking["facilities"] = []
+                        if ":" in facilities:
+                            # Example → 'DAY: Tree Top + Roxby Hut' → ['Tree Top', 'Roxby Hut']
+                            extra = []
+                            for f in facilities.split(":", 1)[1].split("+"):
+                                f = f.strip()
+                                if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
+                                    booking["facilities"].append(f)
+                                else:
+                                    extra.append(f)
+
+                    b = BookingData.model_validate(booking)
+
+                    tracking.pop("invoice", None)
+                    tracking["cost_estimate"] = estimate_cost(
+                        b.event_type, b.group_type, b.group_size, b.facilities
+                    )
+                    if extra:
+                        tracking["bookers_comment"] = ", ".join(extra)
+                    TrackingData.model_validate(tracking)
+
+        else:
+            raise RuntimeError(f"No migration path from version {version}")
+
+    return data
+
+
+def migrate_archive_data(data: dict) -> dict:
+    """Migrate archive data"""
+    version = data.get("schema_version", 1)
+    if version != SCHEMA_VERSION:
+        raise RuntimeError("Unexpected schema version in archive file, or missing")
+
+    return data
+
+
 def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> BaseModel | None:
     """Load and deserialize JSON file with optional checksum verification."""
     if not path.exists():
@@ -41,6 +113,13 @@ def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> 
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    if model is ArchiveData:
+        data = migrate_archive_data(data)
+    elif model is LiveData:
+        data = migrate_live_data(data)
+    else:
+        raise RuntimeError("Unrecognised JSON data type")
 
     return model.model_validate(data)
 

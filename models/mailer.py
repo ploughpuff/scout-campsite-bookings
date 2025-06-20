@@ -3,10 +3,8 @@ mailer.py - Provide functions to send emails from the app.
 """
 
 import logging
-import os
 import smtplib
 from email.message import EmailMessage
-from pathlib import Path
 
 import html2text
 from flask import flash
@@ -14,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
 from models.schemas import LiveBooking
-from models.utils import get_pretty_date_str, now_uk
+from models.utils import get_pretty_date_str, is_email_enabled, now_uk
 
 logger = logging.getLogger("app_logger")
 
@@ -35,8 +33,8 @@ def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
     if rec.tracking.status not in {"Confirmed", "Cancelled", "Pending"}:
         return False
 
-    context = _build_email_context(rec)
-    msg = _create_email_message(context, rec, subject_append_str)
+    body = _build_email_body(rec)
+    msg = _create_email_message(body, rec, subject_append_str)
 
     if not msg:
         return False
@@ -51,7 +49,7 @@ def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
     return _send_email(msg, rec.leader.email)
 
 
-def _build_email_context(rec: LiveBooking):
+def _build_email_body(rec: LiveBooking):
     """
     Confirmed
     Cancelled
@@ -61,42 +59,21 @@ def _build_email_context(rec: LiveBooking):
     arriving_str = get_pretty_date_str(rec.booking.arriving, inc_time=True, full_month=True)
     departing_str = get_pretty_date_str(rec.booking.departing, inc_time=True, full_month=True)
 
-    status_str = rec.tracking.status.upper()
-
-    if rec.tracking.status == "Confirmed":
-        status_colour = "green"
-        body = ""
-
-        file_path = Path(os.path.join(config.EMAIL_TEMP_DIR, "confirmed_body.html"))
-
-        if file_path.exists():
-            with file_path.open("r", encoding="utf-8") as file:
-                body = file.read()
-
-    elif rec.tracking.status == "Cancelled":
-        status_colour = "red"
-        body = f"Cancel Reason: {rec.tracking.cancel_reason}"
-    elif rec.tracking.status == "Pending":
-        status_colour = "#FF8C00"  # Dark Orange
-        body = f"Pend Question: {rec.tracking.pend_question}"
-    else:
-        status_colour = "black"
-        body = ""
-
-    return {
-        "leader": rec.leader.name,
-        "booking_id": rec.booking.id,
+    context = {
+        "rec": rec,
         "arriving_str": arriving_str,
         "departing_str": departing_str,
-        "group_size": rec.booking.group_size,
-        "facilities": rec.booking.facilities,
-        "status_str": status_str,
-        "status_colour": status_colour,
-        "body": body,
+        "event_type": rec.booking.event_type,
     }
 
+    try:
+        return env.get_template("base_email.html").render(context)
+    except TemplateError as e:
+        logger.error("%s trouble rendering email templates: %s: %s", rec.booking.id, rec, e)
+        return None
 
-def _create_email_message(context, rec: LiveBooking, subject_append_str: str = ""):
+
+def _create_email_message(body: str, rec: LiveBooking, subject_append_str: str = ""):
     """
     Generate the email message object with both plain text and HTML content.
 
@@ -109,12 +86,6 @@ def _create_email_message(context, rec: LiveBooking, subject_append_str: str = "
     Returns:
         EmailMessage or None: A composed email message, or None if templates fail.
     """
-    try:
-        body = env.get_template("base_email.html").render(context)
-    except TemplateError as e:
-        logger.error("%s trouble rendering email templates: %s: %s", rec.booking.id, rec, e)
-        return None
-
     arriving_str = get_pretty_date_str(rec.booking.arriving)
     msg = EmailMessage()
     subject = (
@@ -150,7 +121,9 @@ def _send_email(msg, recipient):
     Returns:
         bool: True if email was sent/logged successfully, False if sending failed.
     """
-    if config.EMAIL_ENABLED == "True":
+    # If email_enabled exists in session (from toggle button), use it. Otherwise, fall back to
+    # config.
+    if is_email_enabled():
         try:
             if config.APP_ENV == "production":
                 # Add bcc to site owner

@@ -110,20 +110,22 @@ Booking Details
       </div>
 
       <!-- Row Four -->
-      <div class="col-md-12">
+      <div class="col-md-4">
         <div class="input-group">
-          <span class="input-group-text">Facilities (also Calendar Title)</span>
-          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
-          <input type="text" name="booking.facilities" class="form-control track-changes"
-            value="{{ rec.booking.facilities }}" min="1" required>
-          {% else %}
-          <span class="form-control custom-bg">{{ rec.booking.facilities }}</span>
-          {% endif %}
+          <span class="input-group-text">Facilities</span>
+          <span class="form-control custom-bg">
+            {% for facility in bookable_facilities %}
+            <div>
+              <input type="checkbox" name="booking.facilities" value="{{ facility }}" {% if rec.tracking.status not in
+                ['New', 'Pending' , 'Confirmed' ] %}disabled{% endif %} {% if facility in rec.booking.facilities
+                %}checked{% endif %}>
+              <label>{{ facility }}</label>
+            </div>
+            {% endfor %}
+          </span>
         </div>
       </div>
-
-      <!-- Row Five -->
-      <div class="col-md-5">
+      <div class="col-md-8">
         <div class="input-group">
           <span class="input-group-text">Arriving</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
@@ -133,8 +135,6 @@ Booking Details
           <span class="form-control custom-bg">{{ rec.booking.arriving|pretty_date(True) }}</span>
           {% endif %}
         </div>
-      </div>
-      <div class="col-md-2">
         <div class="input-group">
           <span class="input-group-text">Number</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
@@ -144,8 +144,6 @@ Booking Details
           <span class="form-control custom-bg">{{ rec.booking.group_size }}</span>
           {% endif %}
         </div>
-      </div>
-      <div class="col-md-5">
         <div class="input-group">
           <span class="input-group-text">Departing</span>
           {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
@@ -155,8 +153,28 @@ Booking Details
           <span class="form-control custom-bg">{{ rec.booking.departing|pretty_date(True) }}</span>
           {% endif %}
         </div>
+        <div class="input-group">
+          <span class="input-group-text">Cost Estimate (£)</span>
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          <input type="number" step="0.25" name="tracking.cost_estimate" class="form-control track-changes"
+            value="{{ rec.tracking.cost_estimate | pence_to_pounds }}" min="0" required>
+          {% else %}
+          <span class="form-control custom-bg">{{ rec.tracking.cost_estimate | pence_to_pounds }}</span>
+          {% endif %}
+        </div>
       </div>
+
+      <!-- Row Five -->
+      {% if rec.tracking.bookers_comment %}
+      <div class="col-md-12">
+        <div class="input-group">
+          <span class="input-group-text">Comments</span>
+          <span class="form-control custom-bg">{{ rec.tracking.bookers_comment }}</span>
+        </div>
+      </div>
+      {% endif %}
     </div>
+  </div>
   </div>
 </form>
 

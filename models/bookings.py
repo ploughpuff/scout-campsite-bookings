@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple, get_args
 
@@ -31,7 +31,14 @@ from models.calendar import (
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
-from models.utils import get_booking_prefix, get_timestamp_for_notes, now_uk, secs_to_hr
+from models.utils import (
+    estimate_cost,
+    get_booking_prefix,
+    get_event_type,
+    get_timestamp_for_notes,
+    now_uk,
+    secs_to_hr,
+)
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
 
@@ -157,6 +164,10 @@ class Bookings:
         """
         return secs_to_hr((now_uk() - self.live.updated).total_seconds())
 
+    def _estimate_cost(self, b: BookingData) -> int:
+        """Estimate the cost of a booking in pence"""
+        return estimate_cost(b.event_type, b.group_type, b.group_size, b.facilities)
+
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
 
@@ -249,8 +260,8 @@ class Bookings:
                 self._add_to_notes(rec.tracking, f"Pend Question: {description}")
 
         self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [{new_status}]")
-        send_email_notification(rec)
-        self._add_to_notes(rec.tracking, f"Email Sent: change_status: {rec.leader.email}")
+        if send_email_notification(rec):
+            self._add_to_notes(rec.tracking, f"Email Sent: change_status: {rec.leader.email}")
         update_calendar_entry(rec)
         save_json(self.live, DATA_FILE_PATH)
         return True
@@ -323,6 +334,22 @@ class Bookings:
                     )
 
         if changes:
+            # Redo the event type as a time change may have altered it
+            rec.booking.event_type = get_event_type(rec.booking.arriving, rec.booking.departing)
+            #
+            ## After the field updates, recalculate the cost estimate, but only if its non-zero
+            ## so that manually setting a booking to FREE is not lost
+            if rec.tracking.cost_estimate > 0:
+                cost_estimate = self._estimate_cost(rec.booking)
+
+                if rec.tracking.cost_estimate != cost_estimate:
+                    self._add_to_notes(
+                        rec.tracking,
+                        f"Cost estimate changed from [{rec.tracking.cost_estimate}] "
+                        + f"to [{cost_estimate}]",
+                    )
+                    rec.tracking.cost_estimate = cost_estimate
+
             # Only send modified emails if the booking is confirmed.
             # This avoids sending emails for pending, and then another staight after for comfirmed
             if send_email and rec.tracking.status == "Confirmed":
@@ -388,11 +415,11 @@ class Bookings:
                 continue
 
             if rec.tracking.status == "Confirmed" and rec.booking.departing < now_uk():
-                new_status = "Invoice" if rec.tracking.invoice else "Completed"
-                rec.tracking.status = new_status
+                new_status = "Invoice" if rec.tracking.cost_estimate > 0 else "Completed"
                 self._add_to_notes(
                     rec.tracking, f"Auto Status Change: [{rec.tracking.status}] > [{new_status}]"
                 )
+                rec.tracking.status = new_status
                 save_json(self.live, DATA_FILE_PATH)
                 flash(
                     f"{rec.booking.id} Auto Status Change: From: {rec.tracking.status} "
@@ -560,18 +587,6 @@ class Bookings:
             save_json(self.live, DATA_FILE_PATH)
         return added
 
-    def _get_facilities_prefix(self, start_dt: datetime, end_dt: datetime, my_str: str = "") -> str:
-        """Generate a facilities prefix (EVE, OVERNIGHT) from two dates"""
-        if start_dt.date() != end_dt.date():
-            rc = "OVERNIGHT"
-        elif end_dt.time() < time(16, 5):
-            # Booking which end before 16:05 we class as DAY
-            rc = "DAY"
-        else:
-            rc = "EVE"
-
-        return f"{rc}: {my_str}"
-
     def create_rec_from_sheet_row(
         self, row: dict, original_sheet_md5: str, group_type: str, contains: str
     ) -> LiveBooking:
@@ -587,19 +602,27 @@ class Bookings:
             tzinfo=UK_TZ
         )
 
+        # To store the text from bookers as comments
+        facilities = []
+        extra = []
+
         # Depart time is not common
         if contains == "day_visits":
             dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
             end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
-            facilities = self._get_facilities_prefix(start_dt, end_dt, "Scouts")
             # Day visit bookings are less an address, so we fake one
             row["address"] = "The Scout Hut!"
         else:
             end_dt = datetime.strptime(row["departure_date_time"], "%d/%m/%Y %H:%M:%S").replace(
                 tzinfo=UK_TZ
             )
-            facilities = self._get_facilities_prefix(start_dt, end_dt)
-            facilities += " + ".join(part.strip() for part in row.get("facilities").split(","))
+
+            for f in row.get("facilities", "").split(","):
+                f = f.strip()
+                if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
+                    facilities.append(f)
+                else:
+                    extra.append(f)
 
         #
         ## Map the google sheet fields to the Bookings class keys in one hit
@@ -622,6 +645,7 @@ class Bookings:
             "id": f"{get_booking_prefix(group_type)}-{start_dt.year}-{self.live.next_idx:04d}",
             "original_sheet_md5": original_sheet_md5,
             "group_type": group_type,
+            "event_type": get_event_type(start_dt, end_dt),
             "submitted": submitted_dt,
             "arriving": start_dt,
             "departing": end_dt,
@@ -630,8 +654,9 @@ class Bookings:
 
         tracking_data = {
             "status": "New",
-            "invoice": False,
+            "cost_estimate": self._estimate_cost(BookingData.model_validate(booking_data)),
             "notes": "",
+            "bookers_comment": ", ".join(extra),
             "google_calendar_id": "",
         }
 
