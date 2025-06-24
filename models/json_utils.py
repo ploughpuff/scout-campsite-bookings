@@ -12,7 +12,7 @@ from typing import Type
 
 from pydantic import BaseModel
 
-from config import FIELD_MAPPINGS_DICT, MAX_BACKUPS_TO_KEEP
+from config import MAX_BACKUPS_TO_KEEP
 from models.schemas import (
     SCHEMA_VERSION,
     ArchiveData,
@@ -20,7 +20,7 @@ from models.schemas import (
     LiveData,
     TrackingData,
 )
-from models.utils import estimate_cost, get_event_type
+from models.utils import SortedFacilities, estimate_cost, get_event_type, sort_facilities
 
 logger = logging.getLogger("app_logger")
 
@@ -43,50 +43,46 @@ def migrate_live_data(data: dict) -> dict:
 
     version = data.get("schema_version", 1)
 
+    def migrate_v1_to_v2(data: dict) -> None:
+        data["schema_version"] = 2
+        items = data.get("items", [])
+
+        for item in items:
+            booking = item.get("booking")
+            tracking = item.get("tracking")
+
+            if not booking or not tracking:
+                continue
+
+            # Add event_type based on arriving/departing
+            start_dt = datetime.fromisoformat(booking.get("arriving"))
+            end_dt = datetime.fromisoformat(booking.get("departing"))
+            booking["event_type"] = get_event_type(start_dt, end_dt)
+
+            # Convert facilities from str to list if needed
+            facilities = booking.get("facilities")
+
+            if isinstance(facilities, str):
+                if ":" in facilities:
+                    _, facility_str = facilities.split(":", 1)
+                    facilities: SortedFacilities = sort_facilities(facility_str.split("+"))
+                    booking["facilities"] = facilities.valid
+
+            b = BookingData.model_validate(booking)
+
+            # Update tracking
+            tracking.pop("invoice", None)
+            tracking["cost_estimate"] = estimate_cost(
+                b.event_type, b.group_type, b.group_size, b.facilities
+            )
+            if facilities.extra:
+                tracking["bookers_comment"] = ", ".join(facilities.extra)
+            TrackingData.model_validate(tracking)
+
     while version < SCHEMA_VERSION:
         if version == 1:
+            migrate_v1_to_v2(data)
             version = 2
-            # Add "schema_version" key to root dict
-            data["schema_version"] = 2
-
-            # With BookingData:
-            #    Add "event_type"
-            #    Mod "facilities from str to List"
-            # With TrackingData:
-            #    Del "invoice"
-            #    Add "cost_estimate"
-            for item in data.get("items", []):
-                tracking = item.get("tracking")
-                booking = item.get("booking")
-                if booking and tracking:
-                    start_dt = datetime.fromisoformat(booking.get("arriving"))
-                    end_dt = datetime.fromisoformat(booking.get("departing"))
-                    booking["event_type"] = get_event_type(start_dt, end_dt)
-
-                    # Convert facilities from str → list if needed
-                    facilities = booking.get("facilities")
-                    if isinstance(facilities, str):
-                        booking["facilities"] = []
-                        if ":" in facilities:
-                            # Example → 'DAY: Tree Top + Roxby Hut' → ['Tree Top', 'Roxby Hut']
-                            extra = []
-                            for f in facilities.split(":", 1)[1].split("+"):
-                                f = f.strip()
-                                if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
-                                    booking["facilities"].append(f)
-                                else:
-                                    extra.append(f)
-
-                    b = BookingData.model_validate(booking)
-
-                    tracking.pop("invoice", None)
-                    tracking["cost_estimate"] = estimate_cost(
-                        b.event_type, b.group_type, b.group_size, b.facilities
-                    )
-                    if extra:
-                        tracking["bookers_comment"] = ", ".join(extra)
-                    TrackingData.model_validate(tracking)
-
         else:
             raise RuntimeError(f"No migration path from version {version}")
 

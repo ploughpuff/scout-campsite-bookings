@@ -32,12 +32,14 @@ from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 from models.utils import (
+    SortedFacilities,
     estimate_cost,
     get_booking_prefix,
     get_event_type,
     get_timestamp_for_notes,
     now_uk,
     secs_to_hr,
+    sort_facilities,
 )
 
 status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
@@ -272,6 +274,21 @@ class Bookings:
         send_email_notification(rec, "RESEND")
         self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
 
+    def _update_cost_estimate(self, rec: LiveData):
+        #
+        ## Recalculate the cost estimate, but only if its non-zero
+        ## so that manually setting a booking to FREE is not lost
+        if rec.tracking.cost_estimate > 0:
+            cost_estimate = self._estimate_cost(rec.booking)
+
+            if rec.tracking.cost_estimate != cost_estimate:
+                self._add_to_notes(
+                    rec.tracking,
+                    f"Cost estimate changed from [{rec.tracking.cost_estimate}] "
+                    + f"to [{cost_estimate}]",
+                )
+                rec.tracking.cost_estimate = cost_estimate
+
     def modify_fields(self, booking_id, update_data: dict) -> bool:
         """Modify fields in the booking from the html page.
 
@@ -292,8 +309,7 @@ class Bookings:
             )
             return False
 
-        changes = False
-        send_email = False
+        changed_keys = []
 
         for section, fields in update_data.items():
             if not hasattr(rec, section):
@@ -317,9 +333,7 @@ class Bookings:
                 old_value = getattr(original, key)
                 new_value = getattr(updated, key)
                 if old_value != new_value:
-                    changes = True
-                    if key in ["arriving", "departing", "group_size", "facilities"]:
-                        send_email = True
+                    changed_keys.append(key)
                     setattr(original, key, new_value)
 
                     # Optionally format datetime changes nicely
@@ -333,26 +347,21 @@ class Bookings:
                         rec.tracking, f"{key} changed from [{old_value}] to [{new_value}]"
                     )
 
-        if changes:
+        if changed_keys:
             # Redo the event type as a time change may have altered it
             rec.booking.event_type = get_event_type(rec.booking.arriving, rec.booking.departing)
-            #
-            ## After the field updates, recalculate the cost estimate, but only if its non-zero
-            ## so that manually setting a booking to FREE is not lost
-            if rec.tracking.cost_estimate > 0:
-                cost_estimate = self._estimate_cost(rec.booking)
 
-                if rec.tracking.cost_estimate != cost_estimate:
-                    self._add_to_notes(
-                        rec.tracking,
-                        f"Cost estimate changed from [{rec.tracking.cost_estimate}] "
-                        + f"to [{cost_estimate}]",
-                    )
-                    rec.tracking.cost_estimate = cost_estimate
+            self._update_cost_estimate(rec)
 
             # Only send modified emails if the booking is confirmed.
             # This avoids sending emails for pending, and then another staight after for comfirmed
-            if send_email and rec.tracking.status == "Confirmed":
+            if (
+                any(
+                    key in ["arriving", "departing", "group_size", "facilities"]
+                    for key in changed_keys
+                )
+                and rec.tracking.status == "Confirmed"
+            ):
                 if send_email_notification(rec, "MODIFIED"):
                     self._add_to_notes(
                         rec.tracking, f"Email Sent: modified_fields: {rec.leader.email}"
@@ -360,7 +369,7 @@ class Bookings:
             update_calendar_entry(rec)
             save_json(self.live, DATA_FILE_PATH)
 
-        return changes
+        return bool(changed_keys)
 
     def _apply_status_change(self, rec: LiveBooking, to_status: str):
 
@@ -602,10 +611,6 @@ class Bookings:
             tzinfo=UK_TZ
         )
 
-        # To store the text from bookers as comments
-        facilities = []
-        extra = []
-
         # Depart time is not common
         if contains == "day_visits":
             dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
@@ -617,12 +622,7 @@ class Bookings:
                 tzinfo=UK_TZ
             )
 
-            for f in row.get("facilities", "").split(","):
-                f = f.strip()
-                if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
-                    facilities.append(f)
-                else:
-                    extra.append(f)
+        facilities: SortedFacilities = sort_facilities(row.get("facilities", "").split(","))
 
         #
         ## Map the google sheet fields to the Bookings class keys in one hit
@@ -649,14 +649,14 @@ class Bookings:
             "submitted": submitted_dt,
             "arriving": start_dt,
             "departing": end_dt,
-            "facilities": facilities,
+            "facilities": facilities.valid,
         }
 
         tracking_data = {
             "status": "New",
             "cost_estimate": self._estimate_cost(BookingData.model_validate(booking_data)),
             "notes": "",
-            "bookers_comment": ", ".join(extra),
+            "bookers_comment": ", ".join(facilities.extra),
             "google_calendar_id": "",
         }
 

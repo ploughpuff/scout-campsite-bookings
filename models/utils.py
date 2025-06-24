@@ -5,6 +5,7 @@ utils.py - Utility functions for use in Scout Campsite Booking.
 import logging
 import re
 from datetime import datetime, time
+from typing import NamedTuple
 
 from flask import current_app, session
 
@@ -226,3 +227,22 @@ def estimate_cost(event_type: str, group_type: str, group_size: int, facilities:
         cost += FIELD_MAPPINGS_DICT.get("charges").get("roxby_hut").get("rates").get(group_type)
 
     return cost
+
+
+class SortedFacilities(NamedTuple):
+    """Class to hold valid and extra facilitiey requests"""
+
+    valid: list[str]
+    extra: list[str]
+
+
+def sort_facilities(requested_facilities_list: list) -> SortedFacilities:
+    """From a list of strings, compare against bookable facilities and sort into valid and extra"""
+    rc = SortedFacilities(valid=[], extra=[])
+    for f in requested_facilities_list:
+        f = f.strip()
+        if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
+            rc.valid.append(f)
+        else:
+            rc.extra.append(f)
+    return rc
