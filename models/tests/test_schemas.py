@@ -53,10 +53,11 @@ def test_valid_booking_data():
         group_type="Scouts",
         group_name="1st London",
         group_size=25,
+        event_type="eve",
         submitted="2025-05-01T10:00:00",
         arriving="2025-05-10T15:00:00",
         departing="2025-05-12T11:00:00",
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
     assert booking.id == "abc123"
     assert booking.group_size == 25
@@ -71,10 +72,11 @@ def test_invalid_group_size():
             group_type="Scouts",
             group_name="1st London",
             group_size="twenty",  # invalid type
+            event_type="eve",
             submitted="2025-05-01T10:00:00",
             arriving="2025-05-10T15:00:00",
             departing="2025-05-12T11:00:00",
-            facilities="Eve: Scouts",
+            facilities=["Scouts"],
         )
     assert "group_size" in str(exc_info.value)
 
@@ -87,10 +89,11 @@ def test_missing_required_field():
             group_type="Scouts",
             group_name="1st London",
             group_size=25,
+            event_type="eve",
             submitted="2025-05-01T10:00:00",
             arriving="2025-05-10T15:00:00",
             # missing 'departing'
-            facilities="Eve: Scouts",
+            facilities=["Scouts"],
         )
     assert "departing" in str(exc_info.value)
 
@@ -102,10 +105,11 @@ def test_timezone_added():
         group_type="Guides",
         group_name="2nd Manchester",
         group_size=18,
+        event_type="eve",
         submitted=datetime(2025, 5, 1, 10, 0),  # naive datetime
         arriving=datetime(2025, 5, 10, 14, 0),
         departing=datetime(2025, 5, 12, 11, 0),
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
     assert booking.submitted.tzinfo is not None
     assert booking.arriving.tzinfo is not None
@@ -119,10 +123,11 @@ def test_frozen_fields():
         group_type="Explorers",
         group_name="3rd Sheffield",
         group_size=12,
+        event_type="eve",
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
 
     # Test original_sheet_md5 is frozen
@@ -147,7 +152,7 @@ def test_frozen_fields():
 def test_valid_tracking_data():
     data = TrackingData(
         status="Confirmed",
-        invoice=True,
+        cost_estimate=500,
         notes="Booking confirmed.",
         google_calendar_id="abc123",
         pending_email_sent="2025-05-01T09:00:00",
@@ -158,7 +163,7 @@ def test_valid_tracking_data():
     )
 
     assert data.status == "Confirmed"
-    assert data.invoice is True
+    assert data.cost_estimate == 500
     assert data.pending_email_sent.tzinfo == UK_TZ
     assert data.confirm_email_sent.tzinfo == UK_TZ
     assert data.cancel_email_sent is None
@@ -166,7 +171,7 @@ def test_valid_tracking_data():
 
 def test_invalid_status():
     with pytest.raises(ValidationError) as exc_info:
-        TrackingData(status="InvalidStatus", invoice=True, notes="Bad status")
+        TrackingData(status="InvalidStatus", cost_estimate=400, notes="Bad status")
     assert "status" in str(exc_info.value)
 
 
@@ -174,7 +179,7 @@ def test_invalid_datetime_format():
     with pytest.raises(ValidationError) as exc_info:
         TrackingData(
             status="Pending",
-            invoice=False,
+            cost_estimate=600,
             notes="Invalid datetime",
             pending_email_sent="not-a-date",
         )
@@ -183,7 +188,7 @@ def test_invalid_datetime_format():
 
 
 def test_optional_fields_can_be_none():
-    data = TrackingData(status="New", invoice=False, notes="Some optional fields are missing")
+    data = TrackingData(status="New", cost_estimate=700, notes="Some optional fields are missing")
     assert data.google_calendar_id is None
     assert data.pending_email_sent is None
 
@@ -197,10 +202,11 @@ def booking_data():
         group_type="Explorers",
         group_name="3rd Sheffield",
         group_size=12,
+        event_type="eve",
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
 
 
@@ -213,7 +219,7 @@ def leader_data():
 def tracking_data():
     return TrackingData(
         status="Pending",
-        invoice=False,
+        cost_estimate=800,
         notes="Test booking",
         google_calendar_id="test-id-123",
         pending_email_sent="2025-05-01T09:30:00",
@@ -262,15 +268,16 @@ def test_invalid_live_booking():
                 group_type="Explorers",
                 group_name="3rd Sheffield",
                 group_size=12,
+                event_type="eve",
                 submitted="2025-05-02T09:30:00",
                 arriving="2025-05-10T16:00:00",
                 departing="2025-05-12T10:00:00",
-                facilities="Eve: Scouts",
+                facilities=["Scouts"],
             ),
             leader=None,  # Invalid leader data
             tracking=TrackingData(
                 status="Pending",
-                invoice=False,
+                cost_estimate=900,
                 notes="Test booking",
                 google_calendar_id="test-id-123",
                 pending_email_sent="2025-05-01T09:30:00",
@@ -319,10 +326,11 @@ def booking_data():
         group_type="Explorers",
         group_name="3rd Sheffield",
         group_size=12,
+        event_type="eve",
         submitted="2025-05-02T09:30:00",
         arriving="2025-05-10T16:00:00",
         departing="2025-05-12T10:00:00",
-        facilities="Eve: Scouts",
+        facilities=["Scouts"],
     )
 
 

@@ -19,6 +19,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 from markupsafe import Markup
@@ -33,6 +34,8 @@ from config import (
     EDIT_EMAIL_BODY_ALLOWED_TAGS,
     EMAIL_BODY_BACKUP_DIR,
     EMAIL_BODY_FILE_PATH,
+    EMAIL_ENABLED,
+    FIELD_MAPPINGS_DICT,
     LOG_FILE_PATH,
     SITENAME,
     STATIC_DIR,
@@ -41,21 +44,16 @@ from config import (
 from models.bookings import Bookings
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
-from models.utils import get_pretty_date_str, now_uk
+from models.utils import get_pretty_date_str, is_email_enabled, now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.secret_key = APP_SECRET_KEY
+app.config["EMAIL_ENABLED"] = EMAIL_ENABLED == "True"
 
 logger = setup_logger()
 logger.info("Starting")
 
 bookings = Bookings()
-
-
-@app.context_processor
-def inject_site_name():
-    """Make sitename available globally in all templates"""
-    return {"sitename": SITENAME}
 
 
 @app.route("/")
@@ -97,6 +95,7 @@ def booking_detail(booking_id):
         valid_transitions=transitions.get(rec.tracking.status, []),
         time_now=now_uk(),
         rec_list_clash=rec_list_clash,
+        bookable_facilities=FIELD_MAPPINGS_DICT.get("bookable_facilities"),
     )
 
 
@@ -118,18 +117,35 @@ def resend_email(booking_id):
 @app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
 def modify_fields(booking_id):
     """Handle modifying fields from details page."""
+
     nested = defaultdict(dict)
 
-    # names in post data are like booking.group_size, leader.name
-    # Create dict with left-side of dot as key, right-side of dot as value
-    for full_key, value in request.form.items():
+    for full_key in request.form:
         if "." in full_key:
             section, key = full_key.split(".", 1)
-            nested[section][key] = value
-        else:
-            logger.warning("No flat names in POST data please: [%s]", full_key)
 
+            # Handle facilities (multiple checkboxes → list)
+            if section == "booking" and key == "facilities":
+                nested[section][key] = request.form.getlist(full_key)
+                continue
+
+            value = request.form[full_key]
+
+            # Handle pounds → pence conversion for cost_estimate
+            if section == "tracking" and key == "cost_estimate":
+                try:
+                    value = str(round(float(value) * 100))
+                except (TypeError, ValueError):
+                    value = "0"
+
+            nested[section][key] = value
+
+        else:
+            logger.warning("Unexpected POST key without dot: [%s]", full_key)
+
+    # Apply updates to the booking
     bookings.modify_fields(booking_id, dict(nested))
+
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
@@ -310,6 +326,21 @@ def admin():
     return render_template("admin.html", current="admin", version=APP_VERSION)
 
 
+@app.route("/toggle_email", methods=["POST"])
+def toggle_email():
+    """Route to toggle the sending of emails"""
+    enabled = request.form.get("email_enabled") == "on"
+    session["email_enabled"] = enabled
+    flash(f"Email sending is now {'ENABLED' if enabled else 'DISABLED'}.", "info")
+    return redirect(request.referrer or url_for("bookings"))
+
+
+@app.context_processor
+def inject_globals():
+    """Make sitename available globally in all templates"""
+    return {"sitename": SITENAME, "is_email_enabled": is_email_enabled}
+
+
 @app.errorhandler(404)
 def page_not_found(e):
     """
@@ -388,6 +419,12 @@ def pretty_date(value, inc_time=False):
             return value
 
     return Markup(get_pretty_date_str(dt, inc_time))
+
+
+@app.template_filter("pence_to_pounds")
+def pence_to_pounds(pence):
+    """Jinja template to convert pence to pounds"""
+    return f"{pence / 100:.2f}"
 
 
 if __name__ == "__main__":

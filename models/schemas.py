@@ -10,6 +10,8 @@ from models.utils import (
     now_uk,
 )
 
+SCHEMA_VERSION = 2
+
 
 class LeaderData(BaseModel):
     """This class encapsulates the leader's personal data."""
@@ -28,10 +30,11 @@ class BookingData(BaseModel):
     group_type: str
     group_name: str
     group_size: int
+    event_type: str
     submitted: datetime = Field(frozen=True)
     arriving: datetime
     departing: datetime
-    facilities: str  # This is also our calendar event title
+    facilities: List[str]
 
     @field_validator(
         "submitted",
@@ -56,8 +59,9 @@ class TrackingData(BaseModel):
     """Class holding tracking and private data which is discarded once archived"""
 
     status: Literal["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
-    invoice: bool
+    cost_estimate: int
     notes: str
+    bookers_comment: Optional[str] = None
     google_calendar_id: Optional[str] = None
     pending_email_sent: Optional[datetime] = None
     confirm_email_sent: Optional[datetime] = None
@@ -111,6 +115,7 @@ class LiveBooking(BaseModel):
 class LiveData(BaseModel):
     """Live data that contains the active bookings"""
 
+    schema_version: int = Field(default=SCHEMA_VERSION)
     updated: datetime = Field(default_factory=now_uk)
     next_idx: int = Field(default=1)
     items: List[LiveBooking] = Field(default_factory=list)
@@ -119,5 +124,6 @@ class LiveData(BaseModel):
 class ArchiveData(BaseModel):
     """Holds expired or archived bookings"""
 
+    schema_version: int = Field(default=SCHEMA_VERSION)
     updated: datetime = Field(default_factory=now_uk)
     items: List[BookingData] = Field(default_factory=list)

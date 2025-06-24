@@ -50,8 +50,6 @@
         Pull Now
       </a>
 
-
-
       <a href="{{ url_for('archive_old_bookings') }}"
         class="btn {% if current == 'archive_old_bookings' %}btn-primary{% else %}btn-secondary{% endif %}">
         Archive Old Bookings
@@ -71,6 +69,12 @@
         class="btn {% if current == 'admin' %}btn-primary{% else %}btn-secondary{% endif %}">
         Admin
       </a>
+
+      <form method="POST" action="{{ url_for('toggle_email') }}">
+        <label for="emailSwitch">Enable Email</label>
+        <input type="checkbox" name="email_enabled" {% if is_email_enabled() %}checked{% endif %}
+          onchange="this.form.submit()">
+      </form>
     </div>
   </div>
 
