@@ -615,8 +615,7 @@ class Bookings:
         if contains == "day_visits":
             dep_time = datetime.strptime(row["departure_time"], "%H:%M:%S").time()
             end_dt = datetime.combine(start_dt.date(), dep_time).replace(tzinfo=UK_TZ)
-            # Day visit bookings are less an address, so we fake one
-            row["address"] = "The Scout Hut!"
+
         else:
             end_dt = datetime.strptime(row["departure_date_time"], "%d/%m/%Y %H:%M:%S").replace(
                 tzinfo=UK_TZ

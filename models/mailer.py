@@ -4,6 +4,7 @@ mailer.py - Provide functions to send emails from the app.
 
 import logging
 import smtplib
+from datetime import timedelta
 from email.message import EmailMessage
 
 import html2text
@@ -63,6 +64,9 @@ def _build_email_body(rec: LiveBooking):
         "rec": rec,
         "arriving_str": arriving_str,
         "departing_str": departing_str,
+        "cancel_by_str": get_pretty_date_str(
+            rec.booking.arriving - timedelta(weeks=2), full_month=True
+        ),
         "event_type": rec.booking.event_type,
     }
 
