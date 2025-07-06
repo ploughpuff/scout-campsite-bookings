@@ -68,6 +68,11 @@ def migrate_live_data(data: dict) -> dict:
                     facilities: SortedFacilities = sort_facilities(facility_str.split("+"))
                     booking["facilities"] = facilities.valid
 
+                    if "Scouts" in facilities.extra:
+                        # Ignore the "EVE: Scouts" text as not true facility
+                        facilities.extra.remove("Scouts")
+                        facilities.valid.append("Campfire Circle")
+
             b = BookingData.model_validate(booking)
 
             # Update tracking
