@@ -13,6 +13,14 @@ from typing import Type
 from pydantic import BaseModel
 
 from config import MAX_BACKUPS_TO_KEEP
+from models.schemas import (
+    SCHEMA_VERSION,
+    ArchiveData,
+    BookingData,
+    LiveData,
+    TrackingData,
+)
+from models.utils import SortedFacilities, estimate_cost, get_event_type, sort_facilities
 
 logger = logging.getLogger("app_logger")
 
@@ -30,6 +38,71 @@ def save_json(data: BaseModel, path: Path) -> None:
     write_checksum(path)
 
 
+def migrate_live_data(data: dict) -> dict:
+    """Migrate dict schema versions"""
+
+    version = data.get("schema_version", 1)
+
+    def migrate_v1_to_v2(data: dict) -> None:
+        data["schema_version"] = 2
+        items = data.get("items", [])
+
+        for item in items:
+            booking = item.get("booking")
+            tracking = item.get("tracking")
+
+            if not booking or not tracking:
+                continue
+
+            # Add event_type based on arriving/departing
+            start_dt = datetime.fromisoformat(booking.get("arriving"))
+            end_dt = datetime.fromisoformat(booking.get("departing"))
+            booking["event_type"] = get_event_type(start_dt, end_dt)
+
+            # Convert facilities from str to list if needed
+            facilities = booking.get("facilities")
+
+            if isinstance(facilities, str):
+                if ":" in facilities:
+                    _, facility_str = facilities.split(":", 1)
+                    facilities: SortedFacilities = sort_facilities(facility_str.split("+"))
+                    booking["facilities"] = facilities.valid
+
+                    if "Scouts" in facilities.extra:
+                        # Ignore the "EVE: Scouts" text as not true facility
+                        facilities.extra.remove("Scouts")
+                        facilities.valid.append("Campfire Circle")
+
+            b = BookingData.model_validate(booking)
+
+            # Update tracking
+            tracking.pop("invoice", None)
+            tracking["cost_estimate"] = estimate_cost(
+                b.event_type, b.group_type, b.group_size, b.facilities
+            )
+            if facilities.extra:
+                tracking["bookers_comment"] = ", ".join(facilities.extra)
+            TrackingData.model_validate(tracking)
+
+    while version < SCHEMA_VERSION:
+        if version == 1:
+            migrate_v1_to_v2(data)
+            version = 2
+        else:
+            raise RuntimeError(f"No migration path from version {version}")
+
+    return data
+
+
+def migrate_archive_data(data: dict) -> dict:
+    """Migrate archive data"""
+    version = data.get("schema_version", 1)
+    if version != SCHEMA_VERSION:
+        raise RuntimeError("Unexpected schema version in archive file, or missing")
+
+    return data
+
+
 def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> BaseModel | None:
     """Load and deserialize JSON file with optional checksum verification."""
     if not path.exists():
@@ -41,6 +114,13 @@ def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> 
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    if model is ArchiveData:
+        data = migrate_archive_data(data)
+    elif model is LiveData:
+        data = migrate_live_data(data)
+    else:
+        raise RuntimeError("Unrecognised JSON data type")
 
     return model.model_validate(data)
 

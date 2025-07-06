@@ -4,9 +4,17 @@ utils.py - Utility functions for use in Scout Campsite Booking.
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, time
+from typing import NamedTuple
+
+from flask import current_app, session
 
 from config import DATE_FORMAT, DATE_FORMAT_WITH_SECONDS, FIELD_MAPPINGS_DICT, UK_TZ
+
+
+def is_email_enabled():
+    """Checks session if email is enabled, or falls back to .env var"""
+    return session.get("email_enabled", current_app.config["EMAIL_ENABLED"])
 
 
 def now_uk() -> datetime:
@@ -181,3 +189,60 @@ def get_booking_prefix(description: str) -> str:
         )
     except StopIteration as exc:
         raise ValueError(f"Group description '{description}' not found.") from exc
+
+
+def get_event_type(start_dt: datetime, end_dt: datetime) -> str:
+    """Generate a facilities prefix (EVE, OVERNIGHT) from two dates"""
+    if start_dt.date() != end_dt.date():
+        rc = "overnight"
+    elif end_dt.time() < time(16, 5):
+        # Booking which end before 16:05 we class as DAY
+        rc = "day"
+    else:
+        rc = "eve"
+
+    return rc
+
+
+def estimate_cost(event_type: str, group_type: str, group_size: int, facilities: list) -> int:
+    """ "Estimate cost of booking based on group type and size"""
+    # People costs are based on event_type (day, eve, overnight)
+    # and group_type (cds, ods, sch)
+    unit = FIELD_MAPPINGS_DICT.get("charges").get(event_type).get("unit")
+    rate = FIELD_MAPPINGS_DICT.get("charges").get(event_type).get("rates").get(group_type)
+
+    if rate is None:
+        logger = logging.getLogger("app_logger")
+        logger.warning("Failed to find cost rate from field file for group [%s]", group_type)
+        cost = 0
+    elif unit == "per_person":
+        cost = rate * group_size
+    elif unit == "per_group":
+        cost = rate
+    else:
+        cost = 0
+
+    # Building cost
+    if "Roxby Hut" in facilities:
+        cost += FIELD_MAPPINGS_DICT.get("charges").get("roxby_hut").get("rates").get(group_type)
+
+    return cost
+
+
+class SortedFacilities(NamedTuple):
+    """Class to hold valid and extra facilitiey requests"""
+
+    valid: list[str]
+    extra: list[str]
+
+
+def sort_facilities(requested_facilities_list: list) -> SortedFacilities:
+    """From a list of strings, compare against bookable facilities and sort into valid and extra"""
+    rc = SortedFacilities(valid=[], extra=[])
+    for f in requested_facilities_list:
+        f = f.strip()
+        if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
+            rc.valid.append(f)
+        else:
+            rc.extra.append(f)
+    return rc

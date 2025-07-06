@@ -50,6 +50,14 @@ def get_sheet_data() -> dict:
         # Normalize column headers for each row
         normalized_sheet_data = [{normalize_key(k): v for k, v in rec.items()} for rec in new_data]
 
+        # Override or create new keys as defined in the config table
+        for b in normalized_sheet_data:
+            if sheet_cfg.get("address"):
+                b["address"] = sheet_cfg.get("address")
+
+            if sheet_cfg.get("facilities"):
+                b["facilities"] = sheet_cfg.get("facilities")
+
         all_data.append(
             {"sheet_data": normalized_sheet_data, "group_type": group_type, "contains": contains}
         )
