@@ -59,10 +59,6 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 EMAIL_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-EMAIL_BODY_FILE_PATH = Path(EMAIL_TEMP_DIR) / "confirmed_body.html"
-EMAIL_BODY_BACKUP_DIR = Path(EMAIL_TEMP_DIR) / "backups"
-EMAIL_BODY_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-
 LOG_FILE_PATH = Path(DATA_DIR) / "app.log"
 DATA_FILE_PATH = Path(DATA_DIR) / "bookings.json"
 ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
@@ -96,26 +92,6 @@ DATE_FORMAT_WITH_SECONDS = "%Y-%m-%d %H:%M:%S"
 ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS = 90
 
 MAX_BACKUPS_TO_KEEP = 50  # Keep 50 recent JSON backups for safety
-
-EDIT_EMAIL_BODY_ALLOWED_TAGS = [
-    "p",
-    "ul",
-    "li",
-    "b",
-    "i",
-    "strong",
-    "em",
-    "a",
-    "br",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-]
-EDIT_EMAIL_BODY_ALLOWED_ATTRIBS = {"a": ["href", "title"]}
-
 
 if not FIELD_MAPPING_PATH.exists():
     # Needs moving.  Fake some data so pytest runs

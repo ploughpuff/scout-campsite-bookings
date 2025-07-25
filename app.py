@@ -6,12 +6,10 @@ Handles routing, app initialization, and integrates with the Bookings class.
 
 import io
 import os
-import shutil
 import zipfile
 from collections import defaultdict
 from datetime import datetime
 
-import bleach
 from flask import (
     Flask,
     flash,
@@ -30,10 +28,6 @@ from config import (
     APP_VERSION,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
-    EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
-    EDIT_EMAIL_BODY_ALLOWED_TAGS,
-    EMAIL_BODY_BACKUP_DIR,
-    EMAIL_BODY_FILE_PATH,
     EMAIL_ENABLED,
     FIELD_MAPPINGS_DICT,
     LOG_FILE_PATH,
@@ -207,76 +201,6 @@ def offline_analysis():
         as_attachment=True,
         mimetype="application/zip",
     )
-
-
-@app.route("/edit_email_body", methods=["GET", "POST"])
-def edit_email_body():
-    """Route to edit the confirm email body"""
-
-    # If the form is submitted, sanitize and save the content back to the file
-    if request.method == "POST":
-        new_content = request.form["email_content"]
-
-        # Sanitize the HTML input, allowing only specific tags and attributes
-        sanitized_content = bleach.clean(
-            new_content,
-            tags=EDIT_EMAIL_BODY_ALLOWED_TAGS,
-            attributes=EDIT_EMAIL_BODY_ALLOWED_ATTRIBS,
-        )
-
-        # Save sanitized content to the file
-        try:
-            backup_email_template()
-            with open(EMAIL_BODY_FILE_PATH, "w", encoding="utf-8") as file:
-                file.write(sanitized_content)
-            flash("Email template updated successfully!", "success")
-
-        except (FileNotFoundError, PermissionError) as e:
-            flash(f"Error updating the email template: {e}", "danger")
-            logger.exception("Error updating the email template: [%s]", str(e))
-            return redirect(url_for("edit_email_body"))
-
-    # Read the current content of the template file to display
-    try:
-        with open(EMAIL_BODY_FILE_PATH, "r", encoding="utf-8") as file:
-            current_content = file.read()
-    except (FileNotFoundError, PermissionError) as e:
-        flash(f"Error reading the email template: {e}", "danger")
-        logger.exception("Error reading email confirm body template: [%s]", str(e))
-        current_content = ""
-
-    return render_template(
-        "edit_email_body.html",
-        content=current_content,
-        backups=get_backup_list(),
-        allowed_tags=EDIT_EMAIL_BODY_ALLOWED_TAGS,
-    )
-
-
-def backup_email_template():
-    """Backup the current email body to allow retrieval at later date"""
-    if os.path.exists(EMAIL_BODY_FILE_PATH):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = os.path.join(EMAIL_BODY_BACKUP_DIR, f"confirmed_body_{timestamp}.html")
-        shutil.copy2(EMAIL_BODY_FILE_PATH, backup_path)
-
-
-def get_backup_list():
-    """List all the files in the backup folder"""
-    if not os.path.exists(EMAIL_BODY_BACKUP_DIR):
-        return []
-    return sorted(os.listdir(EMAIL_BODY_BACKUP_DIR), reverse=True)  # latest first
-
-
-@app.route("/admin/load_backup")
-def load_backup():
-    """Called from JS, return file content for display in textarea box"""
-    filename = request.args.get("filename")
-    backup_path = os.path.join(EMAIL_BODY_BACKUP_DIR, filename)
-    if os.path.isfile(backup_path):
-        with open(backup_path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "Backup not found", 404
 
 
 @app.route("/admin/reload_json")
