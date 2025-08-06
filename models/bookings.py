@@ -351,7 +351,10 @@ class Bookings:
             # Redo the event type as a time change may have altered it
             rec.booking.event_type = get_event_type(rec.booking.arriving, rec.booking.departing)
 
-            self._update_cost_estimate(rec)
+            # Only update the cost estimate if it was not in the update payload otherwise
+            # the manual cost estimate is lost
+            if "cost_estimate" not in changed_keys:
+                self._update_cost_estimate(rec)
 
             # Only send modified emails if the booking is confirmed.
             # This avoids sending emails for pending, and then another staight after for comfirmed
