@@ -629,11 +629,11 @@ class Bookings:
         #
         ## Map the google sheet fields to the Bookings class keys in one hit
         leader_fields = {
-            key: row[src_field]
+            key: row[src_field].strip()
             for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("leader").items()
         }
         booking_fields = {
-            key: row[src_field]
+            key: row[src_field].strip()
             for key, src_field in FIELD_MAPPINGS_DICT.get("key_mapping").get("booking").items()
         }
 
