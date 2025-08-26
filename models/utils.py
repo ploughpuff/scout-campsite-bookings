@@ -5,7 +5,7 @@ utils.py - Utility functions for use in Scout Campsite Booking.
 import logging
 import re
 from datetime import datetime, time
-from typing import NamedTuple
+from typing import NamedTuple, Sequence
 
 from flask import current_app, session
 
@@ -204,29 +204,57 @@ def get_event_type(start_dt: datetime, end_dt: datetime) -> str:
     return rc
 
 
-def estimate_cost(event_type: str, group_type: str, group_size: int, facilities: list) -> int:
-    """ "Estimate cost of booking based on group type and size"""
-    # People costs are based on event_type (day, eve, overnight)
-    # and group_type (cds, ods, sch)
-    unit = FIELD_MAPPINGS_DICT.get("charges").get(event_type).get("unit")
-    rate = FIELD_MAPPINGS_DICT.get("charges").get(event_type).get("rates").get(group_type)
+def estimate_cost(
+    event_type: str, group_type: str, group_size: int, facilities: Sequence[str]
+) -> int:
+    """Estimate cost of a booking based on event/group types, size, and facilities.
+    Robust against missing keys in FIELD_MAPPINGS_DICT.
+    """
+    logger = logging.getLogger("app_logger")
+    charges = FIELD_MAPPINGS_DICT.get("charges") or {}
 
-    if rate is None:
-        logger = logging.getLogger("app_logger")
-        logger.warning("Failed to find cost rate from field file for group [%s]", group_type)
-        cost = 0
-    elif unit == "per_person":
-        cost = rate * group_size
-    elif unit == "per_group":
-        cost = rate
+    # --- Base event pricing ---
+    event_cfg = charges.get(event_type) or {}
+    unit = event_cfg.get("unit")
+    rate = (event_cfg.get("rates") or {}).get(group_type)
+
+    cost = 0
+
+    if not event_cfg:
+        logger.warning(
+            "Unknown event_type '%s' in charges mapping; defaulting cost to 0.", event_type
+        )
+    elif unit not in {"per_person", "per_group"}:
+        logger.warning(
+            "Unknown/absent unit for event_type '%s' (got %r); defaulting cost to 0.",
+            event_type,
+            unit,
+        )
+    elif rate is None:
+        logger.warning(
+            "No rate for group_type '%s' under event_type '%s'; defaulting cost to 0.",
+            group_type,
+            event_type,
+        )
     else:
-        cost = 0
+        if group_size < 0:
+            logger.warning("Negative group_size %s; treating as 0.", group_size)
+            group_size = 0
+        cost += rate * group_size if unit == "per_person" else rate
 
-    # Building cost
+    # --- Facility add-ons ---
     if "Roxby Hut" in facilities:
-        cost += FIELD_MAPPINGS_DICT.get("charges").get("roxby_hut").get("rates").get(group_type)
+        rox_cfg = charges.get("roxby_hut") or {}
+        rox_rate = (rox_cfg.get("rates") or {}).get(group_type)
+        if rox_rate is None:
+            logger.warning(
+                "No Roxby Hut rate for group_type '%s'; not adding hut surcharge.", group_type
+            )
+        else:
+            cost += rox_rate  # assumes per-group for hut as in your original code
 
-    return cost
+    # Ensure int return (if your rates are ints this is a no-op)
+    return int(cost)
 
 
 class SortedFacilities(NamedTuple):
