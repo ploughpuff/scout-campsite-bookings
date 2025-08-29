@@ -205,7 +205,11 @@ def get_event_type(start_dt: datetime, end_dt: datetime) -> str:
 
 
 def estimate_cost(
-    event_type: str, group_type: str, group_size: int, facilities: Sequence[str]
+    event_type: str,
+    num_overnights: int,
+    group_type: str,
+    group_size: int,
+    facilities: Sequence[str],
 ) -> int:
     """Estimate cost of a booking based on event/group types, size, and facilities.
     Robust against missing keys in FIELD_MAPPINGS_DICT.
@@ -240,7 +244,7 @@ def estimate_cost(
         if group_size < 0:
             logger.warning("Negative group_size %s; treating as 0.", group_size)
             group_size = 0
-        cost += rate * group_size if unit == "per_person" else rate
+        cost += rate * num_overnights * group_size if unit == "per_person" else rate
 
     # --- Facility add-ons ---
     if "Roxby Hut" in facilities:
