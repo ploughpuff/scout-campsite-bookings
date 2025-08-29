@@ -77,8 +77,9 @@ def migrate_live_data(data: dict) -> dict:
 
             # Update tracking
             tracking.pop("invoice", None)
+            num_overnights = (b.departing.date() - b.arriving.date()).days
             tracking["cost_estimate"] = estimate_cost(
-                b.event_type, b.group_type, b.group_size, b.facilities
+                b.event_type, num_overnights, b.group_type, b.group_size, b.facilities
             )
             if facilities.extra:
                 tracking["bookers_comment"] = ", ".join(facilities.extra)
