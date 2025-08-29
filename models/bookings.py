@@ -168,7 +168,11 @@ class Bookings:
 
     def _estimate_cost(self, b: BookingData) -> int:
         """Estimate the cost of a booking in pence"""
-        return estimate_cost(b.event_type, b.group_type, b.group_size, b.facilities)
+
+        # Count how many midnights passed between start and end
+        num_overnights = (b.departing.date() - b.arriving.date()).days
+
+        return estimate_cost(b.event_type, num_overnights, b.group_type, b.group_size, b.facilities)
 
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
