@@ -507,41 +507,56 @@ class Bookings:
 
         return {"good": good, "missing": missing, "delete": delete, "extra": extra}
 
-    def archive_old_bookings(self):
-        """Move bookings with status 'Archived' to archive.json and remove from bookings.json."""
+    def archive_old_bookings(self) -> bool:
+        """
+        Archive or delete old bookings:
+        - 'Completed' bookings 90+ days after departure are archived.
+        - 'Cancelled' bookings 90+ days after departure are deleted.
+        """
+        now = now_uk()
         to_archive = []
+        remaining_live = []
 
         for rec in self.live.items:
             archive_date = rec.booking.departing + timedelta(
                 days=ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS
             )
 
-            if rec.tracking.status == "Completed" and archive_date < now_uk():
+            # Keep if not yet due for archiving/deletion
+            if archive_date > now:
+                remaining_live.append(rec)
+                continue
 
+            if rec.tracking.status == "Completed":
                 delete_calendar_entry(rec)
 
-                # Take a deep copy of this booking and remove all GDPR data
+                # Deep copy only the booking part (exclude GDPR-related data)
                 archive_copy = copy.deepcopy(rec.booking)
                 to_archive.append(archive_copy)
 
                 self.logger.info("%s archived", rec.booking.id)
 
-                # Remove this booking from the main data table
-                self.live.items = [
-                    this for this in self.live.items if this.booking.id != rec.booking.id
-                ]
+            elif rec.tracking.status == "Cancelled":
+                self.logger.info("%s cancelled booking deleted (not archived)", rec.booking.id)
+
+            else:
+                # Keep all other statuses
+                remaining_live.append(rec)
+
+        # Update live items
+        self.live.items = remaining_live
 
         if not to_archive:
             self.logger.info("No bookings to archive.")
             return False
 
-        # Handle archive file
+        # Append to archive (create new list if first time)
         if ARCHIVE_FILE_PATH.exists():
             self.archive.items.extend(to_archive)
         else:
             self.archive.items = to_archive
 
-        # Save the modified data files to json
+        # Save updated files
         save_json(self.live, DATA_FILE_PATH)
         save_json(self.archive, ARCHIVE_FILE_PATH)
         return True
