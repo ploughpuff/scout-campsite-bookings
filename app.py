@@ -73,15 +73,13 @@ def booking_detail(booking_id):
 
     transitions = bookings.get_states()["transitions"]
 
-    # Only need to check if calendar is free when state is New or Pending
-    rec_list_clash = None
-    if rec.tracking.status in ["New", "Pending"]:
-        rec_list_clash = bookings.get_bookings_list(
-            date_range=(rec.booking.arriving, rec.booking.departing)
-        )
+    # Check if calendar is free for the booking period
+    rec_list_clash = bookings.get_bookings_list(
+        date_range=(rec.booking.arriving, rec.booking.departing)
+    )
 
-        # Remove ourself from list of clashes
-        rec_list_clash = [rec for rec in rec_list_clash if rec.booking.id != booking_id]
+    # Remove ourself from list of clashes
+    rec_list_clash = [rec for rec in rec_list_clash if rec.booking.id != booking_id]
 
     return render_template(
         "booking.html",

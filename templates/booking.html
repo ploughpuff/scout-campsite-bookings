@@ -192,7 +192,8 @@ Booking Details
         {% if 'Confirmed' in valid_transitions %}
         <form method="POST" action="{{ url_for('change_status', new_status='Confirmed', booking_id=rec.booking.id) }}"
           class="d-inline" onsubmit="showLoadingOverlay()">
-          <button id="confirmButton" type="submit" class="btn btn-success">✔️ Confirm</button>
+          <button id="confirmButton" type="submit" class="btn btn-success">✔️ Confirm{% if rec_list_clash %} ignoring
+            clash!{% endif %}</button>
         </form>
         {% endif %}
         {% if 'Cancelled' in valid_transitions %}
