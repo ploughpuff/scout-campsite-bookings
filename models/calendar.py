@@ -176,6 +176,7 @@ def del_cal_event(google_calendar_id: str, booking_id: str):
             return google_calendar_id
 
         # Attempt delete
+        # pylint: disable=no-member
         service.events().delete(calendarId=CALENDAR_ID, eventId=google_calendar_id).execute()
 
         return None
