@@ -163,13 +163,10 @@ def _del_from_rec(rec: LiveBooking):
 
 
 def del_cal_event(google_calendar_id: str, booking_id: str):
-    """Delete an event from the calendar
-
-    Args:
-        google_calendar_id (str): String from the booking record corresponding to the calendar ID.
+    """Delete an event from the calendar.
 
     Returns:
-        None on success, or google_calendar_id on error
+        None on success (including if already deleted), or google_calendar_id on error.
     """
     try:
         service = _build_service()
@@ -178,9 +175,20 @@ def del_cal_event(google_calendar_id: str, booking_id: str):
             logger.info("Unable to delete calendar event as no ID available: %s", booking_id)
             return google_calendar_id
 
-        # pylint: disable=no-member
+        # Attempt delete
         service.events().delete(calendarId=CALENDAR_ID, eventId=google_calendar_id).execute()
+
         return None
+
     except HttpError as e:
+        # If Google says "Resource has been deleted", treat it as success
+        if getattr(e, "status_code", None) == 410:
+            logger.info(
+                "Calendar event already deleted for booking %s (410 Gone). Treating as success.",
+                booking_id,
+            )
+            return None
+
+        # Otherwise, it's a real error
         logger.error("Failed to delete calendar event for booking: %s %s", booking_id, str(e))
         return google_calendar_id
