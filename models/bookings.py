@@ -226,6 +226,7 @@ class Bookings:
 
         for rec in self.archive.items:
 
+            # Now the archive bookings
             year = rec.arriving.year
             if not year:
                 continue
