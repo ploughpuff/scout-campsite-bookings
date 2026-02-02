@@ -244,8 +244,10 @@ def show_archived_bookings():
 
 @app.route("/admin")
 def admin():
-    """Show the Admin dashboard"""
-    return render_template("admin.html", current="admin", version=APP_VERSION)
+    """Show the Admin dashboard with stats too"""
+
+    stats_data = bookings.get_yearly_stats()
+    return render_template("admin.html", current="admin", version=APP_VERSION, stats=stats_data)
 
 
 @app.route("/toggle_email", methods=["POST"])

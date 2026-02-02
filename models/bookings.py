@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple, get_args
+from collections import defaultdict, Counter
 
 from flask import flash
 from pydantic import BaseModel, ValidationError
@@ -176,6 +177,85 @@ class Bookings:
 
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
+
+    def get_yearly_stats(self) -> list[dict]:
+        """
+        Build statistics for every year present in the booking data.
+        Returns a list of dicts sorted by year descending.
+        """
+
+        open_statuses = {
+            "New",
+            "Pending",
+            "Confirmed",
+        }
+        day_events = {"day", "eve"}
+
+        years = defaultdict(
+            lambda: {
+                "day_total_visitors": 0,
+                "day_group_counter": Counter(),
+                "ovr_total_campers": 0,
+                "ovr_group_counter": Counter(),
+            }
+        )
+
+        open_bookings = 0
+
+        for rec in self.live.items:
+
+            # Ignore cancelled bookings
+            if rec.tracking.status == "Cancelled":
+                continue
+
+            # Count open bookings
+            if rec.tracking.status in open_statuses:
+                open_bookings += 1
+                continue
+
+            year = rec.booking.arriving.year
+            if not year:
+                continue
+
+            if rec.booking.event_type in day_events:
+                years[year]["day_total_visitors"] += rec.booking.group_size
+                years[year]["day_group_counter"][rec.booking.group_name] += 1
+            else:
+                years[year]["ovr_total_campers"] += rec.booking.group_size
+                years[year]["ovr_group_counter"][rec.booking.group_name] += 1
+
+        for rec in self.archive.items:
+
+            year = rec.arriving.year
+            if not year:
+                continue
+
+            if rec.event_type in day_events:
+                years[year]["day_total_visitors"] += rec.group_size
+                years[year]["day_group_counter"][rec.group_name] += 1
+            else:
+                years[year]["ovr_total_campers"] += rec.group_size
+                years[year]["ovr_group_counter"][rec.group_name] += 1
+
+        # ---- Convert to sorted output ----
+        output = []
+
+        for year in sorted(years.keys(), reverse=True):
+            data = years[year]
+
+            output.append(
+                {
+                    "year": year,
+                    "day_total_visitors": data["day_total_visitors"],
+                    "day_total_groups": len(data["day_group_counter"]),
+                    "ovr_total_campers": data["ovr_total_campers"],
+                    "ovr_total_groups": len(data["ovr_group_counter"]),
+                    "day_groups": data["day_group_counter"].most_common(),
+                    "ovr_groups": data["ovr_group_counter"].most_common(),
+                }
+            )
+
+        return {"open_bookings": open_bookings, "years": output}
 
     def get_bookings_list(
         self,

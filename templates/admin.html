@@ -17,4 +17,32 @@
     <strong>Running Version:</strong> {{ version }}
 </div>
 
+<hr>
+
+<h1>Booking Stats</h1>
+
+<h2>Open Bookings: {{ stats.open_bookings }}</h2>
+
+{% for y in stats.years %}
+<hr>
+<h2>{{ y.year }}</h2>
+
+<p>Total Day Visitors: {{ y.day_total_visitors }} from {{ y.day_total_groups }} Groups</p>
+<p>Total Overnight Campers: {{ y.ovr_total_campers }} from {{ y.ovr_total_groups }}</p>
+
+<h3>Day Groups</h3>
+<ol>
+    {% for group, count in y.day_groups %}
+    <li>{{ group }} = {{ count }}</li>
+    {% endfor %}
+</ol>
+
+<h3>Overnight Groups</h3>
+<ol>
+    {% for group, count in y.ovr_groups %}
+    <li>{{ group }} = {{ count }}</li>
+    {% endfor %}
+</ol>
+{% endfor %}
+
 {% endblock %}
