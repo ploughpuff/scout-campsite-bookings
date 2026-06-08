@@ -247,15 +247,27 @@ def estimate_cost(
         cost += rate * num_overnights * group_size if unit == "per_person" else rate
 
     # --- Facility add-ons ---
-    if "Roxby Hut" in facilities:
-        rox_cfg = charges.get("roxby_hut") or {}
-        rox_rate = (rox_cfg.get("rates") or {}).get(group_type)
-        if rox_rate is None:
+    # Facilities that carry a surcharge are mapped to a charges key in the config,
+    # so adding/removing a chargeable facility needs no code change here.
+    facility_charges = FIELD_MAPPINGS_DICT.get("facility_charges") or {}
+    for facility in facilities:
+        charge_key = facility_charges.get(facility)
+        if not charge_key:
+            continue  # facility carries no surcharge
+
+        fac_cfg = charges.get(charge_key) or {}
+        fac_rate = (fac_cfg.get("rates") or {}).get(group_type)
+        if fac_rate is None:
             logger.warning(
-                "No Roxby Hut rate for group_type '%s'; not adding hut surcharge.", group_type
+                "No %s rate for group_type '%s'; not adding surcharge.", facility, group_type
             )
-        else:
-            cost += rox_rate  # assumes per-group for hut as in your original code
+            continue
+
+        cost += (
+            fac_rate * num_overnights * group_size
+            if fac_cfg.get("unit") == "per_person"
+            else fac_rate
+        )
 
     # Ensure int return (if your rates are ints this is a no-op)
     return int(cost)

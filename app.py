@@ -164,7 +164,7 @@ def get_logs():
     if not os.path.exists(LOG_FILE_PATH):
         return "", 204
 
-    with open(LOG_FILE_PATH, "r", encoding="latin-1") as f:
+    with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
 
     if level_filter:

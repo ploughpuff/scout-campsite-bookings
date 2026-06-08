@@ -63,27 +63,9 @@ def test_only(func):
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        print(f"test_only wrapper triggered for: {func.__name__}")
         if os.getenv("APP_ENV") != "test":
             raise RuntimeError("test_only function called outside of test environment")
         return func(*args, **kwargs)
-
-    return wrapper
-
-
-def integrity_check(method):
-    """Decorator function to perform integrity check on data"""
-
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        result = method(self, *args, **kwargs)
-
-        try:
-            self.check_integrity()
-        except RuntimeError as e:
-            raise RuntimeError(f"Failed after {method.__name__}(): {e}") from e
-
-        return result
 
     return wrapper
 
@@ -111,32 +93,12 @@ class Bookings:
         save_json(instance, path)
         return instance
 
-    def check_integrity(self):
-        """Helper function via decorator to check the integrity of booking data"""
-        problems = []
-
-        for rec in self.live.items + self.archive.items:
-            booking = (
-                BookingData(**rec) if isinstance(rec, BookingData) else BookingData(**rec.booking)
-            )
-            if not booking.is_valid():
-                problems.append(
-                    {
-                        "booking": booking.id,
-                        "errors": booking.get_problematic_data(),
-                    }
-                )
-
-        if problems:
-            raise RuntimeError(f"Integrity check failed with problems: {problems}")
-
     @test_only
     def set_test_data(self, bookings, archive):
         """Setter method to overwrite data for testing purposes"""
         self.live = bookings
         self.archive = archive
 
-    # @integrity_check
     def load(self, use_checksum: bool = False):
         """Reload the bookings json file from disk. Create empty structure if file not found"""
         self.live = load_json(DATA_FILE_PATH, LiveData, use_checksum)
@@ -178,7 +140,7 @@ class Bookings:
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
 
-    def get_yearly_stats(self) -> list[dict]:
+    def get_yearly_stats(self) -> dict:
         """
         Build statistics for every year present in the booking data.
         Returns a list of dicts sorted by year descending.
@@ -482,8 +444,6 @@ class Bookings:
                 return False
 
         rec.tracking.status = to_status
-
-        save_json(self.live, DATA_FILE_PATH)
         return True
 
     def _add_to_notes(self, tracking: TrackingData, new_note: str):
@@ -519,8 +479,8 @@ class Bookings:
                 rec.tracking.status = new_status
                 save_json(self.live, DATA_FILE_PATH)
                 flash(
-                    f"{rec.booking.id} Auto Status Change: From: {rec.tracking.status} "
-                    f"To: {new_status} now booking has passed",
+                    f"{rec.booking.id} Auto Status Change: From: [Comfirmed] "
+                    f"To: [{new_status}] now booking has passed",
                     "warning",
                 )
 

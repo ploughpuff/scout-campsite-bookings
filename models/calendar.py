@@ -74,7 +74,7 @@ def update_calendar_entry(rec: LiveBooking):
     if not rec.tracking.status:
         logger.error("Unable to add event.  Status not found: %s", rec.booking.id)
 
-    elif rec.tracking.status in ["Confirmed", "Completed", "Invoiced"]:
+    elif rec.tracking.status in ["Confirmed", "Completed", "Invoice"]:
         rec.tracking.google_calendar_id = _add_or_mod_event(rec)
 
     elif rec.tracking.status in ["Cancelled", "Archived"]:

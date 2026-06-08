@@ -104,7 +104,6 @@ def _create_email_message(body: str, rec: LiveBooking, subject_append_str: str =
     msg["To"] = rec.leader.email
 
     h = html2text.HTML2Text()
-    h.body = body
     body_text = h.handle(body)
 
     msg.set_content(body_text)
