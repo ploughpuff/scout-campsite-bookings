@@ -1,0 +1,31 @@
+login to jam as admin
+
+cd /volume1/docker/riffhams-site-data/
+
+# Delete old tar images
+# Delete contents of /data if you want a fresh install
+
+# Load new image to docker
+sudo docker load -i scout-campsite-bookings-20260608-2226.tar
+
+# Create :latest tag pointing at new image
+sudo docker tag scout-campsite-bookings:20260608-2226 scout-campsite-bookings:latest
+
+# Run docker compose to make container and start
+sudo docker-compose up -d
+
+
+v1.4.3 tagged and running on Jam 25th May 2025
+v1.4.5 tagged and running on Jam 19th Jun 2025 - Fixed issue with Day Visits missing leader address
+v2.0.0 tagged and running on Jam 6th July 2025 - Moved to schema v2, added cost estimate, facilities
+v2.0.1 tagged and running on Jam 6th Aug 2025 - Fixed issue where manual pricing was overwritten by automatic cost estimator
+v2.0.2 tagged and running on Jam 26th Aug 2025 - Better handle group name not found in field mappings
+v2.0.3 tagged and running on Jam 29th Aug 2025 - Fixed cost estimate only being for one day.  Now considers multi-day overnights
+v2.0.4 tagged and running on Jam 4th Sept 2025 - Improved archive old bookings function
+v2.0.5 tagged and running on Jam 6th Nov 2025 - Improved del_cal_event() to handle already deleted entries
+v2.1.0 tagged and running on Jam 2nd Feb 2026 - Added STATS section to Admin page
+v2.1.1 tagged and running on Jam 8th June 2026 - 10 bug fixes from Claude.  All minor.
+--- New deploy process from 9th July 2026 (repo now lives at /volume1/docker/scout-campsite-bookings) ---
+Image is built ON the NAS; no more tar/load/tag. From Windows just run:
+    powershell scripts\deploy.ps1
+(or manually: ssh claude@jam "cd /volume1/docker/scout-campsite-bookings && sudo APP_VERSION=<ver> /usr/local/bin/docker compose up -d --build")

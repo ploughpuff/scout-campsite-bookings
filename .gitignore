@@ -1,4 +1,5 @@
 .env
+/docker-mnt
 /config
 /email_templates
 /data

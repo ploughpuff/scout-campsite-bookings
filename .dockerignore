@@ -17,6 +17,7 @@ Dockerfile
 docker-compose.yml
 *.log
 
+docker-mnt
 /data
 /email_templates
 /config
