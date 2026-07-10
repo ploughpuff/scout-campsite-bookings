@@ -45,10 +45,6 @@ XERO_API = "https://api.xero.com/api.xro/2.0"
 # Xero being down must not hang gunicorn's single worker indefinitely
 REQUEST_TIMEOUT = 20
 
-# Xero allows at most 5 contact persons per contact
-MAX_CONTACT_PERSONS = 5
-
-
 class XeroError(Exception):
     """Xero API failure with a message safe to flash to the user."""
 
@@ -327,51 +323,6 @@ def create_contact(group_name: str, leader: LeaderData) -> dict:
     return contact
 
 
-def ensure_leader_on_contact(contact_id: str, leader: LeaderData) -> str:
-    """Make sure the leader is on the Xero contact so they receive the invoice email.
-
-    Returns a short note describing what was done.
-    """
-    data = _request("GET", f"Contacts/{contact_id}")
-    contact = data["Contacts"][0]
-
-    leader_email = leader.email.strip().lower()
-    existing_emails = [str(contact.get("EmailAddress", "")).lower()] + [
-        str(p.get("EmailAddress", "")).lower() for p in contact.get("ContactPersons", [])
-    ]
-    if leader_email in existing_emails:
-        return f"Leader {leader.email} already on Xero contact"
-
-    persons = contact.get("ContactPersons", [])
-    if len(persons) >= MAX_CONTACT_PERSONS:
-        return (
-            f"Leader {leader.email} NOT added to Xero contact: "
-            f"already at Xero's {MAX_CONTACT_PERSONS}-person limit"
-        )
-
-    first, last = _split_name(leader.name)
-    # ContactPersons is replace-on-write, so the existing list must be re-sent in full
-    payload = {
-        "Contacts": [
-            {
-                "ContactID": contact_id,
-                "ContactPersons": persons
-                + [
-                    {
-                        "FirstName": first,
-                        "LastName": last,
-                        "EmailAddress": leader.email,
-                        "IncludeInEmails": True,
-                    }
-                ],
-            }
-        ]
-    }
-    _request("POST", "Contacts", json_body=payload)
-    logger.info("Added leader [%s] to Xero contact [%s]", leader.email, contact_id)
-    return f"Leader {leader.email} added to Xero contact"
-
-
 #
 ## Invoices
 def build_invoice_description(b: BookingData) -> str:
@@ -497,7 +448,11 @@ def find_invoice_by_reference(booking_id: str) -> dict | None:
     data = _request("GET", "Invoices", params={"where": f'Reference=="{booking_id}"'})
     for inv in data.get("Invoices", []):
         if inv.get("Status") not in ("VOIDED", "DELETED"):
-            return {"invoice_id": inv["InvoiceID"], "invoice_number": inv.get("InvoiceNumber", "")}
+            return {
+                "invoice_id": inv["InvoiceID"],
+                "invoice_number": inv.get("InvoiceNumber", ""),
+                "due_date": (inv.get("DueDateString") or "")[:10],
+            }
     return None
 
 
@@ -507,12 +462,13 @@ def create_invoice(rec: LiveBooking, contact_id: str) -> dict:
         raise XeroError(f"Refusing to raise a zero-amount invoice for {rec.booking.id}")
 
     today = now_uk().date()
+    due_date = today + timedelta(days=XERO_INVOICE_DUE_DAYS)
     invoice = {
         "Type": "ACCREC",
         "Status": "AUTHORISED",
         "Contact": {"ContactID": contact_id},
         "Date": today.isoformat(),
-        "DueDate": (today + timedelta(days=XERO_INVOICE_DUE_DAYS)).isoformat(),
+        "DueDate": due_date.isoformat(),
         "Reference": rec.booking.id,
         "LineAmountTypes": "NoTax" if XERO_TAX_TYPE == "NONE" else "Exclusive",
         "LineItems": build_invoice_line_items(rec),
@@ -527,9 +483,37 @@ def create_invoice(rec: LiveBooking, contact_id: str) -> dict:
     logger.info(
         "Xero invoice [%s] raised for booking [%s]", created.get("InvoiceNumber"), rec.booking.id
     )
-    return {"invoice_id": created["InvoiceID"], "invoice_number": created.get("InvoiceNumber", "")}
+    return {
+        "invoice_id": created["InvoiceID"],
+        "invoice_number": created.get("InvoiceNumber", ""),
+        "due_date": due_date.isoformat(),
+    }
 
 
-def email_invoice(invoice_id: str):
-    """Ask Xero to email the invoice using the org's branding template"""
-    _request("POST", f"Invoices/{invoice_id}/Email", json_body={})
+def get_invoice_pdf(invoice_id: str) -> bytes:
+    """Fetch the rendered invoice PDF (uses the invoice's branding theme)"""
+    headers = {
+        "Authorization": f"Bearer {token_manager.get_access_token()}",
+        "Xero-tenant-id": token_manager.get_tenant_id(),
+        "Accept": "application/pdf",
+    }
+    try:
+        resp = requests.get(
+            f"{XERO_API}/Invoices/{invoice_id}", headers=headers, timeout=REQUEST_TIMEOUT
+        )
+    except requests.RequestException as e:
+        raise XeroError(f"Could not fetch invoice PDF: {e}") from e
+
+    if not resp.ok:
+        raise XeroError(f"Invoice PDF fetch failed [{resp.status_code}]")
+    return resp.content
+
+
+def get_online_invoice_url(invoice_id: str) -> str | None:
+    """Xero's shareable view/pay link for the invoice; None if unavailable"""
+    try:
+        data = _request("GET", f"Invoices/{invoice_id}/OnlineInvoice")
+        return data["OnlineInvoices"][0]["OnlineInvoiceUrl"]
+    except (XeroError, KeyError, IndexError) as e:
+        logger.warning("No online invoice URL for [%s]: %s", invoice_id, e)
+        return None

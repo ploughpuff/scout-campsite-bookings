@@ -4,8 +4,8 @@
 <h2>Link Group to Xero Contact</h2>
 
 <p>
-  No Xero contact named <strong>{{ rec.booking.group_name }}</strong> was found.
-  Pick the existing contact this group belongs to, or confirm creating a new one.
+  Confirm which Xero contact <strong>{{ rec.booking.group_name }}</strong> belongs to.
+  Pick an existing contact, search for one under a different name, or create a new one.
   Your choice is remembered, so this only happens once per group.
 </p>
 
@@ -21,15 +21,22 @@
 </div>
 
 <form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}"
-  onsubmit="showLoadingOverlay()">
+  class="d-flex gap-2 mb-3">
+  <input type="text" name="search_term" class="form-control" style="max-width: 24rem;"
+    placeholder="Search Xero contacts by name or email..." value="{{ search_term or '' }}">
+  <button type="submit" class="btn btn-secondary">🔍 Search Xero</button>
+</form>
+
+<form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}"
+  id="xeroChoiceForm" onsubmit="showLoadingOverlay()">
 
   {% if candidates %}
-  <h5>Similar contacts already in Xero</h5>
+  <h5>{% if search_term %}Search results for "{{ search_term }}"{% else %}Possible matches in Xero{% endif %}</h5>
   <div class="list-group mb-3">
     {% for c in candidates %}
     <label class="list-group-item d-flex gap-2">
       <input class="form-check-input flex-shrink-0" type="radio" name="xero_choice" value="{{ c.contact_id }}"
-        data-contact-name="{{ c.name }}">
+        data-contact-name="{{ c.name }}" {% if loop.first %}checked{% endif %}>
       <span>
         {{ c.name }}
         {% if c.email %}<small class="text-muted">({{ c.email }})</small>{% endif %}
@@ -38,7 +45,11 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="text-muted">No similar contacts were found in Xero.</p>
+  <p class="text-muted">
+    {% if search_term %}No Xero contacts matched "{{ search_term }}".
+    {% else %}No similar contacts were found in Xero.{% endif %}
+    Try the search box above if this group might exist under a different name.
+  </p>
   {% endif %}
 
   <div class="list-group mb-3">
@@ -72,7 +83,7 @@
 </div>
 
 <script>
-  document.querySelector('form[action*="raise_invoice"]').addEventListener('submit', function (e) {
+  document.getElementById('xeroChoiceForm').addEventListener('submit', function (e) {
     const chosen = this.querySelector('input[name="xero_choice"]:checked');
     if (!chosen) {
       e.preventDefault();

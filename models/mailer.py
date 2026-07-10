@@ -4,7 +4,7 @@ mailer.py - Provide functions to send emails from the app.
 
 import logging
 import smtplib
-from datetime import timedelta
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 
 import html2text
@@ -46,6 +46,64 @@ def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
         rec.tracking.confirm_email_sent = now_uk()
     else:
         rec.tracking.cancel_email_sent = now_uk()
+
+    return _send_email(msg, rec.leader.email)
+
+
+def send_invoice_email(
+    rec: LiveBooking,
+    invoice_number: str,
+    online_url: str = None,
+    pdf_bytes: bytes = None,
+    due_date_iso: str = None,
+) -> bool:
+    """Email the Xero invoice to the booking's leader, with the PDF attached.
+
+    Sent from the app (not Xero) so it goes to the leader's address on the
+    booking rather than whatever emails the Xero contact holds.
+    """
+    due_str = None
+    if due_date_iso:
+        try:
+            due_str = get_pretty_date_str(datetime.fromisoformat(due_date_iso), full_month=True)
+        except ValueError:
+            due_str = due_date_iso
+
+    context = {
+        "rec": rec,
+        "sitename": config.SITENAME,
+        "invoice_number": invoice_number,
+        "amount_str": f"{rec.tracking.cost_estimate / 100:.2f}",
+        "due_str": due_str,
+        "online_url": online_url,
+        "arriving_str": get_pretty_date_str(rec.booking.arriving, inc_time=True, full_month=True),
+        "departing_str": get_pretty_date_str(
+            rec.booking.departing, inc_time=True, full_month=True
+        ),
+    }
+
+    try:
+        body = env.get_template("invoice_email.html").render(context)
+    except TemplateError as e:
+        logger.error("%s trouble rendering invoice email: %s", rec.booking.id, e)
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = f"{config.SITENAME} Invoice {invoice_number}: Booking {rec.booking.id}"
+    msg["From"] = f"{config.EMAIL_DISPLAY_USERNAME} <{config.EMAIL_FROM_ADDRESS}>"
+    msg["To"] = rec.leader.email
+
+    h = html2text.HTML2Text()
+    msg.set_content(h.handle(body))
+    msg.add_alternative(body, subtype="html")
+
+    if pdf_bytes:
+        msg.add_attachment(
+            pdf_bytes,
+            maintype="application",
+            subtype="pdf",
+            filename=f"{invoice_number}.pdf",
+        )
 
     return _send_email(msg, rec.leader.email)
 

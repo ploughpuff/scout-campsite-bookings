@@ -69,6 +69,7 @@ def manager(live_booking, monkeypatch):
     monkeypatch.setattr(bookings_module, "save_json", lambda *a, **k: None)
     monkeypatch.setattr(bookings_module, "update_calendar_entry", lambda *a, **k: None)
     monkeypatch.setattr(bookings_module, "is_xero_enabled", lambda: True)
+    monkeypatch.setattr(bookings_module, "is_email_enabled", lambda: True)
     return m
 
 
@@ -182,76 +183,6 @@ def test_contact_mapping_roundtrip(tmp_path, monkeypatch):
     assert xero.count_contact_mappings() == 1
 
 
-def test_ensure_leader_already_present_makes_no_update(monkeypatch, live_booking):
-    calls = []
-
-    def fake_request(method, path, params=None, json_body=None):
-        calls.append((method, path))
-        return {
-            "Contacts": [
-                {"ContactID": "cid-1", "EmailAddress": "JANE@example.com", "ContactPersons": []}
-            ]
-        }
-
-    monkeypatch.setattr(xero, "_request", fake_request)
-    note = xero.ensure_leader_on_contact("cid-1", live_booking.leader)
-    assert "already" in note
-    assert calls == [("GET", "Contacts/cid-1")]
-
-
-def test_ensure_leader_added_resends_existing_persons(monkeypatch, live_booking):
-    posted = {}
-    existing_person = {
-        "FirstName": "Old",
-        "LastName": "Person",
-        "EmailAddress": "old@example.com",
-        "IncludeInEmails": False,
-    }
-
-    def fake_request(method, path, params=None, json_body=None):
-        if method == "GET":
-            return {
-                "Contacts": [
-                    {
-                        "ContactID": "cid-1",
-                        "EmailAddress": "office@example.com",
-                        "ContactPersons": [existing_person],
-                    }
-                ]
-            }
-        posted.update(json_body)
-        return {}
-
-    monkeypatch.setattr(xero, "_request", fake_request)
-    note = xero.ensure_leader_on_contact("cid-1", live_booking.leader)
-    assert "added" in note
-
-    persons = posted["Contacts"][0]["ContactPersons"]
-    assert existing_person in persons  # replace-on-write: existing list re-sent
-    new_person = persons[-1]
-    assert new_person["EmailAddress"] == "jane@example.com"
-    assert new_person["IncludeInEmails"] is True
-
-
-def test_ensure_leader_skipped_at_person_limit(monkeypatch, live_booking):
-    def fake_request(method, path, params=None, json_body=None):
-        assert method == "GET", "must not POST when at the person limit"
-        return {
-            "Contacts": [
-                {
-                    "ContactID": "cid-1",
-                    "EmailAddress": "office@example.com",
-                    "ContactPersons": [
-                        {"EmailAddress": f"p{i}@example.com"} for i in range(5)
-                    ],
-                }
-            ]
-        }
-
-    monkeypatch.setattr(xero, "_request", fake_request)
-    assert "NOT added" in xero.ensure_leader_on_contact("cid-1", live_booking.leader)
-
-
 #
 ## Branding theme
 def test_branding_theme_resolved_and_cached(monkeypatch):
@@ -323,7 +254,9 @@ def test_create_invoice_payload(monkeypatch, live_booking):
     monkeypatch.setattr(xero, "_request", fake_request)
     result = xero.create_invoice(live_booking, "cid-1")
 
-    assert result == {"invoice_id": "inv-guid", "invoice_number": "INV-0042"}
+    assert result["invoice_id"] == "inv-guid"
+    assert result["invoice_number"] == "INV-0042"
+    assert result["due_date"]  # ISO date, today + XERO_INVOICE_DUE_DAYS
     assert (sent["method"], sent["path"]) == ("PUT", "Invoices")
 
     inv = sent["Invoices"][0]
@@ -415,15 +348,25 @@ def test_already_invoiced_completes_without_new_invoice(manager, live_booking, m
 
 def test_happy_path_raises_emails_and_completes(manager, live_booking, monkeypatch):
     monkeypatch.setattr(xero, "get_mapped_contact", lambda g: "cid-1")
-    monkeypatch.setattr(xero, "ensure_leader_on_contact", lambda c, l: "Leader already on contact")
     monkeypatch.setattr(xero, "find_invoice_by_reference", lambda b: None)
     monkeypatch.setattr(
         xero,
         "create_invoice",
-        lambda rec, cid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042"},
+        lambda rec, cid: {
+            "invoice_id": "inv-guid",
+            "invoice_number": "INV-0042",
+            "due_date": "2026-07-20",
+        },
     )
+    monkeypatch.setattr(xero, "get_invoice_pdf", lambda iid: b"%PDF-fake")
+    monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: "https://in.xero.com/abc")
     emailed = []
-    monkeypatch.setattr(xero, "email_invoice", lambda iid: emailed.append(iid))
+
+    def fake_send(rec, number, online_url=None, pdf_bytes=None, due_date_iso=None):
+        emailed.append((number, online_url, pdf_bytes, due_date_iso))
+        return True
+
+    monkeypatch.setattr(bookings_module, "send_invoice_email", fake_send)
 
     result = manager.raise_xero_invoice("CDS-2026-0001")
 
@@ -431,8 +374,8 @@ def test_happy_path_raises_emails_and_completes(manager, live_booking, monkeypat
     assert live_booking.booking.xero_invoice_id == "inv-guid"
     assert live_booking.booking.xero_invoice_number == "INV-0042"
     assert live_booking.tracking.status == "Completed"
-    assert emailed == ["inv-guid"]
-    assert "INV-0042" in live_booking.tracking.notes
+    assert emailed == [("INV-0042", "https://in.xero.com/abc", b"%PDF-fake", "2026-07-20")]
+    assert "emailed to leader: jane@example.com" in live_booking.tracking.notes
 
 
 def test_xero_error_leaves_booking_untouched(manager, live_booking, monkeypatch):
@@ -441,7 +384,7 @@ def test_xero_error_leaves_booking_untouched(manager, live_booking, monkeypatch)
     def boom(*a, **k):
         raise XeroError("Xero is down")
 
-    monkeypatch.setattr(xero, "ensure_leader_on_contact", boom)
+    monkeypatch.setattr(xero, "find_invoice_by_reference", boom)
 
     result = manager.raise_xero_invoice("CDS-2026-0001")
     assert result["ok"] is False
@@ -451,24 +394,43 @@ def test_xero_error_leaves_booking_untouched(manager, live_booking, monkeypatch)
 
 def test_email_failure_still_completes(manager, live_booking, monkeypatch):
     monkeypatch.setattr(xero, "get_mapped_contact", lambda g: "cid-1")
-    monkeypatch.setattr(xero, "ensure_leader_on_contact", lambda c, l: "note")
     monkeypatch.setattr(xero, "find_invoice_by_reference", lambda b: None)
     monkeypatch.setattr(
         xero,
         "create_invoice",
-        lambda rec, cid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042"},
+        lambda rec, cid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042", "due_date": ""},
     )
-
-    def boom(iid):
-        raise XeroError("email failed")
-
-    monkeypatch.setattr(xero, "email_invoice", boom)
+    monkeypatch.setattr(xero, "get_invoice_pdf", lambda iid: b"%PDF-fake")
+    monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: None)
+    monkeypatch.setattr(bookings_module, "send_invoice_email", lambda *a, **k: False)
 
     result = manager.raise_xero_invoice("CDS-2026-0001")
     assert result["ok"] is True
     assert live_booking.booking.xero_invoice_number == "INV-0042"
     assert live_booking.tracking.status == "Completed"
     assert "FAILED" in live_booking.tracking.notes
+
+
+def test_email_skipped_when_email_disabled(manager, live_booking, monkeypatch):
+    monkeypatch.setattr(bookings_module, "is_email_enabled", lambda: False)
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: "cid-1")
+    monkeypatch.setattr(xero, "find_invoice_by_reference", lambda b: None)
+    monkeypatch.setattr(
+        xero,
+        "create_invoice",
+        lambda rec, cid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042", "due_date": ""},
+    )
+
+    def fail(*a, **k):
+        raise AssertionError("no email or PDF fetch expected when email disabled")
+
+    monkeypatch.setattr(xero, "get_invoice_pdf", fail)
+    monkeypatch.setattr(bookings_module, "send_invoice_email", fail)
+
+    result = manager.raise_xero_invoice("CDS-2026-0001")
+    assert result["ok"] is True
+    assert live_booking.tracking.status == "Completed"
+    assert "SKIPPED" in live_booking.tracking.notes
 
 
 def test_unmatched_contact_asks_user(manager, live_booking, monkeypatch):
@@ -485,6 +447,31 @@ def test_unmatched_contact_asks_user(manager, live_booking, monkeypatch):
     assert result["needs_contact"] is True
     assert result["candidates"][0]["contact_id"] == "cid-9"
     assert live_booking.tracking.status == "Invoice"
+
+
+def test_exact_match_still_asks_first_time(manager, live_booking, monkeypatch):
+    """An exact name match must not bind silently - it heads the candidate list"""
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: None)
+    monkeypatch.setattr(
+        xero,
+        "find_contact_by_name",
+        lambda g: {"ContactID": "cid-exact", "Name": "3rd Chelmsford", "EmailAddress": "x@y.z"},
+    )
+    monkeypatch.setattr(
+        xero,
+        "search_contacts",
+        lambda g: [
+            {"contact_id": "cid-exact", "name": "3rd Chelmsford", "email": "x@y.z"},
+            {"contact_id": "cid-9", "name": "3rd Chelmsford SG", "email": ""},
+        ],
+    )
+
+    result = manager.raise_xero_invoice("CDS-2026-0001")
+    assert result["needs_contact"] is True
+    ids = [c["contact_id"] for c in result["candidates"]]
+    assert ids == ["cid-exact", "cid-9"]  # exact first, deduped
+    assert live_booking.tracking.status == "Invoice"
+    assert live_booking.booking.xero_invoice_id is None
 
 
 def test_dry_run_changes_nothing(manager, live_booking, monkeypatch):

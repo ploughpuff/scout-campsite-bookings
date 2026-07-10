@@ -4,11 +4,19 @@
 
 When a booking with money owed passes its departure date it moves to `Invoice`
 status. The booking page then offers **Raise Invoice in Xero**, which creates
-an AUTHORISED sales invoice via the Xero API (reference = booking ID), has
-Xero email it to the leader, and marks the booking `Completed`. Group names
-are matched to Xero contacts automatically; the first time a group cannot be
-matched you are asked to pick an existing contact or confirm creating a new
-one, and the choice is remembered (`data/xero_contacts.json`).
+an AUTHORISED sales invoice via the Xero API (reference = booking ID), emails
+it from the app to the leader's address on the booking (invoice PDF attached,
+plus Xero's view/pay-online link), and marks the booking `Completed`. Line
+items are per night per person where the pricing config can reproduce the
+booking's cost estimate; a manually overridden estimate falls back to one
+line for the total.
+
+A group's first invoice always shows a confirmation page to link the group to
+a Xero contact: pick from likely matches, search Xero by another name, or
+create a new contact. The choice is remembered (`data/xero_contacts.json`),
+so it happens once per group. Existing Xero contacts are never modified. The
+invoice email template lives at `email_templates/invoice_email.html` (and the
+production copy in `docker-mnt/email_templates/`).
 
 ### One-time setup
 

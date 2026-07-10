@@ -105,6 +105,23 @@ def change_status(new_status, booking_id):
 @app.route("/xero/raise_invoice/<booking_id>", methods=["POST"])
 def xero_raise_invoice(booking_id):
     """Raise the booking's invoice in Xero (and email it), then mark Completed."""
+
+    # Manual re-search from the confirmation page - just refresh the candidates
+    search_term = request.form.get("search_term", "").strip()
+    if search_term:
+        try:
+            candidates = xero.search_contacts(search_term)
+        except xero.XeroError as e:
+            flash(str(e), "danger")
+            return redirect(url_for("booking_detail", booking_id=booking_id))
+        bookings_list = bookings.get_bookings_list(booking_id=booking_id)
+        return render_template(
+            "xero_contact.html",
+            rec=bookings_list[0],
+            candidates=candidates,
+            search_term=search_term,
+        )
+
     result = bookings.raise_xero_invoice(
         booking_id,
         contact_id=request.form.get("contact_id") or None,
