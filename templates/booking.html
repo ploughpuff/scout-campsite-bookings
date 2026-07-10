@@ -165,6 +165,14 @@ Booking Details
       </div>
 
       <!-- Row Five -->
+      {% if rec.booking.xero_invoice_number %}
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text">Xero Invoice</span>
+          <span class="form-control custom-bg">{{ rec.booking.xero_invoice_number }}</span>
+        </div>
+      </div>
+      {% endif %}
       {% if rec.tracking.bookers_comment %}
       <div class="col-md-12">
         <div class="input-group">
@@ -242,9 +250,14 @@ Booking Details
 
       {# Invoice → Completed #}
       {% if 'Completed' in valid_transitions and rec.tracking.status == 'Invoice' %}
+      <form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}" class="d-inline"
+        onsubmit="showLoadingOverlay()">
+        <button type="submit" class="btn btn-success">🧾 Raise Invoice in Xero
+          (£{{ rec.tracking.cost_estimate | pence_to_pounds }})</button>
+      </form>
       <form method="POST" action="{{ url_for('change_status', new_status='Completed', booking_id=rec.booking.id) }}"
         class="d-inline">
-        <button type="submit" class="btn btn-success">✔️ Invoice Raised in Xero</button>
+        <button type="submit" class="btn btn-outline-success">✔️ Mark Completed (invoiced manually)</button>
       </form>
       {% endif %}
 

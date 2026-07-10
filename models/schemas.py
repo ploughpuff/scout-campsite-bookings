@@ -10,7 +10,7 @@ from models.utils import (
     now_uk,
 )
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class LeaderData(BaseModel):
@@ -35,6 +35,9 @@ class BookingData(BaseModel):
     arriving: datetime
     departing: datetime
     facilities: List[str]
+    # Xero references are financial audit data, kept here so they survive archiving
+    xero_invoice_id: Optional[str] = None
+    xero_invoice_number: Optional[str] = None
 
     @field_validator(
         "submitted",

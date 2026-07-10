@@ -29,6 +29,7 @@ from models.calendar import (
     get_cal_events,
     update_calendar_entry,
 )
+from models import xero
 from models.json_utils import load_json, save_json
 from models.mailer import send_email_notification
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
@@ -38,6 +39,7 @@ from models.utils import (
     get_booking_prefix,
     get_event_type,
     get_timestamp_for_notes,
+    is_xero_enabled,
     now_uk,
     secs_to_hr,
     sort_facilities,
@@ -320,6 +322,150 @@ class Bookings:
         rec = self._get_booking_by_id(booking_id)
         send_email_notification(rec, "RESEND")
         self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
+
+    def raise_xero_invoice(
+        self,
+        booking_id: str,
+        contact_id: str = None,
+        contact_name: str = None,
+        create_contact: bool = False,
+    ) -> dict:
+        """Raise an AUTHORISED invoice in Xero for a booking and mark it Completed.
+
+        contact_id/contact_name or create_contact come from the confirmation page
+        when the group could not be matched to a Xero contact automatically.
+
+        Returns a dict: {"ok": bool} normally, or
+        {"ok": False, "needs_contact": True, "candidates": [...]} when the caller
+        must ask the user to pick or create the Xero contact.
+        """
+        rec = self._get_booking_by_id(booking_id)
+
+        if not rec or rec.tracking.status != "Invoice":
+            reason = "not found" if not rec else f"not awaiting an invoice ({rec.tracking.status})"
+            flash(f"Booking {booking_id} is {reason}", "danger")
+            return {"ok": False}
+
+        #
+        ## Already raised (e.g. crash before completing, or double-click): don't
+        ## create a second invoice, just finish the status change
+        if rec.booking.xero_invoice_id:
+            flash(
+                f"Xero invoice {rec.booking.xero_invoice_number} was already raised "
+                f"for {booking_id} - marking booking Completed",
+                "info",
+            )
+            self._complete_after_invoice(rec)
+            return {"ok": True}
+
+        #
+        ## Dry run: unlike email, nothing at all may change - the status change
+        ## IS "invoice raised", so it must wait for a real run
+        if not is_xero_enabled():
+            flash(
+                f"[XERO DISABLED] Would raise invoice for {booking_id} "
+                f"(£{rec.tracking.cost_estimate / 100:.2f}) "
+                f"to Xero contact for [{rec.booking.group_name}]",
+                "info",
+            )
+            return {"ok": False}
+
+        try:
+            contact_id = self._resolve_xero_contact(rec, contact_id, contact_name, create_contact)
+            if not contact_id:
+                # No confident match - ask the user before creating anything
+                return {
+                    "ok": False,
+                    "needs_contact": True,
+                    "candidates": xero.search_contacts(rec.booking.group_name),
+                }
+
+            self._add_to_notes(rec.tracking, xero.ensure_leader_on_contact(contact_id, rec.leader))
+
+            # Belt-and-braces: adopt an invoice already carrying our reference
+            # (covers a crash between Xero creating it and us saving the ID)
+            inv = xero.find_invoice_by_reference(rec.booking.id)
+            if inv:
+                self._add_to_notes(
+                    rec.tracking, f"Existing Xero invoice {inv['invoice_number']} adopted"
+                )
+            else:
+                inv = xero.create_invoice(rec, contact_id)
+                self._add_to_notes(rec.tracking, f"Xero invoice {inv['invoice_number']} raised")
+
+            rec.booking.xero_invoice_id = inv["invoice_id"]
+            rec.booking.xero_invoice_number = inv["invoice_number"]
+            # Persist the invoice ID before emailing so a retry can never double-invoice
+            save_json(self.live, DATA_FILE_PATH)
+
+        except xero.XeroError as e:
+            self.logger.error("Xero invoice for %s failed: %s", booking_id, e)
+            flash(str(e), "danger")
+            return {"ok": False}
+
+        try:
+            xero.email_invoice(rec.booking.xero_invoice_id)
+            self._add_to_notes(
+                rec.tracking, f"Xero invoice {rec.booking.xero_invoice_number} emailed by Xero"
+            )
+            flash(
+                f"Xero invoice {rec.booking.xero_invoice_number} raised and emailed", "success"
+            )
+        except xero.XeroError as e:
+            self.logger.error("Xero invoice email for %s failed: %s", booking_id, e)
+            self._add_to_notes(rec.tracking, f"Xero invoice email FAILED: {e}")
+            flash(
+                f"Invoice {rec.booking.xero_invoice_number} raised but emailing it failed - "
+                f"send it from Xero. ({e})",
+                "warning",
+            )
+
+        self._complete_after_invoice(rec)
+        return {"ok": True}
+
+    def _resolve_xero_contact(
+        self, rec: LiveBooking, contact_id: str, contact_name: str, create_contact: bool
+    ) -> str:
+        """Work out which Xero contact to invoice, remembering the group mapping.
+
+        Returns the ContactID, or None when no match was found and the user
+        must confirm the contact first.
+        """
+        group_name = rec.booking.group_name
+
+        if contact_id:
+            # User picked an existing Xero contact on the confirmation page
+            xero.save_contact_mapping(group_name, contact_id, contact_name or "")
+            self._add_to_notes(
+                rec.tracking, f"Xero contact confirmed: [{contact_name or contact_id}]"
+            )
+            return contact_id
+
+        if create_contact:
+            # User confirmed creating a brand-new Xero contact
+            contact = xero.create_contact(group_name, rec.leader)
+            xero.save_contact_mapping(group_name, contact["ContactID"], contact["Name"])
+            self._add_to_notes(rec.tracking, f"Xero contact created: [{contact['Name']}]")
+            return contact["ContactID"]
+
+        mapped = xero.get_mapped_contact(group_name)
+        if mapped:
+            return mapped
+
+        contact = xero.find_contact_by_name(group_name)
+        if contact:
+            xero.save_contact_mapping(group_name, contact["ContactID"], contact["Name"])
+            return contact["ContactID"]
+
+        return None
+
+    def _complete_after_invoice(self, rec: LiveBooking):
+        """Move an invoiced booking to Completed and persist"""
+        old_status = rec.tracking.status
+        if self._apply_status_change(rec, "Completed"):
+            self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [Completed]")
+            update_calendar_entry(rec)
+        save_json(self.live, DATA_FILE_PATH)
 
     def _update_cost_estimate(self, rec: LiveData):
         #

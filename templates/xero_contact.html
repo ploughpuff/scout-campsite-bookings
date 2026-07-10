@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Link Group to Xero Contact</h2>
+
+<p>
+  No Xero contact named <strong>{{ rec.booking.group_name }}</strong> was found.
+  Pick the existing contact this group belongs to, or confirm creating a new one.
+  Your choice is remembered, so this only happens once per group.
+</p>
+
+<div class="card mb-4">
+  <div class="card-header bg-secondary text-white">
+    <h5 class="mb-0">Booking {{ rec.booking.id }}</h5>
+  </div>
+  <div class="card-body">
+    <p class="mb-1"><strong>Group:</strong> {{ rec.booking.group_name }}</p>
+    <p class="mb-1"><strong>Leader:</strong> {{ rec.leader.name }} ({{ rec.leader.email }})</p>
+    <p class="mb-0"><strong>Invoice amount:</strong> £{{ rec.tracking.cost_estimate | pence_to_pounds }}</p>
+  </div>
+</div>
+
+<form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}"
+  onsubmit="showLoadingOverlay()">
+
+  {% if candidates %}
+  <h5>Similar contacts already in Xero</h5>
+  <div class="list-group mb-3">
+    {% for c in candidates %}
+    <label class="list-group-item d-flex gap-2">
+      <input class="form-check-input flex-shrink-0" type="radio" name="xero_choice" value="{{ c.contact_id }}"
+        data-contact-name="{{ c.name }}">
+      <span>
+        {{ c.name }}
+        {% if c.email %}<small class="text-muted">({{ c.email }})</small>{% endif %}
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted">No similar contacts were found in Xero.</p>
+  {% endif %}
+
+  <div class="list-group mb-3">
+    <label class="list-group-item d-flex gap-2">
+      <input class="form-check-input flex-shrink-0" type="radio" name="xero_choice" value="__create__" {% if not
+        candidates %}checked{% endif %}>
+      <span>➕ Create new Xero contact <strong>{{ rec.booking.group_name }}</strong>
+        with {{ rec.leader.name }} as the contact person</span>
+    </label>
+  </div>
+
+  <input type="hidden" name="contact_id" value="">
+  <input type="hidden" name="contact_name" value="">
+  <input type="hidden" name="create_contact" value="">
+
+  <button type="submit" class="btn btn-success">🧾 Continue and Raise Invoice</button>
+  <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}" class="btn btn-secondary">Cancel</a>
+</form>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="d-none">
+  <div class="overlay-background"></div>
+  <div class="overlay-spinner">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="mt-3 text-white">
+      <strong>Please wait...</strong>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelector('form[action*="raise_invoice"]').addEventListener('submit', function (e) {
+    const chosen = this.querySelector('input[name="xero_choice"]:checked');
+    if (!chosen) {
+      e.preventDefault();
+      alert('Please pick a contact or choose to create a new one.');
+      return;
+    }
+    if (chosen.value === '__create__') {
+      this.querySelector('input[name="create_contact"]').value = 'yes';
+    } else {
+      this.querySelector('input[name="contact_id"]').value = chosen.value;
+      this.querySelector('input[name="contact_name"]').value = chosen.dataset.contactName || '';
+    }
+  });
+</script>
+{% endblock %}

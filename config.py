@@ -36,6 +36,9 @@ if APP_ENV == "production":
         "GOOGLE_CALENDAR_ID",
     ]
 
+    if os.getenv("XERO_ENABLED") == "True":
+        required_vars += ["XERO_CLIENT_ID", "XERO_CLIENT_SECRET"]
+
     missing = [var for var in required_vars if not os.getenv(var)]
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
@@ -75,10 +78,20 @@ EMAIL_FROM_ADDRESS = _get_and_print("EMAIL_FROM_ADDRESS")
 
 CALENDAR_ID = _get_and_print("GOOGLE_CALENDAR_ID")
 
+XERO_ENABLED = _get_and_print("XERO_ENABLED", "False")
+XERO_CLIENT_ID = _get_and_print("XERO_CLIENT_ID", show=False)
+XERO_CLIENT_SECRET = _get_and_print("XERO_CLIENT_SECRET", show=False)
+XERO_ACCOUNT_CODE = _get_and_print("XERO_ACCOUNT_CODE", "200")  # Sales account in chart of accounts
+XERO_TAX_TYPE = _get_and_print("XERO_TAX_TYPE", "NONE")
+XERO_INVOICE_DUE_DAYS = int(_get_and_print("XERO_INVOICE_DUE_DAYS", "30"))
+XERO_BRANDING_THEME = _get_and_print("XERO_BRANDING_THEME", "")  # Theme name; blank = org default
+
 #
 ## Config data
 SERVICE_ACCOUNT_PATH = Path(CONFIG_DIR) / "credentials.json"
 FIELD_MAPPING_PATH = Path(CONFIG_DIR) / "field_mappings.json"
+XERO_TOKEN_PATH = Path(CONFIG_DIR) / "xero_token.json"
+XERO_CONTACT_MAP_PATH = Path(DATA_DIR) / "xero_contacts.json"
 
 UK_TZ = ZoneInfo("Europe/London")
 

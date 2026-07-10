@@ -34,15 +34,18 @@ from config import (
     SITENAME,
     STATIC_DIR,
     TEMPLATE_DIR,
+    XERO_ENABLED,
 )
+from models import xero
 from models.bookings import Bookings
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
-from models.utils import get_pretty_date_str, is_email_enabled, now_uk
+from models.utils import get_pretty_date_str, is_email_enabled, is_xero_enabled, now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.secret_key = APP_SECRET_KEY
 app.config["EMAIL_ENABLED"] = EMAIL_ENABLED == "True"
+app.config["XERO_ENABLED"] = XERO_ENABLED == "True"
 
 logger = setup_logger()
 logger.info("Starting")
@@ -96,6 +99,27 @@ def change_status(new_status, booking_id):
     """Handle status change triggered by button press."""
     description = request.form.get("description")
     bookings.change_status(booking_id, new_status, description)
+    return redirect(url_for("booking_detail", booking_id=booking_id))
+
+
+@app.route("/xero/raise_invoice/<booking_id>", methods=["POST"])
+def xero_raise_invoice(booking_id):
+    """Raise the booking's invoice in Xero (and email it), then mark Completed."""
+    result = bookings.raise_xero_invoice(
+        booking_id,
+        contact_id=request.form.get("contact_id") or None,
+        contact_name=request.form.get("contact_name") or None,
+        create_contact=request.form.get("create_contact") == "yes",
+    )
+
+    if result.get("needs_contact"):
+        bookings_list = bookings.get_bookings_list(booking_id=booking_id)
+        return render_template(
+            "xero_contact.html",
+            rec=bookings_list[0],
+            candidates=result["candidates"],
+        )
+
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
@@ -247,7 +271,25 @@ def admin():
     """Show the Admin dashboard with stats too"""
 
     stats_data = bookings.get_yearly_stats()
-    return render_template("admin.html", current="admin", version=APP_VERSION, stats=stats_data)
+    return render_template(
+        "admin.html",
+        current="admin",
+        version=APP_VERSION,
+        stats=stats_data,
+        xero=xero.token_manager.status(),
+        xero_mappings=xero.count_contact_mappings(),
+    )
+
+
+@app.route("/admin/xero_test")
+def xero_test():
+    """Live connectivity check against the Xero API"""
+    try:
+        tenant_name = xero.test_connection()
+        flash(f"Xero connection OK: [{tenant_name}]", "success")
+    except xero.XeroError as e:
+        flash(str(e), "danger")
+    return redirect(url_for("admin"))
 
 
 @app.route("/toggle_email", methods=["POST"])
@@ -259,10 +301,23 @@ def toggle_email():
     return redirect(request.referrer or url_for("bookings"))
 
 
+@app.route("/toggle_xero", methods=["POST"])
+def toggle_xero():
+    """Route to toggle raising real invoices in Xero"""
+    enabled = request.form.get("xero_enabled") == "on"
+    session["xero_enabled"] = enabled
+    flash(f"Xero invoicing is now {'ENABLED' if enabled else 'DISABLED'}.", "info")
+    return redirect(request.referrer or url_for("bookings"))
+
+
 @app.context_processor
 def inject_globals():
     """Make sitename available globally in all templates"""
-    return {"sitename": SITENAME, "is_email_enabled": is_email_enabled}
+    return {
+        "sitename": SITENAME,
+        "is_email_enabled": is_email_enabled,
+        "is_xero_enabled": is_xero_enabled,
+    }
 
 
 @app.errorhandler(404)

@@ -44,12 +44,28 @@ def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> 
         data = json.load(f)
 
     version = data.get("schema_version")
+    while version in MIGRATIONS and version < SCHEMA_VERSION:
+        data = MIGRATIONS[version](data)
+        version = data["schema_version"]
+        logger.info("Migrated %s to schema v%s", path.name, version)
+
     if version != SCHEMA_VERSION:
         raise RuntimeError(
             f"Unexpected schema version in {path.name}: got {version}, expected {SCHEMA_VERSION}"
         )
 
     return model.model_validate(data)
+
+
+def _migrate_v2_to_v3(data: dict) -> dict:
+    """v3 only adds optional Xero fields to BookingData, so no payload changes needed."""
+    data["schema_version"] = 3
+    return data
+
+
+MIGRATIONS = {
+    2: _migrate_v2_to_v3,
+}
 
 
 def backup_with_rotation(file_path, max_backups=5):

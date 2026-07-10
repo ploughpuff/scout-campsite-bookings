@@ -17,6 +17,11 @@ def is_email_enabled():
     return session.get("email_enabled", current_app.config["EMAIL_ENABLED"])
 
 
+def is_xero_enabled():
+    """Checks session if Xero is enabled, or falls back to .env var"""
+    return session.get("xero_enabled", current_app.config["XERO_ENABLED"])
+
+
 def now_uk() -> datetime:
     """Returns the current datetime in UK local time."""
     return datetime.now(tz=UK_TZ)

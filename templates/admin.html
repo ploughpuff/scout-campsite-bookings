@@ -19,6 +19,31 @@
 
 <hr>
 
+<h2>Xero</h2>
+
+<ul>
+    <li><strong>Configured:</strong> {{ '✔️' if xero.configured else '❌ (set XERO_CLIENT_ID / XERO_CLIENT_SECRET)' }}
+    </li>
+    <li><strong>Connected:</strong> {{ '✔️' if xero.connected else '❌' }}
+        {% if xero.tenant_name %} to <strong>{{ xero.tenant_name }}</strong>{% endif %}
+    </li>
+    {% if xero.last_refreshed %}
+    <li><strong>Token last refreshed:</strong> {{ xero.last_refreshed }}</li>
+    {% endif %}
+    <li><strong>Saved group → contact mappings:</strong> {{ xero_mappings }}</li>
+</ul>
+
+{% if xero.connected %}
+<a href="{{ url_for('xero_test') }}" class="btn btn-secondary">Test Xero Connection</a>
+{% else %}
+<p class="text-muted">To connect: run <code>python scripts/xero_bootstrap.py</code> on your PC, which writes
+    <code>xero_token.json</code> into <code>docker-mnt/config/</code>, then restart the container.
+    The same fix applies if the connection ever expires (60+ days unused).
+</p>
+{% endif %}
+
+<hr>
+
 <h1>Booking Stats</h1>
 
 <h2>Open Bookings: {{ stats.open_bookings }}</h2>
