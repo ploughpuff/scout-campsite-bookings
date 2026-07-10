@@ -291,25 +291,28 @@ class Bookings:
 
         old_status = rec.tracking.status
 
+        #
+        ## Validate BEFORE mutating the status: bailing out after the mutation
+        ## would leave an unsaved, unnoted status change in memory that the
+        ## next save of any booking silently persists (no history trail)
+        if new_status in ("Cancelled", "Pending") and not description:
+            msg = (
+                "Cancellation reason is required."
+                if new_status == "Cancelled"
+                else "Reason for pending or question to requester is required."
+            )
+            flash(msg, "danger")
+            return False
+
         if not self._apply_status_change(rec, new_status):
             return False
 
-        if new_status in ("Cancelled", "Pending"):
-            if not description:
-                msg = (
-                    "Cancellation reason is required."
-                    if new_status == "Cancelled"
-                    else "Reason for pending or question to requester is required."
-                )
-                flash(msg, "danger")
-                return False
-
-            if new_status == "Cancelled":
-                rec.tracking.cancel_reason = description
-                self._add_to_notes(rec.tracking, f"Cancel Reason: {description}")
-            else:
-                rec.tracking.pend_question = description
-                self._add_to_notes(rec.tracking, f"Pend Question: {description}")
+        if new_status == "Cancelled":
+            rec.tracking.cancel_reason = description
+            self._add_to_notes(rec.tracking, f"Cancel Reason: {description}")
+        elif new_status == "Pending":
+            rec.tracking.pend_question = description
+            self._add_to_notes(rec.tracking, f"Pend Question: {description}")
 
         self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [{new_status}]")
         if send_email_notification(rec):

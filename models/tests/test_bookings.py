@@ -104,3 +104,28 @@ def test_find_booking_by_md5_not_found(setup_bookings):
     # Test with a value that does not exist in either live or archive bookings
     result = manager._find_booking_by_md5("md5_not_found")
     assert result is False  # Should return False since md5_not_found is not found in any booking
+
+
+def test_change_status_without_reason_leaves_status_untouched(setup_bookings, monkeypatch):
+    """Regression: a rejected Cancel/Pend (missing reason) must not mutate the
+    in-memory status - a later save would silently persist it with no history."""
+    import models.bookings as bookings_module
+
+    manager = setup_bookings
+    monkeypatch.setattr(bookings_module, "flash", lambda *a, **k: None)
+
+    def fail(*a, **k):
+        raise AssertionError("no save/email/calendar expected for a rejected change")
+
+    monkeypatch.setattr(bookings_module, "save_json", fail)
+    monkeypatch.setattr(bookings_module, "send_email_notification", fail)
+    monkeypatch.setattr(bookings_module, "update_calendar_entry", fail)
+
+    rec = manager.live.items[0]
+    assert rec.tracking.status == "Pending"
+
+    result = manager.change_status("frozen123", "Cancelled", description=None)
+
+    assert result is False
+    assert rec.tracking.status == "Pending"  # unchanged
+    assert "Status changed" not in rec.tracking.notes
