@@ -233,6 +233,11 @@ def get_mapped_contact(group_name: str) -> str | None:
     return entry.get("contact_id") if entry else None
 
 
+def get_contact_mapping(group_name: str) -> dict | None:
+    """Return the full saved mapping entry {contact_id, contact_name} for a group"""
+    return _load_contact_map().get(_map_key(group_name))
+
+
 def save_contact_mapping(group_name: str, contact_id: str, contact_name: str):
     """Remember which Xero contact a group maps to"""
     contact_map = _load_contact_map()

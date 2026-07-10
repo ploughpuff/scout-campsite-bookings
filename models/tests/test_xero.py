@@ -488,6 +488,93 @@ def test_dry_run_changes_nothing(manager, live_booking, monkeypatch):
     assert live_booking.booking.xero_invoice_id is None
 
 
+#
+## Bookings.link_xero_contact (link ahead of invoicing, Xero name wins)
+def test_link_renames_group_to_xero_contact_name(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "Confirmed"
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: None)
+    saved = {}
+    monkeypatch.setattr(
+        xero, "save_contact_mapping", lambda g, cid, name: saved.update({g: (cid, name)})
+    )
+
+    result = manager.link_xero_contact(
+        "CDS-2026-0001", contact_id="cid-1", contact_name="3rd Chelmsford Scout Group"
+    )
+
+    assert result["ok"] is True
+    assert live_booking.booking.group_name == "3rd Chelmsford Scout Group"  # renamed
+    assert "group_name changed from [3rd Chelmsford]" in live_booking.tracking.notes
+    assert saved == {"3rd Chelmsford Scout Group": ("cid-1", "3rd Chelmsford Scout Group")}
+    assert live_booking.tracking.status == "Confirmed"  # status untouched
+    assert live_booking.booking.xero_invoice_id is None  # no invoice raised
+
+
+def test_link_same_name_does_not_rename(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "New"
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: None)
+    monkeypatch.setattr(xero, "save_contact_mapping", lambda *a: None)
+
+    result = manager.link_xero_contact(
+        "CDS-2026-0001", contact_id="cid-1", contact_name="3rd Chelmsford"
+    )
+
+    assert result["ok"] is True
+    assert live_booking.booking.group_name == "3rd Chelmsford"
+    assert "group_name changed" not in live_booking.tracking.notes
+
+
+def test_link_create_contact_path(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "Confirmed"
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: None)
+    monkeypatch.setattr(
+        xero,
+        "create_contact",
+        lambda g, leader: {"ContactID": "cid-new", "Name": "3rd Chelmsford"},
+    )
+    saved = {}
+    monkeypatch.setattr(
+        xero, "save_contact_mapping", lambda g, cid, name: saved.update({g: cid})
+    )
+
+    result = manager.link_xero_contact("CDS-2026-0001", create_contact=True)
+    assert result["ok"] is True
+    assert saved == {"3rd Chelmsford": "cid-new"}
+    assert "Xero contact created" in live_booking.tracking.notes
+
+
+def test_link_without_choice_asks_user(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "Confirmed"
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: None)
+    monkeypatch.setattr(xero, "find_contact_by_name", lambda g: None)
+    monkeypatch.setattr(
+        xero, "search_contacts", lambda g: [{"contact_id": "c", "name": "x", "email": ""}]
+    )
+
+    result = manager.link_xero_contact("CDS-2026-0001")
+    assert result["needs_contact"] is True
+    assert result["candidates"]
+    assert live_booking.booking.group_name == "3rd Chelmsford"  # unchanged
+
+
+def test_link_rejected_for_completed_booking(manager, live_booking):
+    live_booking.tracking.status = "Completed"
+    assert manager.link_xero_contact("CDS-2026-0001", contact_id="cid-1")["ok"] is False
+
+
+def test_link_noop_when_already_mapped(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "Confirmed"
+    monkeypatch.setattr(xero, "get_mapped_contact", lambda g: "cid-existing")
+
+    def fail(*a, **k):
+        raise AssertionError("no Xero calls expected for an already-linked group")
+
+    monkeypatch.setattr(xero, "create_contact", fail)
+    result = manager.link_xero_contact("CDS-2026-0001", create_contact=True)
+    assert result["ok"] is True
+    assert "Xero contact created" not in live_booking.tracking.notes
+
+
 def test_wrong_status_rejected(manager, live_booking):
     live_booking.tracking.status = "Confirmed"
     assert manager.raise_xero_invoice("CDS-2026-0001")["ok"] is False

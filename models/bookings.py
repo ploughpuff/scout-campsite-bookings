@@ -437,6 +437,77 @@ class Bookings:
                 f"Invoice {number} raised but emailing it failed - send it from Xero.", "warning"
             )
 
+    def get_xero_link(self, group_name: str) -> dict:
+        """The saved Xero contact link for a group, or None. File read only."""
+        return xero.get_contact_mapping(group_name)
+
+    def link_xero_contact(
+        self,
+        booking_id: str,
+        contact_id: str = None,
+        contact_name: str = None,
+        create_contact: bool = False,
+    ) -> dict:
+        """Link a booking's group to a Xero contact ahead of invoicing.
+
+        Xero is the source of truth for group names: choosing an existing
+        contact renames the booking's group_name to the contact's name
+        (recorded in the history), fixing typos from the submission form.
+
+        Returns {"ok": bool} or {"ok": False, "needs_contact": True,
+        "candidates": [...]} when the caller must show the picker.
+        """
+        rec = self._get_booking_by_id(booking_id)
+
+        if not rec or rec.tracking.status in ("Completed", "Archived", "Cancelled"):
+            reason = "not found" if not rec else f"already {rec.tracking.status}"
+            flash(f"Cannot link Xero contact: booking {booking_id} is {reason}", "danger")
+            return {"ok": False}
+
+        group_name = rec.booking.group_name
+
+        if xero.get_mapped_contact(group_name):
+            flash(f"[{group_name}] is already linked to a Xero contact", "info")
+            return {"ok": True}
+
+        try:
+            if create_contact:
+                contact = xero.create_contact(group_name, rec.leader)
+                contact_id = contact["ContactID"]
+                contact_name = contact["Name"]
+                self._add_to_notes(rec.tracking, f"Xero contact created: [{contact_name}]")
+            elif contact_id:
+                self._add_to_notes(
+                    rec.tracking, f"Xero contact linked: [{contact_name or contact_id}]"
+                )
+            else:
+                return {
+                    "ok": False,
+                    "needs_contact": True,
+                    "candidates": self._xero_contact_candidates(group_name),
+                }
+        except xero.XeroError as e:
+            self.logger.error("Xero contact link for %s failed: %s", booking_id, e)
+            flash(str(e), "danger")
+            return {"ok": False}
+
+        # Key the mapping by the Xero name - after the rename below, future
+        # bookings under this (correct) name bind without asking
+        xero.save_contact_mapping(contact_name or group_name, contact_id, contact_name or "")
+
+        if contact_name and contact_name.strip() != group_name:
+            self._add_to_notes(
+                rec.tracking,
+                f"group_name changed from [{group_name}] to [{contact_name.strip()}] "
+                "(matched to Xero contact)",
+            )
+            rec.booking.group_name = contact_name.strip()
+            update_calendar_entry(rec)
+
+        save_json(self.live, DATA_FILE_PATH)
+        flash(f"[{rec.booking.group_name}] linked to Xero contact", "success")
+        return {"ok": True}
+
     def _resolve_xero_contact(
         self, rec: LiveBooking, contact_id: str, contact_name: str, create_contact: bool
     ) -> str:

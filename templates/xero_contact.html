@@ -1,12 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set mode = mode | default('invoice') %}
+{% set post_url = post_url | default(url_for('xero_raise_invoice', booking_id=rec.booking.id)) %}
+
 <h2>Link Group to Xero Contact</h2>
 
 <p>
   Confirm which Xero contact <strong>{{ rec.booking.group_name }}</strong> belongs to.
   Pick an existing contact, search for one under a different name, or create a new one.
-  Your choice is remembered, so this only happens once per group.
+  Choosing an existing contact renames the booking's group to match Xero (the source of
+  truth), and the link is remembered - so this only happens once per group.
 </p>
 
 <div class="card mb-4">
@@ -16,19 +20,19 @@
   <div class="card-body">
     <p class="mb-1"><strong>Group:</strong> {{ rec.booking.group_name }}</p>
     <p class="mb-1"><strong>Leader:</strong> {{ rec.leader.name }} ({{ rec.leader.email }})</p>
+    {% if mode == 'invoice' %}
     <p class="mb-0"><strong>Invoice amount:</strong> £{{ rec.tracking.cost_estimate | pence_to_pounds }}</p>
+    {% endif %}
   </div>
 </div>
 
-<form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}"
-  class="d-flex gap-2 mb-3">
+<form method="POST" action="{{ post_url }}" class="d-flex gap-2 mb-3">
   <input type="text" name="search_term" class="form-control" style="max-width: 24rem;"
     placeholder="Search Xero contacts by name or email..." value="{{ search_term or '' }}">
   <button type="submit" class="btn btn-secondary">🔍 Search Xero</button>
 </form>
 
-<form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}"
-  id="xeroChoiceForm" onsubmit="showLoadingOverlay()">
+<form method="POST" action="{{ post_url }}" id="xeroChoiceForm" onsubmit="showLoadingOverlay()">
 
   {% if candidates %}
   <h5>{% if search_term %}Search results for "{{ search_term }}"{% else %}Possible matches in Xero{% endif %}</h5>
@@ -65,7 +69,11 @@
   <input type="hidden" name="contact_name" value="">
   <input type="hidden" name="create_contact" value="">
 
+  {% if mode == 'invoice' %}
   <button type="submit" class="btn btn-success">🧾 Continue and Raise Invoice</button>
+  {% else %}
+  <button type="submit" class="btn btn-success">🔗 Link Contact</button>
+  {% endif %}
   <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}" class="btn btn-secondary">Cancel</a>
 </form>
 

@@ -91,6 +91,7 @@ def booking_detail(booking_id):
         time_now=now_uk(),
         rec_list_clash=rec_list_clash,
         bookable_facilities=FIELD_MAPPINGS_DICT.get("bookable_facilities"),
+        xero_link=bookings.get_xero_link(rec.booking.group_name),
     )
 
 
@@ -136,6 +137,42 @@ def xero_raise_invoice(booking_id):
             rec=bookings_list[0],
             candidates=result["candidates"],
         )
+
+    return redirect(url_for("booking_detail", booking_id=booking_id))
+
+
+@app.route("/xero/link_contact/<booking_id>", methods=["POST"])
+def xero_link_contact(booking_id):
+    """Link a booking's group to a Xero contact ahead of invoicing."""
+
+    def render_picker(candidates, search_term=None):
+        bookings_list = bookings.get_bookings_list(booking_id=booking_id)
+        return render_template(
+            "xero_contact.html",
+            rec=bookings_list[0],
+            candidates=candidates,
+            search_term=search_term,
+            mode="link",
+            post_url=url_for("xero_link_contact", booking_id=booking_id),
+        )
+
+    search_term = request.form.get("search_term", "").strip()
+    if search_term:
+        try:
+            return render_picker(xero.search_contacts(search_term), search_term)
+        except xero.XeroError as e:
+            flash(str(e), "danger")
+            return redirect(url_for("booking_detail", booking_id=booking_id))
+
+    result = bookings.link_xero_contact(
+        booking_id,
+        contact_id=request.form.get("contact_id") or None,
+        contact_name=request.form.get("contact_name") or None,
+        create_contact=request.form.get("create_contact") == "yes",
+    )
+
+    if result.get("needs_contact"):
+        return render_picker(result["candidates"])
 
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
