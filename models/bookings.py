@@ -137,11 +137,14 @@ class Bookings:
 
     def _estimate_cost(self, b: BookingData) -> int:
         """Estimate the cost of a booking in pence"""
-
-        # Count how many midnights passed between start and end
-        num_overnights = (b.departing.date() - b.arriving.date()).days
-
-        return estimate_cost(b.event_type, num_overnights, b.group_type, b.group_size, b.facilities)
+        return estimate_cost(
+            b.event_type,
+            b.num_overnights(),
+            b.group_type,
+            b.group_size,
+            b.facilities,
+            nightly_sizes=b.nightly_size_list() if b.nightly_group_sizes else None,
+        )
 
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
@@ -412,13 +415,13 @@ class Bookings:
         self._complete_after_invoice(rec)
         return {"ok": True}
 
-    def _email_xero_invoice(self, rec: LiveBooking, inv: dict):
+    def _email_xero_invoice(self, rec: LiveBooking, inv: dict, action: str = "raised"):
         """Email the invoice (PDF + pay link) to the booking's leader from the app"""
         number = rec.booking.xero_invoice_number
 
         if not is_email_enabled():
             self._add_to_notes(rec.tracking, f"Invoice {number} email SKIPPED (email disabled)")
-            flash(f"Invoice {number} raised. Email disabled - send it manually.", "warning")
+            flash(f"Invoice {number} {action}. Email disabled - send it manually.", "warning")
             return
 
         pdf_bytes = None
@@ -433,12 +436,106 @@ class Bookings:
             self._add_to_notes(
                 rec.tracking, f"Invoice {number} emailed to leader: {rec.leader.email}"
             )
-            flash(f"Invoice {number} raised and emailed to {rec.leader.email}", "success")
+            flash(f"Invoice {number} {action} and emailed to {rec.leader.email}", "success")
         else:
             self._add_to_notes(rec.tracking, f"Invoice {number} email FAILED: {rec.leader.email}")
             flash(
-                f"Invoice {number} raised but emailing it failed - send it from Xero.", "warning"
+                f"Invoice {number} {action} but emailing it failed - send it from Xero.", "warning"
             )
+
+    def amend_xero_invoice(
+        self,
+        booking_id: str,
+        nightly_sizes: dict[str, int] | None = None,
+        group_size: int | None = None,
+    ) -> bool:
+        """Correct the people numbers on an invoiced booking and update its Xero
+        invoice in place (same invoice number), then re-email it.
+
+        The booking record is only mutated after Xero accepts the update, so a
+        refused amendment (paid/voided invoice, API error) changes nothing.
+        """
+        rec = self._get_booking_by_id(booking_id)
+
+        if not rec or rec.tracking.status != "Completed" or not rec.booking.xero_invoice_id:
+            reason = (
+                "not found"
+                if not rec
+                else f"not an invoiced Completed booking ({rec.tracking.status})"
+            )
+            flash(f"Cannot amend invoice: booking {booking_id} is {reason}", "danger")
+            return False
+
+        # Apply the new sizes to a deep copy so a Xero failure leaves the record untouched
+        candidate = rec.model_copy(deep=True)
+        b = candidate.booking
+
+        if nightly_sizes:
+            values = list(nightly_sizes.values())
+            # A uniform headcount needs no per-night breakdown
+            b.nightly_group_sizes = None if len(set(values)) == 1 else dict(nightly_sizes)
+            b.group_size = max(values)
+        elif group_size:
+            b.nightly_group_sizes = None
+            b.group_size = group_size
+        else:
+            flash("No people numbers supplied", "danger")
+            return False
+
+        candidate.tracking.cost_estimate = self._estimate_cost(b)
+
+        if (
+            b.group_size == rec.booking.group_size
+            and b.nightly_group_sizes == rec.booking.nightly_group_sizes
+            and candidate.tracking.cost_estimate == rec.tracking.cost_estimate
+        ):
+            flash(f"No changes to booking {booking_id} - invoice left as-is", "info")
+            return False
+
+        #
+        ## Dry run: nothing at all may change - the Xero update IS the amendment
+        if not is_xero_enabled():
+            flash(
+                f"[XERO DISABLED] Would amend invoice {rec.booking.xero_invoice_number} "
+                f"for {booking_id} to £{candidate.tracking.cost_estimate / 100:.2f}",
+                "info",
+            )
+            return False
+
+        try:
+            inv = xero.update_invoice(candidate, rec.booking.xero_invoice_id)
+        except xero.XeroError as e:
+            self.logger.error("Xero invoice amend for %s failed: %s", booking_id, e)
+            flash(str(e), "danger")
+            return False
+
+        for key in ("group_size", "nightly_group_sizes"):
+            old_value, new_value = getattr(rec.booking, key), getattr(b, key)
+            if old_value != new_value:
+                setattr(rec.booking, key, new_value)
+                self._add_to_notes(rec.tracking, f"{key} changed from [{old_value}] to [{new_value}]")
+        if rec.tracking.cost_estimate != candidate.tracking.cost_estimate:
+            self._add_to_notes(
+                rec.tracking,
+                f"Cost estimate changed from [{rec.tracking.cost_estimate}] "
+                + f"to [{candidate.tracking.cost_estimate}]",
+            )
+            rec.tracking.cost_estimate = candidate.tracking.cost_estimate
+        self._add_to_notes(
+            rec.tracking, f"Xero invoice {inv['invoice_number']} amended (line items replaced)"
+        )
+
+        # Xero already holds the amendment, so a calendar failure must not lose it
+        try:
+            update_calendar_entry(rec)
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.logger.exception("Calendar update failed for %s after invoice amend", booking_id)
+
+        # Persist the amendment before emailing so an email failure can't lose it
+        save_json(self.live, DATA_FILE_PATH)
+
+        self._email_xero_invoice(rec, inv, action="amended")
+        return True
 
     def get_xero_link(self, group_name: str) -> dict:
         """The saved Xero contact link for a group, or None. File read only."""
@@ -644,6 +741,15 @@ class Bookings:
             # Redo the event type as a time change may have altered it
             rec.booking.event_type = get_event_type(rec.booking.arriving, rec.booking.departing)
 
+            # Per-night sizes are keyed by date, so a date change invalidates them
+            if (
+                rec.booking.nightly_group_sizes
+                and "nightly_group_sizes" not in changed_keys
+                and any(key in ("arriving", "departing") for key in changed_keys)
+            ):
+                rec.booking.nightly_group_sizes = None
+                self._add_to_notes(rec.tracking, "nightly group sizes cleared - dates changed")
+
             # Only update the cost estimate if it was not in the update payload otherwise
             # the manual cost estimate is lost
             if "cost_estimate" not in changed_keys:
@@ -653,7 +759,8 @@ class Bookings:
             # This avoids sending emails for pending, and then another staight after for comfirmed
             if (
                 any(
-                    key in ["arriving", "departing", "group_size", "facilities"]
+                    key
+                    in ["arriving", "departing", "group_size", "nightly_group_sizes", "facilities"]
                     for key in changed_keys
                 )
                 and rec.tracking.status == "Confirmed"

@@ -13,7 +13,9 @@ import models.bookings as bookings_module
 import models.xero as xero
 from models.bookings import Bookings
 from models.json_utils import load_json
+import models.utils as utils_module
 from models.schemas import (
+    SCHEMA_VERSION,
     ArchiveData,
     BookingData,
     LeaderData,
@@ -21,7 +23,7 @@ from models.schemas import (
     LiveData,
     TrackingData,
 )
-from models.utils import now_uk
+from models.utils import estimate_cost, now_uk
 from models.xero import XeroError, XeroNotConnectedError, XeroTokenManager
 
 
@@ -143,7 +145,7 @@ def test_missing_token_raises_not_connected(tmp_path):
 
 #
 ## Schema migration
-def test_v2_bookings_file_migrates_to_v3(tmp_path):
+def test_v2_bookings_file_migrates_to_current(tmp_path):
     path = tmp_path / "bookings.json"
     path.write_text(
         json.dumps(
@@ -152,17 +154,39 @@ def test_v2_bookings_file_migrates_to_v3(tmp_path):
         encoding="utf-8",
     )
     data = load_json(path, LiveData)
-    assert data.schema_version == 3
+    assert data.schema_version == SCHEMA_VERSION
     assert data.next_idx == 5
 
 
-def test_v2_archive_file_migrates_to_v3(tmp_path):
+def test_v2_archive_file_migrates_to_current(tmp_path):
     path = tmp_path / "archive.json"
     path.write_text(
         json.dumps({"schema_version": 2, "updated": now_uk().isoformat(), "items": []}),
         encoding="utf-8",
     )
-    assert load_json(path, ArchiveData).schema_version == 3
+    assert load_json(path, ArchiveData).schema_version == SCHEMA_VERSION
+
+
+def test_v3_bookings_file_migrates_to_v4(tmp_path):
+    path = tmp_path / "bookings.json"
+    path.write_text(
+        json.dumps(
+            {"schema_version": 3, "updated": now_uk().isoformat(), "next_idx": 7, "items": []}
+        ),
+        encoding="utf-8",
+    )
+    data = load_json(path, LiveData)
+    assert data.schema_version == 4
+    assert data.next_idx == 7
+
+
+def test_v3_archive_file_migrates_to_v4(tmp_path):
+    path = tmp_path / "archive.json"
+    path.write_text(
+        json.dumps({"schema_version": 3, "updated": now_uk().isoformat(), "items": []}),
+        encoding="utf-8",
+    )
+    assert load_json(path, ArchiveData).schema_version == 4
 
 
 def test_unknown_schema_version_still_raises(tmp_path):
@@ -579,3 +603,341 @@ def test_wrong_status_rejected(manager, live_booking):
     live_booking.tracking.status = "Confirmed"
     assert manager.raise_xero_invoice("CDS-2026-0001")["ok"] is False
     assert live_booking.tracking.status == "Confirmed"
+
+
+#
+## Per-night group sizes
+CHARGES = {
+    "charges": {"overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}}}
+}
+NIGHTLY = {"2026-06-12": 20, "2026-06-13": 15}  # fixture stay is 12th-14th June
+
+
+def test_estimate_cost_with_nightly_sizes(monkeypatch):
+    monkeypatch.setattr(utils_module, "FIELD_MAPPINGS_DICT", CHARGES)
+    cost = estimate_cost(
+        "overnight", 2, "Chelmsford District Scouts", 20, [], nightly_sizes=[20, 15]
+    )
+    assert cost == 150 * (20 + 15)
+
+
+def test_estimate_cost_uniform_unchanged_without_nightly_sizes(monkeypatch):
+    monkeypatch.setattr(utils_module, "FIELD_MAPPINGS_DICT", CHARGES)
+    assert estimate_cost("overnight", 2, "Chelmsford District Scouts", 24, []) == 150 * 2 * 24
+
+
+def test_estimate_cost_nightly_sizes_apply_to_per_person_facility(monkeypatch):
+    charges = {
+        "charges": {
+            "overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}},
+            "hall": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 50}},
+        },
+        "facility_charges": {"Main Field": "hall"},
+    }
+    monkeypatch.setattr(utils_module, "FIELD_MAPPINGS_DICT", charges)
+    cost = estimate_cost(
+        "overnight", 2, "Chelmsford District Scouts", 20, ["Main Field"], nightly_sizes=[20, 15]
+    )
+    assert cost == (150 + 50) * (20 + 15)
+
+
+def test_nightly_size_helpers(live_booking):
+    b = live_booking.booking
+    assert b.num_overnights() == 2
+    assert b.nightly_size_list() == [24, 24]  # uniform fallback
+
+    b.nightly_group_sizes = dict(NIGHTLY)
+    assert b.nightly_size_list() == [20, 15]
+
+
+def test_nightly_group_sizes_validation():
+    with pytest.raises(Exception):
+        BookingData.model_validate(
+            {
+                "id": "x",
+                "original_sheet_md5": "x",
+                "group_type": "g",
+                "group_name": "g",
+                "group_size": 10,
+                "nightly_group_sizes": {"2026-06-12": 0},  # < 1 rejected
+                "event_type": "overnight",
+                "submitted": "2026-05-02T09:30:00",
+                "arriving": "2026-06-12T16:00:00",
+                "departing": "2026-06-14T10:00:00",
+                "facilities": [],
+            }
+        )
+
+
+def test_itemised_lines_use_nightly_sizes(monkeypatch, live_booking):
+    monkeypatch.setattr(xero, "FIELD_MAPPINGS_DICT", CHARGES)
+    live_booking.booking.nightly_group_sizes = dict(NIGHTLY)
+    live_booking.tracking.cost_estimate = 150 * (20 + 15)
+
+    lines = xero.build_invoice_line_items(live_booking)
+    assert len(lines) == 2
+    assert (lines[0]["Quantity"], lines[1]["Quantity"]) == (20.0, 15.0)
+    assert all(l["UnitAmount"] == 1.50 for l in lines)
+
+
+def test_build_invoice_description_shows_per_night_counts(live_booking):
+    live_booking.booking.nightly_group_sizes = dict(NIGHTLY)
+    assert "20/15 people (per night)" in xero.build_invoice_description(live_booking.booking)
+
+
+#
+## Invoice update (amend in place)
+def _authorised_invoice(paid=0, credited=0, status="AUTHORISED"):
+    return {
+        "InvoiceID": "inv-guid",
+        "InvoiceNumber": "INV-0042",
+        "Status": status,
+        "AmountPaid": paid,
+        "AmountCredited": credited,
+        "DueDateString": "2026-07-20T00:00:00",
+    }
+
+
+def test_update_invoice_replaces_line_items(monkeypatch, live_booking):
+    sent = []
+
+    def fake_request(method, path, params=None, json_body=None):
+        sent.append((method, path, json_body))
+        if method == "GET":
+            return {"Invoices": [_authorised_invoice()]}
+        return {"Invoices": [_authorised_invoice()]}
+
+    monkeypatch.setattr(xero, "_request", fake_request)
+    result = xero.update_invoice(live_booking, "inv-guid")
+
+    assert result == {
+        "invoice_id": "inv-guid",
+        "invoice_number": "INV-0042",
+        "due_date": "2026-07-20",
+    }
+    method, path, body = sent[-1]
+    assert (method, path) == ("POST", "Invoices/inv-guid")
+    posted = body["Invoices"][0]
+    assert posted["InvoiceID"] == "inv-guid"
+    assert posted["LineItems"]  # full replacement line items
+    assert "Status" not in posted  # only line items change
+
+
+def test_update_invoice_blocks_paid_invoice(monkeypatch, live_booking):
+    posts = []
+
+    def fake_request(method, path, params=None, json_body=None):
+        if method == "POST":
+            posts.append(path)
+        return {"Invoices": [_authorised_invoice(paid=25.0)]}
+
+    monkeypatch.setattr(xero, "_request", fake_request)
+    with pytest.raises(XeroError, match="credit note"):
+        xero.update_invoice(live_booking, "inv-guid")
+    assert posts == []
+
+
+def test_update_invoice_blocks_non_authorised(monkeypatch, live_booking):
+    posts = []
+
+    def fake_request(method, path, params=None, json_body=None):
+        if method == "POST":
+            posts.append(path)
+        return {"Invoices": [_authorised_invoice(status="VOIDED")]}
+
+    monkeypatch.setattr(xero, "_request", fake_request)
+    with pytest.raises(XeroError, match="VOIDED"):
+        xero.update_invoice(live_booking, "inv-guid")
+    assert posts == []
+
+
+def test_update_invoice_refuses_zero_amount(monkeypatch, live_booking):
+    def fail(*a, **k):
+        raise AssertionError("no Xero call expected for a zero amount")
+
+    monkeypatch.setattr(xero, "_request", fail)
+    live_booking.tracking.cost_estimate = 0
+    with pytest.raises(XeroError):
+        xero.update_invoice(live_booking, "inv-guid")
+
+
+#
+## Orchestration: Bookings.amend_xero_invoice
+@pytest.fixture
+def invoiced_manager(manager, live_booking, monkeypatch):
+    """The manager fixture with its booking already invoiced and Completed"""
+    live_booking.tracking.status = "Completed"
+    live_booking.booking.xero_invoice_id = "inv-guid"
+    live_booking.booking.xero_invoice_number = "INV-0042"
+    monkeypatch.setattr(manager, "_estimate_cost", lambda b: 5250)
+    return manager
+
+
+def test_amend_happy_path(invoiced_manager, live_booking, monkeypatch):
+    updated = []
+    monkeypatch.setattr(
+        xero,
+        "update_invoice",
+        lambda rec, iid: updated.append((rec, iid))
+        or {"invoice_id": "inv-guid", "invoice_number": "INV-0042", "due_date": "2026-07-20"},
+    )
+    monkeypatch.setattr(xero, "get_invoice_pdf", lambda iid: b"%PDF-fake")
+    monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: "https://in.xero.com/abc")
+    emailed = []
+    monkeypatch.setattr(
+        bookings_module, "send_invoice_email", lambda *a, **k: emailed.append(a) or True
+    )
+
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is True
+
+    # Xero saw the candidate with the new sizes, before the record was mutated
+    assert updated[0][0].booking.nightly_group_sizes == NIGHTLY
+    assert updated[0][1] == "inv-guid"
+
+    assert live_booking.booking.group_size == 20  # peak of 20/15
+    assert live_booking.booking.nightly_group_sizes == NIGHTLY
+    assert live_booking.tracking.cost_estimate == 5250
+    assert live_booking.tracking.status == "Completed"
+    assert "amended" in live_booking.tracking.notes
+    assert "emailed to leader: jane@example.com" in live_booking.tracking.notes
+    assert emailed
+
+
+def test_amend_uniform_nights_collapse_to_group_size(invoiced_manager, live_booking, monkeypatch):
+    monkeypatch.setattr(
+        xero,
+        "update_invoice",
+        lambda rec, iid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042", "due_date": ""},
+    )
+    monkeypatch.setattr(xero, "get_invoice_pdf", lambda iid: b"%PDF-fake")
+    monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: None)
+    monkeypatch.setattr(bookings_module, "send_invoice_email", lambda *a, **k: True)
+
+    assert (
+        invoiced_manager.amend_xero_invoice(
+            "CDS-2026-0001", {"2026-06-12": 18, "2026-06-13": 18}
+        )
+        is True
+    )
+    assert live_booking.booking.group_size == 18
+    assert live_booking.booking.nightly_group_sizes is None  # uniform needs no breakdown
+
+
+def test_amend_xero_error_leaves_booking_untouched(invoiced_manager, live_booking, monkeypatch):
+    def boom(*a, **k):
+        raise XeroError("Invoice INV-0042 has £25.00 paid/credited against it")
+
+    monkeypatch.setattr(xero, "update_invoice", boom)
+
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is False
+    assert live_booking.booking.group_size == 24
+    assert live_booking.booking.nightly_group_sizes is None
+    assert live_booking.tracking.cost_estimate == 12345
+    assert live_booking.tracking.notes == ""
+
+
+def test_amend_calendar_failure_still_saves_amendment(invoiced_manager, live_booking, monkeypatch):
+    monkeypatch.setattr(
+        xero,
+        "update_invoice",
+        lambda rec, iid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042", "due_date": ""},
+    )
+    monkeypatch.setattr(xero, "get_invoice_pdf", lambda iid: b"%PDF-fake")
+    monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: None)
+    monkeypatch.setattr(bookings_module, "send_invoice_email", lambda *a, **k: True)
+
+    def boom(rec):
+        raise RuntimeError("Google Calendar is down")
+
+    monkeypatch.setattr(bookings_module, "update_calendar_entry", boom)
+    saved = []
+    monkeypatch.setattr(bookings_module, "save_json", lambda *a, **k: saved.append(True))
+
+    # Xero already holds the amendment - a calendar failure must not lose it
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is True
+    assert live_booking.tracking.cost_estimate == 5250
+    assert saved
+
+
+def test_amend_email_failure_still_saves_amendment(invoiced_manager, live_booking, monkeypatch):
+    monkeypatch.setattr(
+        xero,
+        "update_invoice",
+        lambda rec, iid: {"invoice_id": "inv-guid", "invoice_number": "INV-0042", "due_date": ""},
+    )
+    monkeypatch.setattr(xero, "get_invoice_pdf", lambda iid: b"%PDF-fake")
+    monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: None)
+    monkeypatch.setattr(bookings_module, "send_invoice_email", lambda *a, **k: False)
+
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is True
+    assert live_booking.tracking.cost_estimate == 5250
+    assert "FAILED" in live_booking.tracking.notes
+
+
+def test_amend_rejected_without_invoice_or_wrong_status(invoiced_manager, live_booking):
+    live_booking.booking.xero_invoice_id = None
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is False
+
+    live_booking.booking.xero_invoice_id = "inv-guid"
+    live_booking.tracking.status = "Invoice"
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is False
+    assert live_booking.booking.group_size == 24
+
+
+def test_amend_no_change_is_a_noop(invoiced_manager, live_booking, monkeypatch):
+    def fail(*a, **k):
+        raise AssertionError("no Xero call expected when nothing changed")
+
+    monkeypatch.setattr(xero, "update_invoice", fail)
+    monkeypatch.setattr(invoiced_manager, "_estimate_cost", lambda b: 12345)
+
+    # Same uniform headcount as the booking already has
+    assert (
+        invoiced_manager.amend_xero_invoice(
+            "CDS-2026-0001", {"2026-06-12": 24, "2026-06-13": 24}
+        )
+        is False
+    )
+    assert live_booking.tracking.notes == ""
+
+
+def test_amend_dry_run_changes_nothing(invoiced_manager, live_booking, monkeypatch):
+    monkeypatch.setattr(bookings_module, "is_xero_enabled", lambda: False)
+
+    def fail(*a, **k):
+        raise AssertionError("no Xero call expected when disabled")
+
+    monkeypatch.setattr(xero, "update_invoice", fail)
+
+    assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is False
+    assert live_booking.booking.group_size == 24
+    assert live_booking.booking.nightly_group_sizes is None
+    assert live_booking.tracking.cost_estimate == 12345
+
+
+#
+## modify_fields and per-night sizes
+def test_modify_fields_accepts_nightly_sizes(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "New"
+    monkeypatch.setattr(manager, "_estimate_cost", lambda b: 5250)
+
+    assert manager.modify_fields(
+        "CDS-2026-0001",
+        {"booking": {"nightly_group_sizes": dict(NIGHTLY), "group_size": 20}},
+    )
+    assert live_booking.booking.nightly_group_sizes == NIGHTLY
+    assert live_booking.booking.group_size == 20
+    assert live_booking.tracking.cost_estimate == 5250
+    assert "nightly_group_sizes changed" in live_booking.tracking.notes
+
+
+def test_date_change_clears_nightly_sizes(manager, live_booking, monkeypatch):
+    live_booking.tracking.status = "New"
+    live_booking.booking.nightly_group_sizes = dict(NIGHTLY)
+    monkeypatch.setattr(manager, "_estimate_cost", lambda b: 5250)
+
+    assert manager.modify_fields(
+        "CDS-2026-0001", {"booking": {"departing": "2026-06-15T10:00:00"}}
+    )
+    assert live_booking.booking.nightly_group_sizes is None
+    assert "nightly group sizes cleared - dates changed" in live_booking.tracking.notes

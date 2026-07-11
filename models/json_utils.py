@@ -63,8 +63,15 @@ def _migrate_v2_to_v3(data: dict) -> dict:
     return data
 
 
+def _migrate_v3_to_v4(data: dict) -> dict:
+    """v4 only adds optional nightly_group_sizes to BookingData, so no payload changes needed."""
+    data["schema_version"] = 4
+    return data
+
+
 MIGRATIONS = {
     2: _migrate_v2_to_v3,
+    3: _migrate_v3_to_v4,
 }
 
 

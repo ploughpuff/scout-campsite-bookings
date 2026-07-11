@@ -8,7 +8,7 @@ import io
 import os
 import zipfile
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Flask,
@@ -179,6 +179,107 @@ def xero_link_contact(booking_id):
         return render_picker(result["candidates"])
 
     return redirect(url_for("booking_detail", booking_id=booking_id))
+
+
+def _nightly_inputs(rec):
+    """One {key, label, size} entry per night of the stay, for the sizes form"""
+    nights = []
+    for i in range(rec.booking.num_overnights()):
+        night = rec.booking.arriving + timedelta(days=i)
+        nights.append(
+            {
+                "key": night.date().isoformat(),
+                "label": night.strftime("%a %d %b %Y"),
+                "size": rec.booking.size_for_night(night.date()),
+            }
+        )
+    return nights
+
+
+def _parse_nightly_form():
+    """Extract night.<iso-date> fields and optional group_size from the POSTed form.
+
+    Returns (nightly_sizes, group_size) or (None, None) if any value is invalid.
+    """
+    nightly_sizes = {}
+    try:
+        for full_key in request.form:
+            if full_key.startswith("night."):
+                nightly_sizes[full_key.split(".", 1)[1]] = int(request.form[full_key])
+        group_size = int(request.form["group_size"]) if request.form.get("group_size") else None
+    except (TypeError, ValueError):
+        return None, None
+    if any(size < 1 for size in nightly_sizes.values()) or (group_size or 1) < 1:
+        return None, None
+    return nightly_sizes, group_size
+
+
+@app.route("/xero/amend_invoice/<booking_id>", methods=["GET", "POST"])
+def xero_amend_invoice(booking_id):
+    """Correct people numbers on an invoiced booking, update the Xero invoice
+    in place (same invoice number) and re-email it."""
+    bookings_list = bookings.get_bookings_list(booking_id=booking_id)
+    rec = bookings_list[0] if bookings_list else None
+
+    if not rec or rec.tracking.status != "Completed" or not rec.booking.xero_invoice_id:
+        flash(f"Booking {booking_id} has no amendable Xero invoice", "danger")
+        return redirect(url_for("booking_detail", booking_id=booking_id))
+
+    if request.method == "POST":
+        nightly_sizes, group_size = _parse_nightly_form()
+        if nightly_sizes is None:
+            flash("People numbers must be whole numbers of at least 1", "danger")
+        else:
+            bookings.amend_xero_invoice(booking_id, nightly_sizes, group_size)
+        return redirect(url_for("booking_detail", booking_id=booking_id))
+
+    # Pre-check with Xero so the admin isn't filling in a form for a paid invoice
+    if is_xero_enabled():
+        try:
+            xero.assert_invoice_amendable(xero.get_invoice(rec.booking.xero_invoice_id))
+        except xero.XeroError as e:
+            flash(str(e), "danger")
+            return redirect(url_for("booking_detail", booking_id=booking_id))
+
+    return render_template(
+        "amend_invoice.html",
+        rec=rec,
+        nights=_nightly_inputs(rec),
+        mode="amend",
+        post_url=url_for("xero_amend_invoice", booking_id=booking_id),
+    )
+
+
+@app.route("/booking/nightly_sizes/<booking_id>", methods=["GET", "POST"])
+def booking_nightly_sizes(booking_id):
+    """Set per-night people numbers on a booking before it is invoiced."""
+    bookings_list = bookings.get_bookings_list(booking_id=booking_id)
+    rec = bookings_list[0] if bookings_list else None
+
+    if not rec or rec.tracking.status not in ("New", "Pending", "Confirmed", "Invoice"):
+        flash(f"Booking {booking_id} is not editable", "danger")
+        return redirect(url_for("booking_detail", booking_id=booking_id))
+
+    if request.method == "POST":
+        nightly_sizes, _ = _parse_nightly_form()
+        if not nightly_sizes:
+            flash("People numbers must be whole numbers of at least 1", "danger")
+        else:
+            values = list(nightly_sizes.values())
+            update = {
+                "nightly_group_sizes": None if len(set(values)) == 1 else nightly_sizes,
+                "group_size": max(values),
+            }
+            bookings.modify_fields(booking_id, {"booking": update})
+        return redirect(url_for("booking_detail", booking_id=booking_id))
+
+    return render_template(
+        "amend_invoice.html",
+        rec=rec,
+        nights=_nightly_inputs(rec),
+        mode="edit",
+        post_url=url_for("booking_nightly_sizes", booking_id=booking_id),
+    )
 
 
 @app.route("/booking/resend_email/<booking_id>", methods=["POST"])

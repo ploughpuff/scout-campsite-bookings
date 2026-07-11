@@ -5,7 +5,7 @@ utils.py - Utility functions for use in Scout Campsite Booking.
 import logging
 import re
 from datetime import datetime, time
-from typing import NamedTuple, Sequence
+from typing import NamedTuple, Optional, Sequence
 
 from flask import current_app, session
 
@@ -215,8 +215,11 @@ def estimate_cost(
     group_type: str,
     group_size: int,
     facilities: Sequence[str],
+    nightly_sizes: Optional[Sequence[int]] = None,
 ) -> int:
     """Estimate cost of a booking based on event/group types, size, and facilities.
+    nightly_sizes, when given, holds the headcount for each night in turn and
+    overrides num_overnights * group_size for per_person pricing.
     Robust against missing keys in FIELD_MAPPINGS_DICT.
     """
     logger = logging.getLogger("app_logger")
@@ -249,7 +252,8 @@ def estimate_cost(
         if group_size < 0:
             logger.warning("Negative group_size %s; treating as 0.", group_size)
             group_size = 0
-        cost += rate * num_overnights * group_size if unit == "per_person" else rate
+        people_nights = sum(nightly_sizes) if nightly_sizes else num_overnights * group_size
+        cost += rate * people_nights if unit == "per_person" else rate
 
     # --- Facility add-ons ---
     # Facilities that carry a surcharge are mapped to a charges key in the config,
@@ -268,11 +272,8 @@ def estimate_cost(
             )
             continue
 
-        cost += (
-            fac_rate * num_overnights * group_size
-            if fac_cfg.get("unit") == "per_person"
-            else fac_rate
-        )
+        people_nights = sum(nightly_sizes) if nightly_sizes else num_overnights * group_size
+        cost += fac_rate * people_nights if fac_cfg.get("unit") == "per_person" else fac_rate
 
     # Ensure int return (if your rates are ints this is a no-op)
     return int(cost)

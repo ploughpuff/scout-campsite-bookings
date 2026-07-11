@@ -349,10 +349,11 @@ def build_invoice_description(b: BookingData) -> str:
     """Human-readable line item description built from the booking"""
     arriving = get_pretty_date_str(b.arriving)
     departing = get_pretty_date_str(b.departing)
-    desc = (
-        f"{b.group_name} - {b.event_type} booking, "
-        f"{arriving} to {departing}, {b.group_size} people"
-    )
+    if b.nightly_group_sizes:
+        people = "/".join(str(n) for n in b.nightly_size_list()) + " people (per night)"
+    else:
+        people = f"{b.group_size} people"
+    desc = f"{b.group_name} - {b.event_type} booking, {arriving} to {departing}, {people}"
     if b.facilities:
         desc += f". Facilities: {', '.join(b.facilities)}"
     return desc
@@ -403,8 +404,9 @@ def _itemised_lines(b: BookingData) -> tuple[list[dict], int]:
     if unit == "per_person":
         for i in range(num_overnights):
             night = b.arriving + timedelta(days=i)
-            lines.append(_line(f"{label} - {_line_date_str(night)}", b.group_size, rate))
-            total += rate * b.group_size
+            size = b.size_for_night(night.date())
+            lines.append(_line(f"{label} - {_line_date_str(night)}", size, rate))
+            total += rate * size
     else:
         lines.append(_line(f"{label} - {_line_date_str(b.arriving)}", 1, rate))
         total += rate
@@ -432,9 +434,10 @@ def _facility_lines(b: BookingData, charges: dict, num_overnights: int) -> tuple
         if fac_cfg.get("unit") == "per_person":
             for i in range(num_overnights):
                 night = b.arriving + timedelta(days=i)
+                size = b.size_for_night(night.date())
                 desc = f"{facility} - {_line_date_str(night)}"
-                lines.append(_line(desc, b.group_size, fac_rate))
-                total += fac_rate * b.group_size
+                lines.append(_line(desc, size, fac_rate))
+                total += fac_rate * size
         else:
             lines.append(_line(facility, 1, fac_rate))
             total += fac_rate
@@ -474,6 +477,58 @@ def find_invoice_by_reference(booking_id: str) -> dict | None:
                 "due_date": (inv.get("DueDateString") or "")[:10],
             }
     return None
+
+
+def get_invoice(invoice_id: str) -> dict:
+    """Fetch the raw invoice record (Status, AmountPaid, InvoiceNumber, ...)"""
+    data = _request("GET", f"Invoices/{invoice_id}")
+    return data["Invoices"][0]
+
+
+def assert_invoice_amendable(inv: dict) -> None:
+    """Raise XeroError unless the invoice is AUTHORISED with no money against it"""
+    number = inv.get("InvoiceNumber", "?")
+    status = inv.get("Status")
+    if status != "AUTHORISED":
+        raise XeroError(
+            f"Invoice {number} is {status} - only unpaid AUTHORISED invoices can be amended"
+        )
+    paid = inv.get("AmountPaid") or 0
+    credited = inv.get("AmountCredited") or 0
+    if paid or credited:
+        raise XeroError(
+            f"Invoice {number} has £{paid + credited:.2f} paid/credited against it - "
+            f"amend it in Xero with a credit note; this app cannot do that"
+        )
+
+
+def update_invoice(rec: LiveBooking, invoice_id: str) -> dict:
+    """Replace the line items on an existing unpaid AUTHORISED invoice.
+
+    Xero keeps the invoice number; only the LineItems change. The invoice is
+    fetched first so an already-paid or voided invoice can never be touched.
+    """
+    if rec.tracking.cost_estimate <= 0:
+        raise XeroError(f"Refusing to amend invoice to a zero amount for {rec.booking.id}")
+
+    inv = get_invoice(invoice_id)
+    assert_invoice_amendable(inv)
+
+    # POST updates in place; omitted fields are retained, LineItems fully replaced
+    _request(
+        "POST",
+        f"Invoices/{invoice_id}",
+        json_body={
+            "Invoices": [{"InvoiceID": invoice_id, "LineItems": build_invoice_line_items(rec)}]
+        },
+    )
+    number = inv.get("InvoiceNumber", "")
+    logger.info("Xero invoice [%s] amended for booking [%s]", number, rec.booking.id)
+    return {
+        "invoice_id": invoice_id,
+        "invoice_number": number,
+        "due_date": (inv.get("DueDateString") or "")[:10],
+    }
 
 
 def create_invoice(rec: LiveBooking, contact_id: str) -> dict:

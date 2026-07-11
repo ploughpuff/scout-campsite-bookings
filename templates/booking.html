@@ -137,11 +137,17 @@ Booking Details
         </div>
         <div class="input-group">
           <span class="input-group-text">Number</span>
-          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          {% if rec.booking.nightly_group_sizes %}
+          <span class="form-control custom-bg">{{ rec.booking.nightly_size_list() | join(' / ') }} per night</span>
+          {% elif rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
           <input type="number" name="booking.group_size" class="form-control track-changes"
             value="{{ rec.booking.group_size }}" min="1" required>
           {% else %}
           <span class="form-control custom-bg">{{ rec.booking.group_size }}</span>
+          {% endif %}
+          {% if rec.booking.num_overnights() > 1 and rec.tracking.status in ['New', 'Pending', 'Confirmed', 'Invoice'] %}
+          <a href="{{ url_for('booking_nightly_sizes', booking_id=rec.booking.id) }}"
+            class="btn btn-outline-secondary" title="Set a different headcount for each night">🌙 Per-night</a>
           {% endif %}
         </div>
         <div class="input-group">
@@ -279,6 +285,12 @@ Booking Details
         class="d-inline">
         <button type="submit" class="btn btn-outline-success">✔️ Mark Completed (invoiced manually)</button>
       </form>
+      {% endif %}
+
+      {# Completed with a Xero invoice → correct the numbers and re-issue #}
+      {% if rec.tracking.status == 'Completed' and rec.booking.xero_invoice_id %}
+      <a href="{{ url_for('xero_amend_invoice', booking_id=rec.booking.id) }}" class="btn btn-warning">🧾 Amend
+        Invoice</a>
       {% endif %}
 
       {# New → Pending #}

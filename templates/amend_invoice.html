@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set amending = mode == 'amend' %}
+
+<h2>{% if amending %}Amend Invoice{% else %}Per-Night People Numbers{% endif %}</h2>
+
+<p>
+  {% if amending %}
+  Correct the number of people for <strong>{{ rec.booking.group_name }}</strong>.
+  The cost is recalculated from the standard rates, the line items on invoice
+  <strong>{{ rec.booking.xero_invoice_number }}</strong> are replaced in Xero
+  (the invoice number stays the same), and the corrected invoice is re-emailed
+  to <strong>{{ rec.leader.email }}</strong>.
+  {% else %}
+  Set how many people <strong>{{ rec.booking.group_name }}</strong> are staying each
+  night. The cost estimate is recalculated from the per-night numbers.
+  {% endif %}
+</p>
+
+<div class="card mb-4">
+  <div class="card-header bg-secondary text-white">
+    <h5 class="mb-0">Booking {{ rec.booking.id }}</h5>
+  </div>
+  <div class="card-body">
+    <p class="mb-1"><strong>Group:</strong> {{ rec.booking.group_name }}</p>
+    <p class="mb-1"><strong>Leader:</strong> {{ rec.leader.name }} ({{ rec.leader.email }})</p>
+    <p class="mb-1"><strong>Stay:</strong> {{ rec.booking.arriving | pretty_date(True) }}
+      to {{ rec.booking.departing | pretty_date(True) }}</p>
+    {% if amending %}
+    <p class="mb-1"><strong>Invoice:</strong> {{ rec.booking.xero_invoice_number }}</p>
+    {% endif %}
+    <p class="mb-0"><strong>Current cost:</strong> £{{ rec.tracking.cost_estimate | pence_to_pounds }}</p>
+  </div>
+</div>
+
+<form method="POST" action="{{ post_url }}" onsubmit="showLoadingOverlay()">
+
+  {% if nights %}
+  <div class="card mb-3" style="max-width: 24rem;">
+    <div class="card-header">People staying each night</div>
+    <div class="card-body">
+      {% for n in nights %}
+      <div class="input-group mb-2">
+        <span class="input-group-text" style="min-width: 11rem;">{{ n.label }}</span>
+        <input type="number" name="night.{{ n.key }}" class="form-control" value="{{ n.size }}" min="1" required>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="input-group mb-3" style="max-width: 24rem;">
+    <span class="input-group-text">Number of people</span>
+    <input type="number" name="group_size" class="form-control" value="{{ rec.booking.group_size }}" min="1" required>
+  </div>
+  {% endif %}
+
+  {% if amending %}
+  <div class="alert alert-warning">
+    ⚠️ This will replace the line items on invoice
+    <strong>{{ rec.booking.xero_invoice_number }}</strong> in Xero (same invoice number),
+    recompute the cost from standard rates, and re-email the corrected invoice to
+    <strong>{{ rec.leader.email }}</strong>.
+  </div>
+  <button type="submit" class="btn btn-warning">🧾 Amend Invoice and Re-email</button>
+  {% else %}
+  <button type="submit" class="btn btn-success">💾 Save Nightly Numbers</button>
+  {% endif %}
+  <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}" class="btn btn-secondary">Cancel</a>
+</form>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="d-none">
+  <div class="overlay-background"></div>
+  <div class="overlay-spinner">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="mt-3 text-white">
+      <strong>Please wait...</strong>
+    </div>
+  </div>
+</div>
+{% endblock %}

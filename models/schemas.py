@@ -1,7 +1,7 @@
 """schemas.py"""
 
-from datetime import datetime
-from typing import List, Literal, Optional
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -10,7 +10,7 @@ from models.utils import (
     now_uk,
 )
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class LeaderData(BaseModel):
@@ -30,6 +30,9 @@ class BookingData(BaseModel):
     group_type: str
     group_name: str
     group_size: int
+    # Per-night headcounts keyed by ISO date of the night's start; None means
+    # group_size applies to every night. group_size stays the peak headcount.
+    nightly_group_sizes: Optional[Dict[str, int]] = None
     event_type: str
     submitted: datetime = Field(frozen=True)
     arriving: datetime
@@ -38,6 +41,33 @@ class BookingData(BaseModel):
     # Xero references are financial audit data, kept here so they survive archiving
     xero_invoice_id: Optional[str] = None
     xero_invoice_number: Optional[str] = None
+
+    @field_validator("nightly_group_sizes")
+    @classmethod
+    def validate_nightly_group_sizes(cls, value):
+        """Empty dict collapses to None; keys must be ISO dates, sizes at least 1."""
+        if not value:
+            return None
+        for key, size in value.items():
+            date.fromisoformat(key)  # raises ValueError on a bad key
+            if size < 1:
+                raise ValueError(f"nightly size for {key} must be at least 1, got {size}")
+        return value
+
+    def num_overnights(self) -> int:
+        """Nights spent on site; 0 for day/eve bookings."""
+        return (self.departing.date() - self.arriving.date()).days
+
+    def size_for_night(self, night: date) -> int:
+        """Headcount for the night starting on the given date."""
+        return (self.nightly_group_sizes or {}).get(night.isoformat(), self.group_size)
+
+    def nightly_size_list(self) -> List[int]:
+        """Per-night headcounts in stay order; empty for day/eve bookings."""
+        return [
+            self.size_for_night(self.arriving.date() + timedelta(days=i))
+            for i in range(self.num_overnights())
+        ]
 
     @field_validator(
         "submitted",
