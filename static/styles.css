@@ -8,6 +8,11 @@
   /* Bootstrap's warning background */
 }
 
+.table tr.booking-paid {
+  --bs-table-bg: #fff9e6;
+  /* Soft gold: paid booking */
+}
+
 .badge-status {
   color: white;
 }

@@ -238,6 +238,21 @@ def get_contact_mapping(group_name: str) -> dict | None:
     return _load_contact_map().get(_map_key(group_name))
 
 
+# Legacy URL form: needs no org shortcode, Xero redirects into the new UI
+XERO_CONTACT_URL = "https://go.xero.com/Contacts/View/{contact_id}"
+
+
+def get_contact_urls(group_names) -> dict[str, str]:
+    """Xero contact page URLs keyed by group name, for groups with a saved mapping"""
+    contact_map = _load_contact_map()
+    urls = {}
+    for name in group_names:
+        entry = contact_map.get(_map_key(name))
+        if entry:
+            urls[name] = XERO_CONTACT_URL.format(contact_id=entry["contact_id"])
+    return urls
+
+
 def save_contact_mapping(group_name: str, contact_id: str, contact_name: str):
     """Remember which Xero contact a group maps to"""
     contact_map = _load_contact_map()

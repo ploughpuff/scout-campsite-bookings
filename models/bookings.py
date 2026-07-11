@@ -46,7 +46,10 @@ from models.utils import (
     sort_facilities,
 )
 
-status_options = ["New", "Pending", "Confirmed", "Invoice", "Completed", "Archived", "Cancelled"]
+#
+## Display order on the All Bookings page: Invoice first so bookings
+## awaiting an invoice are dealt with promptly
+status_options = ["Invoice", "New", "Pending", "Confirmed", "Completed", "Archived", "Cancelled"]
 
 #
 ## Valid transitions to control buttons on html, and filter user input
@@ -440,6 +443,10 @@ class Bookings:
     def get_xero_link(self, group_name: str) -> dict:
         """The saved Xero contact link for a group, or None. File read only."""
         return xero.get_contact_mapping(group_name)
+
+    def get_xero_contact_urls(self, recs) -> dict:
+        """Xero contact page URL per group name, for the bookings given. File read only."""
+        return xero.get_contact_urls({rec.booking.group_name for rec in recs})
 
     def link_xero_contact(
         self,

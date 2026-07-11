@@ -17,21 +17,37 @@
             <th>Arriving</th>
             <th>Departing</th>
             <th>Number</th>
+            <th>Cost</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
           {% for rec in list %}
-          <tr>
+          <tr {% if rec.tracking.cost_estimate > 0 %}class="booking-paid" {% endif %}>
             <td>
               <a href="{{ url_for('booking_detail', booking_id=rec.booking.id) }}"
                 class="text-decoration-none fw-semibold">{{ rec.booking.id }}</a>
             </td>
-            <td>{{ rec.booking.group_name }}</td>
+            <td>
+              {% set xero_url = xero_urls.get(rec.booking.group_name) %}
+              {% if rec.tracking.cost_estimate > 0 and xero_url %}
+              <a href="{{ xero_url }}" target="_blank" rel="noopener"
+                class="text-decoration-none">{{ rec.booking.group_name }}</a>
+              {% else %}
+              {{ rec.booking.group_name }}
+              {% endif %}
+            </td>
             <td>{{ rec.leader.name }}</td>
             <td>{{ rec.booking.arriving|pretty_date }}</td>
             <td>{{ rec.booking.departing|pretty_date }}</td>
             <td>{{ rec.booking.group_size }}</td>
+            <td>
+              {% if rec.tracking.cost_estimate > 0 %}
+              £{{ rec.tracking.cost_estimate | pence_to_pounds }}
+              {% else %}
+              <span class="text-muted">FREE</span>
+              {% endif %}
+            </td>
             <td>
               <span class="badge badge-status {{ rec.tracking.status|lower }}">{{ rec.tracking.status }}</span>
             </td>

@@ -58,8 +58,12 @@ bookings = Bookings()
 def all_bookings():
     """Render the main bookings table page."""
     bookings.auto_update_statuses()
+    recs = bookings.get_bookings_list()
     return render_template(
-        "all_bookings.html", list=bookings.get_bookings_list(), age=bookings.age()
+        "all_bookings.html",
+        list=recs,
+        age=bookings.age(),
+        xero_urls=bookings.get_xero_contact_urls(recs),
     )
 
 
@@ -283,18 +287,14 @@ def offline_analysis():
 def reload_json():
     "Route to reload the bookings JSON file bypassing the checksum validation"
     bookings.load(use_checksum=False)
-    return render_template(
-        "all_bookings.html", list=bookings.get_bookings_list(), age=bookings.age()
-    )
+    return redirect(url_for("all_bookings"))
 
 
 @app.route("/admin/archive_old_bookings")
 def archive_old_bookings():
     "Route to archive old bookings"
     bookings.archive_old_bookings()
-    return render_template(
-        "all_bookings.html", list=bookings.get_bookings_list(), age=bookings.age()
-    )
+    return redirect(url_for("all_bookings"))
 
 
 @app.route("/admin/list_cal_events")
