@@ -289,6 +289,13 @@ def resend_email(booking_id):
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
+@app.route("/booking/request_numbers/<booking_id>", methods=["POST"])
+def request_numbers(booking_id):
+    """Email the leader asking them to confirm final attendance numbers."""
+    bookings.request_confirm_numbers(booking_id)
+    return redirect(url_for("booking_detail", booking_id=booking_id))
+
+
 @app.route("/booking/modify_fields/<booking_id>", methods=["POST"])
 def modify_fields(booking_id):
     """Handle modifying fields from details page."""

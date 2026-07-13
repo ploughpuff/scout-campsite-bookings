@@ -276,6 +276,12 @@ Booking Details
 
       {# Invoice → Completed #}
       {% if 'Completed' in valid_transitions and rec.tracking.status == 'Invoice' %}
+      <form method="POST" action="{{ url_for('request_numbers', booking_id=rec.booking.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-outline-primary">✉️ Ask Leader to Confirm Numbers</button>
+      </form>
+      {% if rec.tracking.numbers_email_sent %}
+      <span class="text-muted small ms-1">requested {{ rec.tracking.numbers_email_sent | pretty_date(True) }}</span>
+      {% endif %}
       <form method="POST" action="{{ url_for('xero_raise_invoice', booking_id=rec.booking.id) }}" class="d-inline"
         onsubmit="showLoadingOverlay()">
         <button type="submit" class="btn btn-success">🧾 Raise Invoice in Xero

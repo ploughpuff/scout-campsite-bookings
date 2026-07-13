@@ -99,6 +99,7 @@ class TrackingData(BaseModel):
     pending_email_sent: Optional[datetime] = None
     confirm_email_sent: Optional[datetime] = None
     cancel_email_sent: Optional[datetime] = None
+    numbers_email_sent: Optional[datetime] = None
     pend_question: Optional[str] = None
     cancel_reason: Optional[str] = None
 
@@ -106,6 +107,7 @@ class TrackingData(BaseModel):
         "pending_email_sent",
         "confirm_email_sent",
         "cancel_email_sent",
+        "numbers_email_sent",
         mode="before",
     )
     @classmethod

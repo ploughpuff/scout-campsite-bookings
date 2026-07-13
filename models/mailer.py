@@ -108,6 +108,50 @@ def send_invoice_email(
     return _send_email(msg, rec.leader.email)
 
 
+def send_confirm_numbers_email(rec: LiveBooking) -> bool:
+    """Email the leader asking them to confirm their actual attendance numbers.
+
+    Sent before the invoice is raised when the final headcount isn't yet known.
+    The leader replies with the confirmed per-day numbers (and Roxby Hut usage
+    where relevant); no PDF is attached.
+    """
+    nights = [
+        {
+            "label": (rec.booking.arriving + timedelta(days=i)).strftime("%a %d %b %Y"),
+            "size": rec.booking.size_for_night((rec.booking.arriving + timedelta(days=i)).date()),
+        }
+        for i in range(rec.booking.num_overnights())
+    ]
+
+    context = {
+        "rec": rec,
+        "sitename": config.SITENAME,
+        "arriving_str": get_pretty_date_str(rec.booking.arriving, inc_time=True, full_month=True),
+        "departing_str": get_pretty_date_str(
+            rec.booking.departing, inc_time=True, full_month=True
+        ),
+        "nights": nights,
+        "roxby": "Roxby Hut" in rec.booking.facilities,
+    }
+
+    try:
+        body = env.get_template("confirm_numbers_email.html").render(context)
+    except TemplateError as e:
+        logger.error("%s trouble rendering confirm numbers email: %s", rec.booking.id, e)
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = f"{config.SITENAME} Booking {rec.booking.id}: please confirm your numbers"
+    msg["From"] = f"{config.EMAIL_DISPLAY_USERNAME} <{config.EMAIL_FROM_ADDRESS}>"
+    msg["To"] = rec.leader.email
+
+    h = html2text.HTML2Text()
+    msg.set_content(h.handle(body))
+    msg.add_alternative(body, subtype="html")
+
+    return _send_email(msg, rec.leader.email)
+
+
 def _build_email_body(rec: LiveBooking):
     """
     Confirmed

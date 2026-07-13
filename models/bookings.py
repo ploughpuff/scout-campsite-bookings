@@ -31,7 +31,11 @@ from models.calendar import (
 )
 from models import xero
 from models.json_utils import load_json, save_json
-from models.mailer import send_email_notification, send_invoice_email
+from models.mailer import (
+    send_confirm_numbers_email,
+    send_email_notification,
+    send_invoice_email,
+)
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 from models.utils import (
     SortedFacilities,
@@ -330,8 +334,29 @@ class Bookings:
     def resend_email(self, booking_id):
         """Resend the last type of email again"""
         rec = self._get_booking_by_id(booking_id)
-        send_email_notification(rec, "RESEND")
-        self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
+        if send_email_notification(rec, "RESEND"):
+            self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
+            save_json(self.live, DATA_FILE_PATH)
+
+    def request_confirm_numbers(self, booking_id):
+        """Email the leader asking them to confirm final attendance numbers.
+
+        Only valid while awaiting an invoice; the leader replies with the
+        confirmed per-day numbers so staff can price the invoice accurately.
+        """
+        rec = self._get_booking_by_id(booking_id)
+
+        if not rec or rec.tracking.status != "Invoice":
+            reason = "not found" if not rec else f"not awaiting an invoice ({rec.tracking.status})"
+            flash(f"Booking {booking_id} is {reason}", "danger")
+            return
+
+        if send_confirm_numbers_email(rec):
+            rec.tracking.numbers_email_sent = now_uk()
+            self._add_to_notes(
+                rec.tracking, f"Email Sent: confirm numbers request: {rec.leader.email}"
+            )
+            save_json(self.live, DATA_FILE_PATH)
 
     def raise_xero_invoice(
         self,
