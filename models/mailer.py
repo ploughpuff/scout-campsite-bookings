@@ -117,7 +117,9 @@ def send_confirm_numbers_email(rec: LiveBooking) -> bool:
     """
     nights = [
         {
-            "label": (rec.booking.arriving + timedelta(days=i)).strftime("%a %d %b %Y"),
+            "label": get_pretty_date_str(
+                rec.booking.arriving + timedelta(days=i), full_month=True, always_year=True
+            ),
             "size": rec.booking.size_for_night((rec.booking.arriving + timedelta(days=i)).date()),
         }
         for i in range(rec.booking.num_overnights())

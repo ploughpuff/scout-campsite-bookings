@@ -139,8 +139,11 @@ def get_timestamp_for_notes(value=None, include_seconds=False):
         return value
 
 
-def get_pretty_date_str(dt, inc_time=False, full_month=False):
-    """Return pretty date string from passed dt object"""
+def get_pretty_date_str(dt, inc_time=False, full_month=False, always_year=False):
+    """Return pretty date string from passed dt object.
+
+    The year is omitted for dates in the current year unless always_year is set.
+    """
     try:
         # https://strftime.org/
         day_name = dt.strftime("%A")
@@ -153,7 +156,7 @@ def get_pretty_date_str(dt, inc_time=False, full_month=False):
 
         date_str = f"{day_name}, {day}{suffix} {month}"
 
-        if year != current_year:
+        if always_year or year != current_year:
             date_str += f" {year}"
 
         if inc_time:
