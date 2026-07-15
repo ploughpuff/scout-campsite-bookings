@@ -18,7 +18,7 @@ Booking Details
             <span>{{ rec.tracking.status }}</span>
           </h5>
         </div>
-        {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+        {% if rec.tracking.status in ['New', 'Pending', 'Confirmed', 'Invoice'] %}
         <button type="submit" class="btn btn-primary" title="Clicking Save triggers an email send">💾 Save
           Changes</button>
         {% else %}
@@ -161,7 +161,7 @@ Booking Details
         </div>
         <div class="input-group">
           <span class="input-group-text">Cost Estimate (£)</span>
-          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          {% if rec.tracking.status in ['New', 'Pending', 'Confirmed', 'Invoice'] %}
           <input type="number" step="0.25" name="tracking.cost_estimate" class="form-control track-changes"
             value="{{ rec.tracking.cost_estimate | pence_to_pounds }}" min="0" required>
           {% else %}
