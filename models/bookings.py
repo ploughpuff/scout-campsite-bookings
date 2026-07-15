@@ -436,7 +436,17 @@ class Bookings:
             flash(str(e), "danger")
             return {"ok": False}
 
-        self._email_xero_invoice(rec, inv)
+        # The invoice is now live in Xero, so emailing is best-effort: a failure
+        # here must never strand the booking in Invoice status (it would leave a
+        # raised invoice the app thinks is still pending). Always complete.
+        try:
+            self._email_xero_invoice(rec, inv)
+        except Exception:  # pylint: disable=broad-except
+            self.logger.exception("Emailing invoice for %s failed", booking_id)
+            self._add_to_notes(
+                rec.tracking,
+                f"Invoice {rec.booking.xero_invoice_number} email errored - send it manually",
+            )
         self._complete_after_invoice(rec)
         return {"ok": True}
 

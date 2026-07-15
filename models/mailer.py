@@ -243,7 +243,9 @@ def _send_email(msg, recipient):
                 with smtplib.SMTP("localhost", 25) as server:
                     server.send_message(msg)
 
-        except (smtplib.SMTPException, ConnectionRefusedError) as e:
+        # OSError covers connection refused, timeouts, and DNS failures
+        # (socket.gaierror when offline) - none of which should raise out of here.
+        except (smtplib.SMTPException, OSError) as e:
             logger.error("%s - Failed to send email to %s: %s", config.APP_ENV, recipient, e)
             flash(f"{config.APP_ENV} - Failed to send email to {recipient}: {e}", "danger")
             return False
