@@ -297,6 +297,10 @@ Booking Details
       {% if rec.tracking.status == 'Completed' and rec.booking.xero_invoice_id %}
       <a href="{{ url_for('xero_amend_invoice', booking_id=rec.booking.id) }}" class="btn btn-warning">🧾 Amend
         Invoice</a>
+      <form method="POST" action="{{ url_for('xero_resend_invoice', booking_id=rec.booking.id) }}" class="d-inline"
+        onsubmit="showLoadingOverlay()">
+        <button type="submit" class="btn btn-outline-info">📧 Resend Invoice Email</button>
+      </form>
       {% endif %}
 
       {# New → Pending #}

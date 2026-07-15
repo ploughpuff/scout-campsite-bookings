@@ -468,6 +468,42 @@ class Bookings:
                 f"Invoice {number} {action} but emailing it failed - send it from Xero.", "warning"
             )
 
+    def resend_invoice_email(self, booking_id) -> bool:
+        """Re-email an already-raised Xero invoice to the leader.
+
+        For when the original send failed (e.g. no connectivity). Only the email
+        is re-sent; the Xero invoice itself is not touched.
+        """
+        rec = self._get_booking_by_id(booking_id)
+
+        if not rec or rec.tracking.status != "Completed" or not rec.booking.xero_invoice_id:
+            reason = (
+                "not found"
+                if not rec
+                else f"not an invoiced Completed booking ({rec.tracking.status})"
+            )
+            flash(f"Cannot resend invoice: booking {booking_id} is {reason}", "danger")
+            return False
+
+        if not is_xero_enabled():
+            flash(
+                f"[XERO DISABLED] Would resend invoice {rec.booking.xero_invoice_number} "
+                f"email for {booking_id}",
+                "info",
+            )
+            return False
+
+        # Refetch so the email carries the current due date and to confirm the
+        # invoice is still live (not voided) before emailing.
+        inv = xero.find_invoice_by_reference(rec.booking.id)
+        if not inv:
+            flash(f"No live Xero invoice found for {booking_id} to resend", "danger")
+            return False
+
+        self._email_xero_invoice(rec, inv, action="resent")
+        save_json(self.live, DATA_FILE_PATH)
+        return True
+
     def amend_xero_invoice(
         self,
         booking_id: str,

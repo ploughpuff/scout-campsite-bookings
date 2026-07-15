@@ -181,6 +181,13 @@ def xero_link_contact(booking_id):
     return redirect(url_for("booking_detail", booking_id=booking_id))
 
 
+@app.route("/xero/resend_invoice/<booking_id>", methods=["POST"])
+def xero_resend_invoice(booking_id):
+    """Re-email an already-raised Xero invoice to the leader."""
+    bookings.resend_invoice_email(booking_id)
+    return redirect(url_for("booking_detail", booking_id=booking_id))
+
+
 def _nightly_inputs(rec):
     """One {key, label, size} entry per night of the stay, for the sizes form"""
     nights = []
