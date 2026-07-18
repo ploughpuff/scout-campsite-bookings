@@ -139,7 +139,7 @@ Booking Details
           <span class="input-group-text">Number</span>
           {% if rec.booking.nightly_group_sizes %}
           <span class="form-control custom-bg">{{ rec.booking.nightly_size_list() | join(' / ') }} per night</span>
-          {% elif rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+          {% elif rec.tracking.status in ['New', 'Pending', 'Confirmed', 'Invoice'] %}
           <input type="number" name="booking.group_size" class="form-control track-changes"
             value="{{ rec.booking.group_size }}" min="1" required>
           {% else %}
