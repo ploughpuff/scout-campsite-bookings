@@ -2,6 +2,7 @@
 Bookings.py - Manage the bookings data file and provide access functions.
 """
 
+import calendar
 import copy
 import functools
 import hashlib
@@ -10,6 +11,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from statistics import median
 from typing import List, Optional, Tuple, get_args
 from collections import defaultdict, Counter
 
@@ -42,6 +44,7 @@ from models.utils import (
     estimate_cost,
     get_booking_prefix,
     get_event_type,
+    get_pretty_date_str,
     get_timestamp_for_notes,
     is_email_enabled,
     is_xero_enabled,
@@ -153,85 +156,198 @@ class Bookings:
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])
 
+    def _stats_source(self):
+        """Yield (booking, cost_pence, cost_is_estimated) for every booking that
+        counts towards the year stats.
+
+        Live open (New/Pending/Confirmed) and Cancelled bookings are excluded.
+        Archived bookings carry no stored cost, so their income is re-derived at
+        current rates and flagged as estimated.
+        """
+        skip_statuses = {"New", "Pending", "Confirmed", "Cancelled"}
+        for rec in self.live.items:
+            if rec.tracking.status in skip_statuses:
+                continue
+            yield rec.booking, rec.tracking.cost_estimate, False
+        for b in self.archive.items:
+            yield b, self._estimate_cost(b), True
+
     def get_yearly_stats(self) -> dict:
         """
         Build statistics for every year present in the booking data.
-        Returns a list of dicts sorted by year descending.
+        Returns a dict with open-booking counts and per-year stats sorted by
+        year descending. All values are JSON-primitive so the whole structure
+        can be embedded in a page via | tojson for the charts.
         """
-
-        open_statuses = {
-            "New",
-            "Pending",
-            "Confirmed",
-        }
         day_events = {"day", "eve"}
 
-        years = defaultdict(
-            lambda: {
-                "day_total_visitors": 0,
-                "day_group_counter": Counter(),
-                "ovr_total_campers": 0,
-                "ovr_group_counter": Counter(),
-            }
-        )
-
-        open_bookings = 0
-
+        open_by_status = {"New": 0, "Pending": 0, "Confirmed": 0}
         for rec in self.live.items:
+            if rec.tracking.status in open_by_status:
+                open_by_status[rec.tracking.status] += 1
 
-            # Ignore cancelled bookings
-            if rec.tracking.status == "Cancelled":
-                continue
+        def new_year_bucket():
+            return {
+                "bookings_total": 0,
+                "event_bookings": Counter(),
+                "event_people": Counter(),
+                "day_total_visitors": 0,
+                "ovr_total_campers": 0,
+                "day_group_counter": Counter(),
+                "ovr_group_counter": Counter(),
+                "person_nights": 0,
+                "income_p": 0,
+                "income_day_p": 0,
+                "income_ovr_p": 0,
+                "income_by_group_type": Counter(),
+                "income_estimated": False,
+                "monthly_bookings": [0] * 12,
+                "monthly_people": [0] * 12,
+                "facility_counter": Counter(),
+                "group_visits": Counter(),
+                "group_people": Counter(),
+                "stay_nights": [],
+                "lead_days": [],
+                "night_occupancy": defaultdict(int),
+            }
 
-            # Count open bookings
-            if rec.tracking.status in open_statuses:
-                open_bookings += 1
-                continue
+        years = defaultdict(new_year_bucket)
 
-            year = rec.booking.arriving.year
+        for b, cost_p, estimated in self._stats_source():
+            year = b.arriving.year
             if not year:
                 continue
 
-            if rec.booking.event_type in day_events:
-                years[year]["day_total_visitors"] += rec.booking.group_size
-                years[year]["day_group_counter"][rec.booking.group_name] += 1
+            d = years[year]
+            d["bookings_total"] += 1
+            d["event_bookings"][b.event_type] += 1
+            d["event_people"][b.event_type] += b.group_size
+            d["monthly_bookings"][b.arriving.month - 1] += 1
+            d["monthly_people"][b.arriving.month - 1] += b.group_size
+            d["income_p"] += cost_p
+            d["income_by_group_type"][b.group_type] += cost_p
+            if estimated:
+                d["income_estimated"] = True
+            for facility in b.facilities:
+                d["facility_counter"][facility] += 1
+            d["group_visits"][b.group_name] += 1
+            d["group_people"][b.group_name] += b.group_size
+            # Clamp guards legacy rows with bad submitted timestamps
+            d["lead_days"].append(max((b.arriving - b.submitted).days, 0))
+
+            if b.event_type in day_events:
+                d["day_total_visitors"] += b.group_size
+                d["day_group_counter"][b.group_name] += 1
+                d["income_day_p"] += cost_p
             else:
-                years[year]["ovr_total_campers"] += rec.booking.group_size
-                years[year]["ovr_group_counter"][rec.booking.group_name] += 1
-
-        for rec in self.archive.items:
-
-            # Now the archive bookings
-            year = rec.arriving.year
-            if not year:
-                continue
-
-            if rec.event_type in day_events:
-                years[year]["day_total_visitors"] += rec.group_size
-                years[year]["day_group_counter"][rec.group_name] += 1
-            else:
-                years[year]["ovr_total_campers"] += rec.group_size
-                years[year]["ovr_group_counter"][rec.group_name] += 1
+                d["ovr_total_campers"] += b.group_size
+                d["ovr_group_counter"][b.group_name] += 1
+                d["income_ovr_p"] += cost_p
+                d["person_nights"] += sum(b.nightly_size_list())
+                d["stay_nights"].append(b.num_overnights())
+                for i in range(b.num_overnights()):
+                    night = b.arriving.date() + timedelta(days=i)
+                    d["night_occupancy"][night] += b.size_for_night(night)
 
         # ---- Convert to sorted output ----
         output = []
 
         for year in sorted(years.keys(), reverse=True):
-            data = years[year]
+            d = years[year]
+            total_people = d["day_total_visitors"] + d["ovr_total_campers"]
+
+            busiest_month = None
+            if any(d["monthly_people"]):
+                peak_idx = d["monthly_people"].index(max(d["monthly_people"]))
+                busiest_month = calendar.month_name[peak_idx + 1]
+
+            busiest_night = None
+            if d["night_occupancy"]:
+                night, people = max(d["night_occupancy"].items(), key=lambda kv: kv[1])
+                busiest_night = {
+                    "date": get_pretty_date_str(night, full_month=True, always_year=True),
+                    "people": people,
+                }
+
+            top = sorted(
+                d["group_visits"].items(),
+                key=lambda kv: (-kv[1], -d["group_people"][kv[0]]),
+            )[:10]
+            top_groups = [[name, visits, d["group_people"][name]] for name, visits in top]
 
             output.append(
                 {
                     "year": year,
-                    "day_total_visitors": data["day_total_visitors"],
-                    "day_total_groups": len(data["day_group_counter"]),
-                    "ovr_total_campers": data["ovr_total_campers"],
-                    "ovr_total_groups": len(data["ovr_group_counter"]),
-                    "day_groups": data["day_group_counter"].most_common(),
-                    "ovr_groups": data["ovr_group_counter"].most_common(),
+                    "bookings_total": d["bookings_total"],
+                    "day_bookings": d["event_bookings"]["day"],
+                    "eve_bookings": d["event_bookings"]["eve"],
+                    "ovr_bookings": d["event_bookings"]["overnight"],
+                    "event_people": {
+                        "day": d["event_people"]["day"],
+                        "eve": d["event_people"]["eve"],
+                        "overnight": d["event_people"]["overnight"],
+                    },
+                    "day_total_visitors": d["day_total_visitors"],
+                    "day_total_groups": len(d["day_group_counter"]),
+                    "ovr_total_campers": d["ovr_total_campers"],
+                    "ovr_total_groups": len(d["ovr_group_counter"]),
+                    "total_people": total_people,
+                    "unique_groups": len(d["group_visits"]),
+                    "person_nights": d["person_nights"],
+                    "est_income_p": d["income_p"],
+                    "income_day_p": d["income_day_p"],
+                    "income_ovr_p": d["income_ovr_p"],
+                    "income_by_group_type": dict(d["income_by_group_type"]),
+                    "income_estimated": d["income_estimated"],
+                    "monthly_bookings": d["monthly_bookings"],
+                    "monthly_people": d["monthly_people"],
+                    "facility_counts": d["facility_counter"].most_common(),
+                    "top_groups": top_groups,
+                    "day_groups": d["day_group_counter"].most_common(),
+                    "ovr_groups": d["ovr_group_counter"].most_common(),
+                    "avg_group_size": (
+                        round(total_people / d["bookings_total"], 1)
+                        if d["bookings_total"]
+                        else 0
+                    ),
+                    "avg_stay_nights": (
+                        round(sum(d["stay_nights"]) / len(d["stay_nights"]), 1)
+                        if d["stay_nights"]
+                        else None
+                    ),
+                    "median_lead_days": (
+                        int(median(d["lead_days"])) if d["lead_days"] else None
+                    ),
+                    "busiest_month": busiest_month,
+                    "busiest_night": busiest_night,
                 }
             )
 
-        return {"open_bookings": open_bookings, "years": output}
+        # Year-over-year deltas, now that each year's figures exist
+        by_year = {y["year"]: y for y in output}
+        for y in output:
+            prev = by_year.get(y["year"] - 1)
+            y["deltas"] = {
+                key: (
+                    round((y[key] - prev[key]) / prev[key] * 100, 1)
+                    if prev and prev[key]
+                    else None
+                )
+                for key in ("total_people", "bookings_total", "est_income_p", "person_nights")
+            }
+
+        return {
+            "open_bookings": sum(open_by_status.values()),
+            "open_by_status": open_by_status,
+            "years": output,
+        }
+
+    def get_year_report(self, year: int) -> Optional[dict]:
+        """Return the stats dict for a single year, or None if it has no data."""
+        for y in self.get_yearly_stats()["years"]:
+            if y["year"] == year:
+                return y
+        return None
 
     def get_bookings_list(
         self,

@@ -450,6 +450,20 @@ def admin():
     )
 
 
+@app.route("/admin/report/<int:year>")
+def year_report(year):
+    """Standalone Scouts-branded annual stats report for one year"""
+    year_stats = bookings.get_year_report(year)
+    if not year_stats:
+        flash(f"No booking data for {year}", "danger")
+        return redirect(url_for("admin"))
+    return render_template(
+        "year_report.html",
+        y=year_stats,
+        generated=get_pretty_date_str(now_uk(), inc_time=True, always_year=True),
+    )
+
+
 @app.route("/admin/xero_test")
 def xero_test():
     """Live connectivity check against the Xero API"""

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ sitename }} {{ y.year }} Annual Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        /* Scouts brand (guidelines v3.2 July 2024): purple #7413dc core, teal
+           #088486 pairing, Nunito Sans throughout. */
+        :root {
+            --scout-purple: #7413dc;
+            --scout-teal: #088486;
+            --purple-tint: #f1e7fb;
+        }
+
+        body {
+            font-family: "Nunito Sans", sans-serif;
+            font-weight: 400;
+            color: #212529;
+            background: #fff;
+        }
+
+        .report {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 0 12px 24px;
+        }
+
+        .brand-band {
+            background: var(--scout-purple);
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 28px 32px;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .brand-band .logo-lockup img {
+            width: 110px;
+            height: 80px;
+            display: block;
+        }
+
+        .brand-band .logo-lockup .personalisation {
+            font-weight: 800;
+            /* Nunito Sans ExtraBold per brand rules */
+            font-size: 1.05rem;
+            margin-top: 4px;
+        }
+
+        .brand-band .report-title {
+            text-align: right;
+        }
+
+        .brand-band .report-title h1 {
+            font-weight: 900;
+            font-size: 1.9rem;
+            margin: 0;
+        }
+
+        .brand-band .report-title .year-line {
+            font-weight: 800;
+            font-size: 1.3rem;
+        }
+
+        .brand-band .report-title .tag {
+            font-weight: 700;
+            font-size: 0.85rem;
+            opacity: 0.85;
+        }
+
+        .section-title {
+            font-weight: 900;
+            color: var(--scout-purple);
+            font-size: 1.25rem;
+            border-bottom: 3px solid var(--scout-teal);
+            padding-bottom: 4px;
+            margin: 24px 0 12px;
+        }
+
+        .stat-tile {
+            text-align: center;
+            padding: 12px 8px;
+            border-radius: 8px;
+            background: var(--purple-tint);
+            height: 100%;
+        }
+
+        .stat-tile .stat-value {
+            font-weight: 900;
+            font-size: 1.45rem;
+            color: var(--scout-purple);
+            line-height: 1.2;
+        }
+
+        .stat-tile .stat-label {
+            font-size: 0.78rem;
+            color: #6c757d;
+            font-weight: 700;
+        }
+
+        .stat-tile .stat-caption {
+            font-size: 0.72rem;
+            color: #6c757d;
+        }
+
+        .chart-box {
+            position: relative;
+            height: 280px;
+        }
+
+        .chart-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .highlight-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .highlight-list li {
+            padding: 7px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .highlight-list li::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--scout-teal);
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        table.report-table {
+            font-size: 0.9rem;
+        }
+
+        table.report-table th {
+            font-weight: 800;
+            color: var(--scout-purple);
+        }
+
+        .report-footer {
+            border-top: 3px solid var(--scout-purple);
+            margin-top: 28px;
+            padding-top: 10px;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .report-footer .tagline {
+            color: var(--scout-teal);
+            font-weight: 700;
+        }
+
+        .footnote {
+            font-size: 0.78rem;
+            color: #6c757d;
+        }
+
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #fff;
+            border-bottom: 1px solid #eee;
+            padding: 8px 12px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        @media print {
+            .d-print-none {
+                display: none !important;
+            }
+
+            .report-section {
+                break-inside: avoid;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
+        @page {
+            size: A4;
+            margin: 12mm;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar d-print-none">
+        <button id="pdf-btn" class="btn btn-primary btn-sm" onclick="downloadPdf()">⬇ Download PDF</button>
+        <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary btn-sm">Back to Admin</a>
+    </div>
+
+    <div class="report" id="report">
+
+        <div class="report-section">
+            <div class="brand-band">
+                <div class="logo-lockup">
+                    <img src="{{ url_for('static', filename='img/scouts-logo-stack-white.svg') }}" alt="Scouts logo">
+                    <div class="personalisation">Chelmsford</div>
+                </div>
+                <div class="report-title">
+                    <h1>{{ sitename }} Campsite</h1>
+                    <div class="year-line">{{ y.year }} Annual Report</div>
+                    <div class="tag">#SkillsForLife</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h2 class="section-title">The year in numbers</h2>
+            <div class="row row-cols-2 row-cols-md-4 g-3">
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.bookings_total }}</div>
+                        <div class="stat-label">Bookings</div>
+                        <div class="stat-caption">{{ y.day_bookings }} day · {{ y.eve_bookings }} eve ·
+                            {{ y.ovr_bookings }} overnight</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.total_people }}</div>
+                        <div class="stat-label">Total attendees</div>
+                        <div class="stat-caption">{{ y.day_total_visitors }} day ·
+                            {{ y.ovr_total_campers }} overnight</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.person_nights }}</div>
+                        <div class="stat-label">Person-nights camped</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">£{{ "{:,.0f}".format(y.est_income_p / 100) }}</div>
+                        <div class="stat-label">{{ "Estimated income" if y.income_estimated else "Income" }}</div>
+                        <div class="stat-caption">£{{ "{:,.0f}".format(y.income_day_p / 100) }} day ·
+                            £{{ "{:,.0f}".format(y.income_ovr_p / 100) }} overnight</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.unique_groups }}</div>
+                        <div class="stat-label">Unique groups</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.avg_group_size }}</div>
+                        <div class="stat-label">Avg group size</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.avg_stay_nights if y.avg_stay_nights is not none else "—" }}</div>
+                        <div class="stat-label">Avg stay (nights)</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="stat-tile">
+                        <div class="stat-value">{{ y.median_lead_days if y.median_lead_days is not none else "—" }}
+                        </div>
+                        <div class="stat-label">Median lead time (days)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h2 class="section-title">People on site by month</h2>
+            <div class="chart-box"><canvas id="chart-monthly-{{ y.year }}"></canvas></div>
+        </div>
+
+        <div class="report-section">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <h2 class="section-title">Visit mix</h2>
+                    <div class="chart-box"><canvas id="chart-events-{{ y.year }}"></canvas></div>
+                </div>
+                <div class="col-md-6">
+                    <h2 class="section-title">Highlights</h2>
+                    <ul class="highlight-list">
+                        {% if y.busiest_month %}
+                        <li>Busiest month: <strong>{{ y.busiest_month }}</strong></li>
+                        {% endif %}
+                        {% if y.busiest_night %}
+                        <li>Busiest night: <strong>{{ y.busiest_night.date }}</strong> —
+                            <strong>{{ y.busiest_night.people }}</strong> people on site</li>
+                        {% endif %}
+                        <li>Day visitors: <strong>{{ y.day_total_visitors }}</strong> from
+                            {{ y.day_total_groups }} groups</li>
+                        <li>Overnight campers: <strong>{{ y.ovr_total_campers }}</strong> from
+                            {{ y.ovr_total_groups }} groups</li>
+                        <li>Nights under canvas: <strong>{{ y.person_nights }}</strong> person-nights</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <h2 class="section-title">Facility popularity</h2>
+                    <div class="chart-box"><canvas id="chart-facilities-{{ y.year }}"></canvas></div>
+                </div>
+                <div class="col-md-6">
+                    <h2 class="section-title">{{ "Estimated income" if y.income_estimated else "Income" }} by group
+                        type</h2>
+                    <div class="chart-box"><canvas id="chart-income-{{ y.year }}"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h2 class="section-title">Income summary</h2>
+            <table class="table table-sm report-table">
+                <thead>
+                    <tr>
+                        <th>Group type</th>
+                        <th class="text-end">{{ "Estimated income" if y.income_estimated else "Income" }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gt, pence in y.income_by_group_type | dictsort(by='value', reverse=true) %}
+                    <tr>
+                        <td>{{ gt }}</td>
+                        <td class="text-end">£{{ "{:,.2f}".format(pence / 100) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <th>Total</th>
+                        <th class="text-end">£{{ "{:,.2f}".format(y.est_income_p / 100) }}</th>
+                    </tr>
+                </tbody>
+            </table>
+            {% if y.income_estimated %}
+            <p class="footnote">Income for archived bookings is estimated at current rates and excludes any manual
+                adjustments made at the time of invoicing.</p>
+            {% endif %}
+        </div>
+
+        <div class="report-section">
+            <h2 class="section-title">Top groups</h2>
+            <table class="table table-sm table-striped report-table">
+                <thead>
+                    <tr>
+                        <th>Group</th>
+                        <th class="text-end">Visits</th>
+                        <th class="text-end">People</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, visits, people in y.top_groups %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td class="text-end">{{ visits }}</td>
+                        <td class="text-end">{{ people }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="report-section">
+            <div class="report-footer">
+                <span class="tagline">We prepare young people with skills for life</span><br>
+                {{ sitename }} Campsite · Chelmsford District Scouts · Charity Number 302033<br>
+                Report generated {{ generated }}
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='stats_charts.js') }}"></script>
+    <script>
+        const Y = {{ y | tojson }};
+
+        /* Build the charts, then swap each canvas for a static image so both
+           printing and html2canvas capture are deterministic. */
+        document.addEventListener("DOMContentLoaded", async () => {
+            const charts = StatsCharts.renderYearCharts(Y, { animate: false, dpr: 2 });
+            await new Promise((r) => setTimeout(r, 150));
+            for (const chart of charts) {
+                const box = chart.canvas.parentElement;
+                const img = new Image();
+                img.src = chart.toBase64Image("image/png", 1.0);
+                img.className = "chart-img";
+                chart.destroy();
+                box.replaceChildren(img);
+            }
+            if (new URLSearchParams(location.search).get("print") === "1") {
+                setTimeout(() => window.print(), 300);
+            }
+        });
+
+        /* One-click PDF: snapshot each section and flow them onto A4 pages,
+           starting a new page when the next section will not fit. */
+        async function downloadPdf() {
+            const btn = document.getElementById("pdf-btn");
+            btn.disabled = true;
+            btn.textContent = "Generating…";
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ unit: "mm", format: "a4" });
+                const MARGIN = 12;
+                const WIDTH = 210 - 2 * MARGIN;
+                const BOTTOM = 297 - MARGIN;
+                let cursorY = MARGIN;
+                let first = true;
+
+                for (const el of document.querySelectorAll(".report-section")) {
+                    const canvas = await html2canvas(el, {
+                        scale: 2,
+                        backgroundColor: "#ffffff",
+                        useCORS: true,
+                    });
+                    const imgH = (WIDTH * canvas.height) / canvas.width;
+                    if (!first && cursorY + imgH > BOTTOM) {
+                        pdf.addPage();
+                        cursorY = MARGIN;
+                    }
+                    pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", MARGIN, cursorY, WIDTH, imgH);
+                    cursorY += imgH + 4;
+                    first = false;
+                }
+
+                pdf.save("riffhams-{{ y.year }}-annual-report.pdf");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "⬇ Download PDF";
+            }
+        }
+    </script>
+</body>
+
+</html>

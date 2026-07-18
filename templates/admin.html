@@ -44,30 +44,190 @@
 
 <hr>
 
-<h1>Booking Stats</h1>
+{% macro delta_tag(val, prev_year) %}
+{% if val is not none %}
+{% if val >= 0 %}
+<div class="stat-delta-up">&#9650; {{ val }}% vs {{ prev_year }}</div>
+{% else %}
+<div class="stat-delta-down">&#9660; {{ -val }}% vs {{ prev_year }}</div>
+{% endif %}
+{% endif %}
+{% endmacro %}
 
-<h2>Open Bookings: {{ stats.open_bookings }}</h2>
+{% macro tile(value, label, delta_val=none, prev_year=none, caption=none) %}
+<div class="col">
+    <div class="stat-tile">
+        <div class="stat-value">{{ value }}</div>
+        <div class="stat-label">{{ label }}</div>
+        {{ delta_tag(delta_val, prev_year) }}
+        {% if caption %}<div class="stat-label">{{ caption }}</div>{% endif %}
+    </div>
+</div>
+{% endmacro %}
 
-{% for y in stats.years %}
-<hr>
-<h2>{{ y.year }}</h2>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="mb-0">Booking Statistics</h1>
+    <div>
+        <span class="text-muted small me-2">{{ stats.open_bookings }} open:</span>
+        <span class="badge text-bg-danger">New {{ stats.open_by_status.New }}</span>
+        <span class="badge text-bg-warning">Pending {{ stats.open_by_status.Pending }}</span>
+        <span class="badge text-bg-success">Confirmed {{ stats.open_by_status.Confirmed }}</span>
+    </div>
+</div>
 
-<p>Total Day Visitors: {{ y.day_total_visitors }} from {{ y.day_total_groups }} Groups</p>
-<p>Total Overnight Campers: {{ y.ovr_total_campers }} from {{ y.ovr_total_groups }}</p>
-
-<h3>Day Groups</h3>
-<ol>
-    {% for group, count in y.day_groups %}
-    <li>{{ group }} = {{ count }}</li>
+<ul class="nav nav-tabs mt-3" role="tablist">
+    {% for y in stats.years %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if loop.first }}" data-bs-toggle="tab"
+            data-bs-target="#year-pane-{{ y.year }}" type="button" role="tab">{{ y.year }}</button>
+    </li>
     {% endfor %}
-</ol>
+</ul>
 
-<h3>Overnight Groups</h3>
-<ol>
-    {% for group, count in y.ovr_groups %}
-    <li>{{ group }} = {{ count }}</li>
+<div class="tab-content pt-3">
+    {% for y in stats.years %}
+    <div class="tab-pane fade {{ 'show active' if loop.first }}" id="year-pane-{{ y.year }}"
+        data-year="{{ y.year }}" role="tabpanel">
+
+        {% set prev = y.year - 1 %}
+
+        <div class="row row-cols-2 row-cols-md-4 g-3">
+            {{ tile(y.bookings_total, "Bookings", y.deltas.bookings_total, prev,
+                    y.day_bookings ~ " day · " ~ y.eve_bookings ~ " eve · " ~ y.ovr_bookings ~ " overnight") }}
+            {{ tile(y.total_people, "Total attendees", y.deltas.total_people, prev,
+                    y.day_total_visitors ~ " day · " ~ y.ovr_total_campers ~ " overnight") }}
+            {{ tile(y.person_nights, "Person-nights", y.deltas.person_nights, prev) }}
+            {{ tile("£" ~ "{:,.2f}".format(y.est_income_p / 100),
+                    "Est. income" if y.income_estimated else "Income",
+                    y.deltas.est_income_p, prev,
+                    "£" ~ "{:,.0f}".format(y.income_day_p / 100) ~ " day · £"
+                        ~ "{:,.0f}".format(y.income_ovr_p / 100) ~ " overnight") }}
+            {{ tile(y.unique_groups, "Unique groups", caption=y.day_total_groups ~ " day · " ~ y.ovr_total_groups ~ " overnight") }}
+            {{ tile(y.avg_group_size, "Avg group size") }}
+            {{ tile(y.avg_stay_nights if y.avg_stay_nights is not none else "—", "Avg stay (nights)") }}
+            {{ tile(y.median_lead_days if y.median_lead_days is not none else "—", "Median lead time (days)") }}
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">People on site by month</div>
+                    <div class="card-body">
+                        <div class="chart-box"><canvas id="chart-monthly-{{ y.year }}"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Visit mix (people)</div>
+                    <div class="card-body">
+                        <div class="chart-box"><canvas id="chart-events-{{ y.year }}"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">{{ "Estimated income" if y.income_estimated else "Income" }} by group type</div>
+                    <div class="card-body">
+                        <div class="chart-box"><canvas id="chart-income-{{ y.year }}"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Facility popularity</div>
+                    <div class="card-body">
+                        <div class="chart-box"><canvas id="chart-facilities-{{ y.year }}"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Highlights</div>
+                    <ul class="list-group list-group-flush">
+                        {% if y.busiest_month %}
+                        <li class="list-group-item">Busiest month: <strong>{{ y.busiest_month }}</strong></li>
+                        {% endif %}
+                        {% if y.busiest_night %}
+                        <li class="list-group-item">Busiest night: <strong>{{ y.busiest_night.date }}</strong>
+                            with <strong>{{ y.busiest_night.people }}</strong> people on site</li>
+                        {% endif %}
+                        <li class="list-group-item">Day visitors: <strong>{{ y.day_total_visitors }}</strong>
+                            from {{ y.day_total_groups }} groups</li>
+                        <li class="list-group-item">Overnight campers: <strong>{{ y.ovr_total_campers }}</strong>
+                            from {{ y.ovr_total_groups }} groups</li>
+                        {% if y.income_estimated %}
+                        <li class="list-group-item text-muted small">Income for archived bookings is
+                            estimated at current rates</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">Top groups</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                        <tr><th>Group</th><th class="text-end">Visits</th><th class="text-end">People</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for name, visits, people in y.top_groups %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td class="text-end">{{ visits }}</td>
+                            <td class="text-end">{{ people }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-2">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                data-bs-target="#all-groups-{{ y.year }}">Show all groups</button>
+            <a href="{{ url_for('year_report', year=y.year) }}" class="btn btn-sm btn-primary">
+                &#128196; Year Report / Download PDF</a>
+        </div>
+
+        <div class="collapse mt-2" id="all-groups-{{ y.year }}">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <h6>Day groups ({{ y.day_total_groups }})</h6>
+                    <table class="table table-sm table-striped">
+                        <tbody>
+                            {% for group, count in y.day_groups %}
+                            <tr><td>{{ group }}</td><td class="text-end">{{ count }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Overnight groups ({{ y.ovr_total_groups }})</h6>
+                    <table class="table table-sm table-striped">
+                        <tbody>
+                            {% for group, count in y.ovr_groups %}
+                            <tr><td>{{ group }}</td><td class="text-end">{{ count }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
     {% endfor %}
-</ol>
-{% endfor %}
+</div>
 
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='stats_charts.js') }}"></script>
+<script>
+    const YEAR_STATS = {{ stats.years | tojson }};
+    StatsCharts.initAdminTabs(YEAR_STATS);
+</script>
 {% endblock %}

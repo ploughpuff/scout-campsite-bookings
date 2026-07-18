@@ -129,3 +129,126 @@ def test_change_status_without_reason_leaves_status_untouched(setup_bookings, mo
     assert result is False
     assert rec.tracking.status == "Pending"  # unchanged
     assert "Status changed" not in rec.tracking.notes
+
+
+def _mk_booking(**overrides):
+    """Minimal valid BookingData with overridable fields for stats tests"""
+    defaults = dict(
+        id="TST-2025-0001",
+        original_sheet_md5="md5-default",
+        group_type="Other Scout Group",
+        group_name="Test Group",
+        group_size=10,
+        event_type="overnight",
+        submitted="2025-05-01T09:00:00",
+        arriving="2025-06-06T18:00:00",
+        departing="2025-06-09T10:00:00",
+        facilities=[],
+    )
+    defaults.update(overrides)
+    return BookingData(**defaults)
+
+
+@pytest.fixture
+def stats_manager(leader_data):
+    """One archived overnight, one live Completed day booking, one Confirmed
+    (open), one Cancelled (ignored)."""
+
+    archived = _mk_booking(
+        original_sheet_md5="md5-archived",
+        group_name="Camp Group",
+        facilities=["Roxby Hut"],
+        # 3 nights, size 10 -> 30 person-nights; June; lead 36 days
+    )
+
+    live_day = LiveBooking(
+        booking=_mk_booking(
+            id="TST-2025-0002",
+            original_sheet_md5="md5-day",
+            group_name="Day Group",
+            group_size=20,
+            event_type="day",
+            submitted="2025-03-05T09:00:00",
+            arriving="2025-03-15T09:00:00",
+            departing="2025-03-15T15:00:00",
+            facilities=["Campfire Circle"],
+        ),
+        leader=leader_data,
+        tracking=TrackingData(status="Completed", cost_estimate=500, notes=""),
+    )
+
+    live_open = LiveBooking(
+        booking=_mk_booking(
+            id="TST-2026-0003",
+            original_sheet_md5="md5-open",
+            arriving="2026-08-01T18:00:00",
+            departing="2026-08-03T10:00:00",
+        ),
+        leader=leader_data,
+        tracking=TrackingData(status="Confirmed", cost_estimate=1000, notes=""),
+    )
+
+    live_cancelled = LiveBooking(
+        booking=_mk_booking(
+            id="TST-2025-0004",
+            original_sheet_md5="md5-cancelled",
+            arriving="2025-09-01T18:00:00",
+            departing="2025-09-02T10:00:00",
+        ),
+        leader=leader_data,
+        tracking=TrackingData(status="Cancelled", cost_estimate=9999, notes=""),
+    )
+
+    manager = Bookings()
+    manager.live = LiveData(items=[live_day, live_open, live_cancelled])
+    manager.archive = ArchiveData(items=[archived])
+    return manager
+
+
+def test_get_yearly_stats_rich(stats_manager):
+    stats = stats_manager.get_yearly_stats()
+
+    assert stats["open_bookings"] == 1
+    assert stats["open_by_status"] == {"New": 0, "Pending": 0, "Confirmed": 1}
+
+    # Only 2025 has counted bookings (open 2026 excluded, cancelled ignored)
+    assert [y["year"] for y in stats["years"]] == [2025]
+    y = stats["years"][0]
+
+    assert y["bookings_total"] == 2
+    assert y["day_bookings"] == 1 and y["ovr_bookings"] == 1 and y["eve_bookings"] == 0
+    assert y["day_total_visitors"] == 20
+    assert y["ovr_total_campers"] == 10
+    assert y["total_people"] == 30
+    assert y["unique_groups"] == 2
+    assert y["person_nights"] == 30  # 3 nights x 10 people
+
+    # Live booking contributes its stored cost; archived cost is re-derived
+    # (0 under the dummy test config) and flags the total as estimated
+    assert y["income_day_p"] == 500
+    assert y["income_estimated"] is True
+    assert y["est_income_p"] == 500 + y["income_ovr_p"]
+
+    # Monthly buckets: March (day) and June (overnight)
+    assert y["monthly_people"][2] == 20
+    assert y["monthly_people"][5] == 10
+    assert sum(y["monthly_bookings"]) == 2
+
+    assert y["avg_group_size"] == 15.0
+    assert y["avg_stay_nights"] == 3.0
+    assert y["median_lead_days"] == 23  # median of 10 and 36
+    assert y["busiest_month"] == "March"
+    assert y["busiest_night"]["people"] == 10
+    assert "2025" in y["busiest_night"]["date"]
+
+    assert y["facility_counts"] == [("Campfire Circle", 1), ("Roxby Hut", 1)]
+    assert ["Camp Group", 1, 10] in y["top_groups"]
+    assert ["Day Group", 1, 20] in y["top_groups"]
+
+    # Oldest year has no previous year to compare against
+    assert all(v is None for v in y["deltas"].values())
+
+
+def test_get_year_report(stats_manager):
+    assert stats_manager.get_year_report(2025)["year"] == 2025
+    assert stats_manager.get_year_report(1999) is None

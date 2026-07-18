@@ -197,3 +197,41 @@ body.logs-view .log-DEBUG {
 }
 
 /* End Loading Overlay
+/* ---- Admin year statistics ---- */
+
+.stat-tile {
+  text-align: center;
+  padding: 0.75rem 0.5rem;
+  border-radius: 0.5rem;
+  background-color: #f1e7fb;   /* ~20% tint of Scouts Purple */
+  height: 100%;
+}
+
+.stat-tile .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #7413dc;              /* Scouts Purple */
+  line-height: 1.2;
+}
+
+.stat-tile .stat-label {
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+.stat-delta-up {
+  color: #198754;
+  font-size: 0.8rem;
+}
+
+.stat-delta-down {
+  color: #dc3545;
+  font-size: 0.8rem;
+}
+
+.chart-box {
+  position: relative;
+  height: 280px;
+}
+
+/* End Admin year statistics */
