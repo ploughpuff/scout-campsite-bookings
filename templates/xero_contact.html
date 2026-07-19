@@ -27,7 +27,7 @@
 </div>
 
 <form method="POST" action="{{ post_url }}" class="d-flex gap-2 mb-3">
-  <input type="text" name="search_term" class="form-control" style="max-width: 24rem;"
+  <input type="text" name="search_term" class="form-control" style="max-width: 24rem;" maxlength="50"
     placeholder="Search Xero contacts by name or email..." value="{{ search_term or '' }}">
   <button type="submit" class="btn btn-secondary">🔍 Search Xero</button>
 </form>

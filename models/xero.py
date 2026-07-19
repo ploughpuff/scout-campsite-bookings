@@ -306,6 +306,8 @@ def find_contact_by_name(group_name: str) -> dict | None:
 
 def search_contacts(term: str) -> list[dict]:
     """Fuzzy contact search, used to offer near-matches before creating a new contact"""
+    # Xero rejects searchTerm over 50 chars with a 400
+    term = term[:50].strip()
     data = _request("GET", "Contacts", params={"searchTerm": term, "summaryOnly": "true"})
     return [
         {
