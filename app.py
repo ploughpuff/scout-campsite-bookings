@@ -20,6 +20,7 @@ from flask import (
     session,
     url_for,
 )
+from flask_compress import Compress
 from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 
@@ -37,7 +38,7 @@ from config import (
     XERO_ENABLED,
 )
 from models import xero
-from models.bookings import Bookings
+from models.bookings import DEFAULT_STATUS_FILTER, STATUS_FILTERS, Bookings, archive_summary
 from models.logger import setup_logger
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, is_email_enabled, is_xero_enabled, now_uk
@@ -46,6 +47,15 @@ app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.secret_key = APP_SECRET_KEY
 app.config["EMAIL_ENABLED"] = EMAIL_ENABLED == "True"
 app.config["XERO_ENABLED"] = XERO_ENABLED == "True"
+
+#
+## The bookings table is a large chunk of HTML, so compress responses.
+Compress(app)
+
+#
+## Let the browser hold onto static assets. APP_VERSION is appended to every
+## static url_for() as a cache buster, so a new build still picks up changes.
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24 * 7  # 1 week
 
 logger = setup_logger()
 logger.info("Starting")
@@ -56,14 +66,29 @@ bookings = Bookings()
 @app.route("/")
 @app.route("/bookings")
 def all_bookings():
-    """Render the main bookings table page."""
+    """Render the main bookings table page, filtered to one status group.
+
+    Defaults to the open bookings that need attention. Completed and Cancelled
+    are a click away via ?status=, so the daily view stays small.
+
+    This page also drives the housekeeping: statuses roll forward on every load,
+    and the archive sweep runs on the first load of each day.
+    """
     bookings.auto_update_statuses()
-    recs = bookings.get_bookings_list()
+    bookings.auto_archive_old_bookings()
+
+    status_filter = request.args.get("status", DEFAULT_STATUS_FILTER)
+    if status_filter not in STATUS_FILTERS:
+        status_filter = DEFAULT_STATUS_FILTER
+
+    recs = bookings.get_bookings_list(statuses=STATUS_FILTERS[status_filter])
     return render_template(
         "all_bookings.html",
         list=recs,
         age=bookings.age(),
         xero_urls=bookings.get_xero_contact_urls(recs),
+        status_filter=status_filter,
+        filter_counts=bookings.get_status_filter_counts(),
     )
 
 
@@ -405,11 +430,12 @@ def reload_json():
     return redirect(url_for("all_bookings"))
 
 
-@app.route("/admin/archive_old_bookings")
+@app.route("/admin/archive_old_bookings", methods=["POST"])
 def archive_old_bookings():
-    "Route to archive old bookings"
-    bookings.archive_old_bookings()
-    return redirect(url_for("all_bookings"))
+    """Force an archive sweep now, rather than waiting for the daily automatic one."""
+    result = bookings.archive_old_bookings()
+    flash(archive_summary(result), "info")
+    return redirect(url_for("admin"))
 
 
 @app.route("/admin/list_cal_events")
@@ -431,8 +457,31 @@ def list_cal_events():
 
 @app.route("/bookings/archived")
 def show_archived_bookings():
-    """Show archived bookings in list table"""
-    return render_template("archived.html", list=bookings.get_archive_list())
+    """Show archived bookings in a list table, filtered to one arrival year.
+
+    Defaults to the most recent year so the page stays short as the archive
+    grows. "all" and every other year are a click away via ?year=.
+    """
+    year_counts = bookings.get_archive_year_counts()
+
+    #
+    ## Anything we don't recognise falls back to the newest year, like ?status=
+    year_arg = request.args.get("year", "")
+    if year_arg == "all":
+        selected_year = "all"
+    elif year_arg.isdigit() and int(year_arg) in year_counts:
+        selected_year = int(year_arg)
+    else:
+        selected_year = next(iter(year_counts), "all")
+
+    recs = bookings.get_archive_list(year=None if selected_year == "all" else selected_year)
+
+    return render_template(
+        "archived.html",
+        list=recs,
+        year_counts=year_counts,
+        selected_year=selected_year,
+    )
 
 
 @app.route("/admin")
@@ -481,7 +530,7 @@ def toggle_email():
     enabled = request.form.get("email_enabled") == "on"
     session["email_enabled"] = enabled
     flash(f"Email sending is now {'ENABLED' if enabled else 'DISABLED'}.", "info")
-    return redirect(request.referrer or url_for("bookings"))
+    return redirect(request.referrer or url_for("all_bookings"))
 
 
 @app.route("/toggle_xero", methods=["POST"])
@@ -490,14 +539,15 @@ def toggle_xero():
     enabled = request.form.get("xero_enabled") == "on"
     session["xero_enabled"] = enabled
     flash(f"Xero invoicing is now {'ENABLED' if enabled else 'DISABLED'}.", "info")
-    return redirect(request.referrer or url_for("bookings"))
+    return redirect(request.referrer or url_for("all_bookings"))
 
 
 @app.context_processor
 def inject_globals():
-    """Make sitename available globally in all templates"""
+    """Make sitename, app version and feature flags available in all templates"""
     return {
         "sitename": SITENAME,
+        "app_version": APP_VERSION,
         "is_email_enabled": is_email_enabled,
         "is_xero_enabled": is_xero_enabled,
     }

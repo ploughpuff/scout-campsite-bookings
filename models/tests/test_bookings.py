@@ -3,7 +3,7 @@ test_bookings.py
 """
 
 # pylint: disable=all
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -252,3 +252,124 @@ def test_get_yearly_stats_rich(stats_manager):
 def test_get_year_report(stats_manager):
     assert stats_manager.get_year_report(2025)["year"] == 2025
     assert stats_manager.get_year_report(1999) is None
+
+
+@pytest.fixture
+def archive_manager(leader_data, monkeypatch):
+    """A manager holding one of each case the archive sweep has to decide on,
+    with saves/calendar/flash captured rather than performed."""
+    import models.bookings as bookings_module
+
+    from models.utils import now_uk
+
+    now = now_uk()
+
+    def _live(booking_id, status, days_past_departure):
+        departing = now - timedelta(days=days_past_departure)
+        return LiveBooking(
+            booking=_mk_booking(
+                id=booking_id,
+                original_sheet_md5=f"md5-{booking_id}",
+                arriving=(departing - timedelta(days=2)).isoformat(),
+                departing=departing.isoformat(),
+            ),
+            leader=leader_data,
+            tracking=TrackingData(status=status, cost_estimate=100, notes="private"),
+        )
+
+    manager = Bookings()
+    manager.live = LiveData(
+        items=[
+            _live("OLD-COMPLETED", "Completed", 91),
+            _live("OLD-CANCELLED", "Cancelled", 91),
+            _live("NEW-COMPLETED", "Completed", 10),
+            _live("OLD-INVOICE", "Invoice", 91),
+        ]
+    )
+    manager.archive = ArchiveData(items=[])
+
+    saved = []
+    flashed = []
+    monkeypatch.setattr(bookings_module, "save_json", lambda data, path: saved.append(path.name))
+    monkeypatch.setattr(bookings_module, "delete_calendar_entry", lambda rec: None)
+    monkeypatch.setattr(bookings_module, "flash", lambda msg, cat=None: flashed.append(msg))
+
+    return manager, saved, flashed
+
+
+def test_archive_old_bookings_moves_completed_and_deletes_cancelled(archive_manager):
+    manager, saved, _ = archive_manager
+
+    result = manager.archive_old_bookings()
+
+    assert result == {"archived": 1, "deleted": 1}
+
+    # Only the two in-date/other-status bookings stay live
+    assert [rec.booking.id for rec in manager.live.items] == ["NEW-COMPLETED", "OLD-INVOICE"]
+
+    # The archived copy keeps the booking and nothing else (GDPR)
+    assert [b.id for b in manager.archive.items] == ["OLD-COMPLETED"]
+    assert isinstance(manager.archive.items[0], BookingData)
+    assert not hasattr(manager.archive.items[0], "leader")
+    assert not hasattr(manager.archive.items[0], "tracking")
+
+    assert set(saved) == {"bookings.json", "archive.json"}
+
+
+def test_archive_old_bookings_persists_cancelled_only_run(archive_manager):
+    """Regression: a sweep that only deletes cancelled bookings must still save
+    the live file, or the deletions come back on the next restart."""
+    manager, saved, _ = archive_manager
+    manager.live.items = [rec for rec in manager.live.items if rec.booking.id == "OLD-CANCELLED"]
+
+    result = manager.archive_old_bookings()
+
+    assert result == {"archived": 0, "deleted": 1}
+    assert manager.live.items == []
+    assert saved == ["bookings.json"]  # live saved, archive untouched
+
+
+def test_archive_old_bookings_no_op_saves_nothing(archive_manager):
+    manager, saved, _ = archive_manager
+    manager.live.items = [rec for rec in manager.live.items if rec.booking.id == "NEW-COMPLETED"]
+
+    assert manager.archive_old_bookings() == {"archived": 0, "deleted": 0}
+    assert saved == []
+
+
+def test_auto_archive_runs_once_a_day(archive_manager):
+    manager, saved, flashed = archive_manager
+
+    manager.auto_archive_old_bookings()
+    assert len(flashed) == 1
+    assert "1 booking(s) archived" in flashed[0]
+
+    # Second call the same day does nothing at all
+    saved.clear()
+    manager.auto_archive_old_bookings()
+    assert saved == []
+    assert len(flashed) == 1
+
+
+def test_auto_archive_stays_quiet_when_nothing_to_do(archive_manager):
+    manager, _, flashed = archive_manager
+    manager.live.items = [rec for rec in manager.live.items if rec.booking.id == "NEW-COMPLETED"]
+
+    manager.auto_archive_old_bookings()
+    assert flashed == []
+
+
+def test_get_archive_list_filters_by_year_newest_first(setup_bookings):
+    manager = setup_bookings
+    manager.archive = ArchiveData(
+        items=[
+            _mk_booking(id="A-2024", arriving="2024-06-01T18:00:00", departing="2024-06-02T10:00:00"),
+            _mk_booking(id="B-2025", arriving="2025-03-01T18:00:00", departing="2025-03-02T10:00:00"),
+            _mk_booking(id="C-2025", arriving="2025-09-01T18:00:00", departing="2025-09-02T10:00:00"),
+        ]
+    )
+
+    assert [b.id for b in manager.get_archive_list()] == ["C-2025", "B-2025", "A-2024"]
+    assert [b.id for b in manager.get_archive_list(year=2025)] == ["C-2025", "B-2025"]
+    assert manager.get_archive_list(year=1999) == []
+    assert manager.get_archive_year_counts() == {2025: 2, 2024: 1}

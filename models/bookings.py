@@ -9,10 +9,10 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from statistics import median
-from typing import List, Optional, Tuple, get_args
+from typing import Iterable, List, Optional, Tuple, get_args
 from collections import defaultdict, Counter
 
 from flask import flash
@@ -59,6 +59,22 @@ from models.utils import (
 status_options = ["Invoice", "New", "Pending", "Confirmed", "Completed", "Archived", "Cancelled"]
 
 #
+## Precomputed rank so the sort key doesn't linear scan status_options per comparison
+STATUS_ORDER = {status: i for i, status in enumerate(status_options)}
+
+#
+## Status groups behind the All Bookings filter buttons. "all" means no filtering.
+## Between them the groups cover every value of TrackingData.status, so no
+## booking can end up unreachable from the page.
+STATUS_FILTERS = {
+    "open": ("Invoice", "New", "Pending", "Confirmed"),
+    "completed": ("Completed", "Archived"),
+    "cancelled": ("Cancelled",),
+    "all": None,
+}
+DEFAULT_STATUS_FILTER = "open"
+
+#
 ## Valid transitions to control buttons on html, and filter user input
 status_transitions = {
     "New": ["Pending", "Confirmed", "Cancelled"],
@@ -69,6 +85,20 @@ status_transitions = {
     "Archived": [],
     "Cancelled": ["New"],
 }
+
+
+def archive_summary(result: dict) -> str:
+    """Human readable one liner for what an archive sweep did."""
+
+    if not result["archived"] and not result["deleted"]:
+        return "Nothing old enough to archive."
+
+    parts = []
+    if result["archived"]:
+        parts.append(f"{result['archived']} booking(s) archived")
+    if result["deleted"]:
+        parts.append(f"{result['deleted']} old cancelled booking(s) deleted")
+    return " and ".join(parts) + "."
 
 
 def test_only(func):
@@ -91,6 +121,12 @@ class Bookings:
 
         self.live = self._load_or_initialize(DATA_FILE_PATH, LiveData)
         self.archive = self._load_or_initialize(ARCHIVE_FILE_PATH, ArchiveData)
+
+        #
+        ## Date of the last archive sweep, so page traffic only triggers one a day.
+        ## Held in memory only: the sweep is idempotent, so an extra run after a
+        ## restart is harmless, and this avoids a daily no-op write to archive.json.
+        self._archive_last_run: Optional[date] = None
 
     def _load_or_initialize(self, path: Path, model: BaseModel) -> BaseModel:
         if path.exists():
@@ -353,14 +389,14 @@ class Bookings:
         self,
         date_range: Optional[Tuple[datetime, datetime]] = None,
         booking_id: Optional[str] = None,
-        booking_state: Optional[str] = None,
+        statuses: Optional[Iterable[str]] = None,
     ) -> List[dict]:
         """
         Return a filtered and sorted list of bookings.
 
         - Filter by:
             - booking_id: return only the booking with that ID
-            - booking_state: return bookings matching that status
+            - statuses: return bookings whose status is in the given collection
             - date_range: return bookings overlapping with the date range
         - Otherwise, return all bookings.
 
@@ -371,7 +407,7 @@ class Bookings:
         for rec in self.live.items:
             if booking_id and rec.booking.id != booking_id:
                 continue
-            if booking_state and rec.tracking.status != booking_state:
+            if statuses is not None and rec.tracking.status not in statuses:
                 continue
             if date_range:
                 arriving = rec.booking.arriving
@@ -387,16 +423,32 @@ class Bookings:
         # Sort by status index then arrival datetime
         results.sort(
             key=lambda rec: (
-                status_options.index(rec.tracking.status),
+                STATUS_ORDER[rec.tracking.status],
                 rec.booking.arriving or datetime.min,
             )
         )
 
         return results
 
-    def get_archive_list(self) -> List[BookingData]:
-        """Returns the list of archived bookings"""
-        return self.archive.items
+    def get_status_filter_counts(self) -> dict:
+        """Row count per All Bookings filter, for the filter button badges."""
+        counts = Counter(rec.tracking.status for rec in self.live.items)
+        return {
+            key: sum(counts.values()) if group is None else sum(counts[s] for s in group)
+            for key, group in STATUS_FILTERS.items()
+        }
+
+    def get_archive_list(self, year: Optional[int] = None) -> List[BookingData]:
+        """Archived bookings, newest arrival first, optionally limited to one year."""
+        items = self.archive.items
+        if year is not None:
+            items = [b for b in items if b.arriving.year == year]
+        return sorted(items, key=lambda b: b.arriving, reverse=True)
+
+    def get_archive_year_counts(self) -> dict:
+        """Row count per arrival year, newest year first, for the filter button badges."""
+        counts = Counter(b.arriving.year for b in self.archive.items)
+        return dict(sorted(counts.items(), reverse=True))
 
     def change_status(self, booking_id: str, new_status: str, description: str = None):
         """Change the status of a single booking.
@@ -1088,15 +1140,36 @@ class Bookings:
 
         return {"good": good, "missing": missing, "delete": delete, "extra": extra}
 
-    def archive_old_bookings(self) -> bool:
+    def auto_archive_old_bookings(self):
+        """Run the archive sweep once a day, piggy-backed on page traffic."""
+
+        today = now_uk().date()
+        if self._archive_last_run == today:
+            return
+
+        #
+        ## Stamp the date before the sweep: if it raises, we retry tomorrow rather
+        ## than on every page load for the rest of today.
+        self._archive_last_run = today
+        result = self.archive_old_bookings()
+
+        if result["archived"] or result["deleted"]:
+            flash(archive_summary(result), "info")
+
+    def archive_old_bookings(self) -> dict:
         """
         Archive or delete old bookings:
         - 'Completed' bookings 90+ days after departure are archived.
         - 'Cancelled' bookings 90+ days after departure are deleted.
+
+        Returns counts of what was done: {"archived": int, "deleted": int}
         """
+        self._archive_last_run = now_uk().date()
+
         now = now_uk()
         to_archive = []
         remaining_live = []
+        deleted = 0
 
         for rec in self.live.items:
             archive_date = rec.booking.departing + timedelta(
@@ -1109,7 +1182,16 @@ class Bookings:
                 continue
 
             if rec.tracking.status == "Completed":
-                delete_calendar_entry(rec)
+                #
+                ## The sweep now runs unattended on page load, so a broken calendar
+                ## must not stop us stripping personal data. Any event left behind
+                ## is picked up as an "extra" by fix_cal_events().
+                try:
+                    delete_calendar_entry(rec)
+                except Exception:  # pylint: disable=broad-except
+                    self.logger.exception(
+                        "Calendar delete failed for %s - archiving anyway", rec.booking.id
+                    )
 
                 # Deep copy only the booking part (exclude GDPR-related data)
                 archive_copy = copy.deepcopy(rec.booking)
@@ -1118,29 +1200,27 @@ class Bookings:
                 self.logger.info("%s archived", rec.booking.id)
 
             elif rec.tracking.status == "Cancelled":
+                deleted += 1
                 self.logger.info("%s cancelled booking deleted (not archived)", rec.booking.id)
 
             else:
                 # Keep all other statuses
                 remaining_live.append(rec)
 
-        # Update live items
+        if not to_archive and not deleted:
+            self.logger.info("No bookings to archive.")
+            return {"archived": 0, "deleted": 0}
+
+        # Update live items - saved below for deletions as well as archivals
         self.live.items = remaining_live
 
-        if not to_archive:
-            self.logger.info("No bookings to archive.")
-            return False
-
-        # Append to archive (create new list if first time)
-        if ARCHIVE_FILE_PATH.exists():
+        if to_archive:
             self.archive.items.extend(to_archive)
-        else:
-            self.archive.items = to_archive
+            self.archive.updated = now
+            save_json(self.archive, ARCHIVE_FILE_PATH)
 
-        # Save updated files
         save_json(self.live, DATA_FILE_PATH)
-        save_json(self.archive, ARCHIVE_FILE_PATH)
-        return True
+        return {"archived": len(to_archive), "deleted": deleted}
 
     def _md5_of_dict(self, data):
         # Ensure consistent ordering to get a consistent hash

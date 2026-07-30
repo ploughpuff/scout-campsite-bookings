@@ -5,6 +5,15 @@
   Bookings Last Retrieved: <strong>{{ age }}</strong>
 </div>
 
+<div class="d-flex gap-2 justify-content-center flex-wrap mb-3">
+  {% for key, label in [('open', 'Open'), ('completed', 'Completed'), ('cancelled', 'Cancelled'), ('all', 'All')] %}
+  <a href="{{ url_for('all_bookings', status=key) }}"
+    class="btn btn-sm {% if status_filter == key %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    {{ label }} <span class="badge text-bg-light">{{ filter_counts[key] }}</span>
+  </a>
+  {% endfor %}
+</div>
+
 <div class="card shadow-sm rounded-4">
   <div class="card-body p-0">
     <div class="table-responsive w-auto mx-auto">
@@ -51,6 +60,10 @@
             <td>
               <span class="badge badge-status {{ rec.tracking.status|lower }}">{{ rec.tracking.status }}</span>
             </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-4">No bookings with this status.</td>
           </tr>
           {% endfor %}
         </tbody>

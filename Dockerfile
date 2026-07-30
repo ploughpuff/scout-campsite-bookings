@@ -31,5 +31,10 @@ COPY . .
 # Expose port for Flask (default 5000)
 EXPOSE 80
 
-# Run the app
-CMD ["gunicorn", "-b", "0.0.0.0:80", "app:app", "--access-logfile", "-", "--error-logfile", "-"]
+# Run the app.
+# gthread rather than the default sync worker: sync workers can't do keep-alive,
+# so every static asset needed a fresh TCP connection. Stay on a single process
+# so the in-memory Bookings singleton remains a single copy.
+CMD ["gunicorn", "-b", "0.0.0.0:80", "app:app", \
+    "--workers", "1", "--worker-class", "gthread", "--threads", "4", \
+    "--keep-alive", "5", "--access-logfile", "-", "--error-logfile", "-"]

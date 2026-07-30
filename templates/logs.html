@@ -24,5 +24,5 @@ logs-view
 </div>
 
 <div id="log-container">Loading logs...</div>
-<script src="{{ url_for('static', filename='logviewer.js') }}"></script>
+<script src="{{ url_for('static', filename='logviewer.js', v=app_version) }}"></script>
 {% endblock %}

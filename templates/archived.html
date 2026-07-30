@@ -3,29 +3,59 @@
 {% block content %}
 <h2>Archived Bookings</h2>
 
+<p class="text-muted small text-center">
+    Personal details are stripped when a booking is archived, so only the booking itself is kept.
+</p>
+
+{% if year_counts %}
+<div class="d-flex gap-2 justify-content-center flex-wrap mb-3">
+    {% for year, count in year_counts.items() %}
+    <a href="{{ url_for('show_archived_bookings', year=year) }}"
+        class="btn btn-sm {% if selected_year == year %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        {{ year }} <span class="badge text-bg-light">{{ count }}</span>
+    </a>
+    {% endfor %}
+
+    <a href="{{ url_for('show_archived_bookings', year='all') }}"
+        class="btn btn-sm {% if selected_year == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        All <span class="badge text-bg-light">{{ year_counts.values() | sum }}</span>
+    </a>
+</div>
+{% endif %}
+
 {% if list %}
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Group</th>
-            <th>Size</th>
-            <th>Arriving</th>
-            <th>Departing</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for booking in list %}
-        <tr>
-            <td>{{ booking.id }}</td>
-            <td>{{ booking.group_name }}</td>
-            <td>{{ booking.group_size }}</td>
-            <td>{{ booking.arriving.strftime('%d/%m/%Y %H:%M') if booking.arriving }}</td>
-            <td>{{ booking.departing.strftime('%d/%m/%Y %H:%M') if booking.departing }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="card shadow-sm rounded-4">
+    <div class="card-body p-0">
+        <div class="table-responsive w-auto mx-auto">
+            <table class="table table-striped table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Group Type</th>
+                        <th>Group</th>
+                        <th>Size</th>
+                        <th>Arriving</th>
+                        <th>Departing</th>
+                        <th>Nights</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in list %}
+                    <tr>
+                        <td class="fw-semibold">{{ booking.id }}</td>
+                        <td>{{ booking.group_type }}</td>
+                        <td>{{ booking.group_name }}</td>
+                        <td>{{ booking.group_size }}</td>
+                        <td>{{ booking.arriving.strftime('%d/%m/%Y %H:%M') if booking.arriving }}</td>
+                        <td>{{ booking.departing.strftime('%d/%m/%Y %H:%M') if booking.departing }}</td>
+                        <td>{{ booking.num_overnights() or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
 <p>No archived bookings found.</p>
 {% endif %}

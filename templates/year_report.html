@@ -219,7 +219,7 @@
         <div class="report-section">
             <div class="brand-band">
                 <div class="logo-lockup">
-                    <img src="{{ url_for('static', filename='img/scouts-logo-stack-white.svg') }}" alt="Scouts logo">
+                    <img src="{{ url_for('static', filename='img/scouts-logo-stack-white.svg', v=app_version) }}" alt="Scouts logo">
                     <div class="personalisation">Chelmsford</div>
                 </div>
                 <div class="report-title">
@@ -399,7 +399,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-    <script src="{{ url_for('static', filename='stats_charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='stats_charts.js', v=app_version) }}"></script>
     <script>
         const Y = {{ y | tojson }};
 

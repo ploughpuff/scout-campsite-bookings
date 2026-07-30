@@ -3,15 +3,29 @@
 {% block content %}
 <h2>Admin Dashboard</h2>
 
-<div class="btn-group" role="group">
-    <a href="{{ url_for('view_logs') }}" class="btn btn-secondary">
-        View Log
-    </a>
+<div class="d-flex gap-2 flex-wrap align-items-center">
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('view_logs') }}" class="btn btn-secondary">
+            View Log
+        </a>
 
-    <a href="{{ url_for('reload_json') }}" class="btn btn-secondary">
-        Reload JSON
-    </a>
+        <a href="{{ url_for('reload_json') }}" class="btn btn-secondary">
+            Reload JSON
+        </a>
+    </div>
+
+    <form method="POST" action="{{ url_for('archive_old_bookings') }}" class="m-0">
+        <button type="submit" class="btn btn-secondary">
+            Archive Old Bookings
+        </button>
+    </form>
 </div>
+
+<p class="text-muted small mt-2 mb-0">
+    Archiving runs automatically on the first visit to the bookings page each day: completed
+    bookings 90+ days past departure lose their leader and tracking details and move to the
+    archive, and cancelled ones are deleted. Use the button only to force a sweep now.
+</p>
 
 <div class="version-info">
     <strong>Running Version:</strong> {{ version }}
@@ -225,7 +239,7 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='stats_charts.js') }}"></script>
+<script src="{{ url_for('static', filename='stats_charts.js', v=app_version) }}"></script>
 <script>
     const YEAR_STATS = {{ stats.years | tojson }};
     StatsCharts.initAdminTabs(YEAR_STATS);
