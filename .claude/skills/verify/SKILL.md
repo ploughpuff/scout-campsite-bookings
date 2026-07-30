@@ -8,8 +8,13 @@ description: Run the Flask app locally against dev data to verify changes end-to
 ## Launch
 
 ```bash
-.venv/Scripts/python.exe app.py   # run_in_background; serves http://127.0.0.1:5000
+~/.venvs/scout-campsite-bookings/bin/python app.py   # run_in_background; serves http://127.0.0.1:5000
 ```
+
+- The venv lives outside the repo, on the WSL filesystem — `/mnt/d` is a CIFS
+  mount with no symlink support and slow small-file I/O. Rebuild it with
+  `uv venv --python 3.13 ~/.venvs/scout-campsite-bookings` +
+  `uv pip install --python ~/.venvs/scout-campsite-bookings/bin/python -r requirements.txt`.
 
 - `APP_ENV=development` (from `.env`) → uses the repo's local `data/` dir, NOT the
   live NAS data in `docker-mnt/`. Safe to run locally.
@@ -28,9 +33,10 @@ description: Run the Flask app locally against dev data to verify changes end-to
 
 - Page loads call `auto_update_statuses()` which can rewrite `data/bookings.json`
   (dev copy — acceptable, but statuses may shift between requests).
-- Known pre-existing dev breakage: `/booking/<id>` 500s with
-  `'NoneType' object is not iterable` at `booking.html` `{% for facility in
-  bookable_facilities %}` because dev `config/field_mappings.json` lacks
-  `bookable_facilities`. Not caused by your change.
+- Known pre-existing dev breakage: saving field edits on a Confirmed/Invoice
+  booking 500s at `update_calendar_entry` because dev `config/` has no Google
+  `credentials.json`. The edits ARE applied in memory before the crash (reload
+  the page to see them); only the calendar step dies. Not caused by your change.
+  (The old `bookable_facilities` 500 note is obsolete - dev config now has it.)
 - `/admin/archive_old_bookings` really archives old dev bookings — avoid unless
   that's what you're testing.

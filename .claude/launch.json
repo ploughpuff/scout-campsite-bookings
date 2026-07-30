@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "flask-dev",
-      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeExecutable": "/home/chris/.venvs/scout-campsite-bookings/bin/python",
       "runtimeArgs": ["app.py"],
       "port": 5000
     }

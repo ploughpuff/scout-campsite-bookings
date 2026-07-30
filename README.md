@@ -29,9 +29,12 @@ production copy in `docker-mnt/email_templates/`).
    `XERO_INVOICE_DUE_DAYS` (default 30), and `XERO_BRANDING_THEME` (a branding
    theme *name*, e.g. `Riffhams` - applied to invoices and set as the default
    sales theme on newly created contacts; blank = org default).
-3. On a PC, run `python scripts/xero_bootstrap.py`, sign in, and pick the
-   organisation (use the free **Demo Company** for testing first). This writes
-   `docker-mnt/config/xero_token.json`.
+3. On a PC, run `~/.venvs/scout-campsite-bookings/bin/python
+   scripts/xero_bootstrap.py`, sign in, and pick the organisation (use the free
+   **Demo Company** for testing first). This writes
+   `docker-mnt/config/xero_token.json`. WSL works: the script prints the consent
+   URL if it can't open a browser, and WSL2 forwards `localhost:8400` so the
+   Windows browser reaches the callback.
 4. Restart the container and check the Admin page shows Xero as connected.
 
 The app keeps the connection alive by refreshing the token. If it reports the
