@@ -2,6 +2,9 @@
 Bookings.py - Manage the bookings data file and provide access functions.
 """
 
+# This module is the single home for booking state, so it runs long.
+# pylint: disable=too-many-lines
+
 import calendar
 import copy
 import functools
@@ -114,7 +117,13 @@ def test_only(func):
 
 
 class Bookings:
-    """Class for managing the booking data"""
+    """Class for managing the booking data.
+
+    Deliberately the one façade over live and archived bookings, so it carries
+    more public methods than pylint's default ceiling.
+    """
+
+    # pylint: disable=too-many-public-methods
 
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
@@ -215,6 +224,8 @@ class Bookings:
         year descending. All values are JSON-primitive so the whole structure
         can be embedded in a page via | tojson for the charts.
         """
+        # One pass filling one bucket per year, so the counters all live here
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         day_events = {"day", "eve"}
 
         open_by_status = {"New": 0, "Pending": 0, "Confirmed": 0}
@@ -295,7 +306,10 @@ class Bookings:
             busiest_month = None
             if any(d["monthly_people"]):
                 peak_idx = d["monthly_people"].index(max(d["monthly_people"]))
-                busiest_month = calendar.month_name[peak_idx + 1]
+                #
+                ## This is the stdlib calendar, but pylint resolves the name to our
+                ## sibling models/calendar.py and so can't see month_name.
+                busiest_month = calendar.month_name[peak_idx + 1]  # pylint: disable=no-member
 
             busiest_night = None
             if d["night_occupancy"]:
@@ -305,9 +319,12 @@ class Bookings:
                     "people": people,
                 }
 
+            #
+            ## group_people is bound as a default so the lambda captures this year's
+            ## bucket by value rather than closing over the loop variable.
             top = sorted(
                 d["group_visits"].items(),
-                key=lambda kv: (-kv[1], -d["group_people"][kv[0]]),
+                key=lambda kv, group_people=d["group_people"]: (-kv[1], -group_people[kv[0]]),
             )[:10]
             top_groups = [[name, visits, d["group_people"][name]] for name, visits in top]
 
@@ -752,7 +769,9 @@ class Bookings:
             old_value, new_value = getattr(rec.booking, key), getattr(b, key)
             if old_value != new_value:
                 setattr(rec.booking, key, new_value)
-                self._add_to_notes(rec.tracking, f"{key} changed from [{old_value}] to [{new_value}]")
+                self._add_to_notes(
+                    rec.tracking, f"{key} changed from [{old_value}] to [{new_value}]"
+                )
         if rec.tracking.cost_estimate != candidate.tracking.cost_estimate:
             self._add_to_notes(
                 rec.tracking,
@@ -928,6 +947,8 @@ class Bookings:
         Returns:
             bool: True is successful
         """
+        # Each field type validates and journals differently
+        # pylint: disable=too-many-branches
 
         rec = self._get_booking_by_id(booking_id)
 

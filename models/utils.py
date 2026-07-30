@@ -225,6 +225,9 @@ def estimate_cost(
     overrides num_overnights * group_size for per_person pricing.
     Robust against missing keys in FIELD_MAPPINGS_DICT.
     """
+    # Every argument is a distinct pricing input; grouping them into an object
+    # would just move the same values behind another layer.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     logger = logging.getLogger("app_logger")
     charges = FIELD_MAPPINGS_DICT.get("charges") or {}
 
