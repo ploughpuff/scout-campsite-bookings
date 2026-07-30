@@ -1,0 +1,4 @@
+# Check out LF everywhere. The working tree lives on a NAS share reachable from
+# both Windows and WSL, and Git-for-Windows' core.autocrlf=true would otherwise
+# leave CRLF in the tree that WSL's git reports as a modification to every file.
+* text=auto eol=lf
