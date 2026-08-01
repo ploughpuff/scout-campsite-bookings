@@ -512,8 +512,24 @@ class Bookings:
         self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [{new_status}]")
         if send_email_notification(rec):
             self._add_to_notes(rec.tracking, f"Email Sent: change_status: {rec.leader.email}")
-        update_calendar_entry(rec)
+
+        #
+        ## Save before touching the calendar. The leader has already been emailed by
+        ## this point, so a calendar outage must not throw away the status change -
+        ## fix_cal_events() can reconcile a stale event, but nothing can un-send mail.
         save_json(self.live, DATA_FILE_PATH)
+
+        old_cal_id = rec.tracking.google_calendar_id
+        try:
+            update_calendar_entry(rec)
+        except Exception:  # pylint: disable=broad-except
+            self.logger.exception(
+                "Calendar update failed for %s - status change already saved", rec.booking.id
+            )
+
+        if rec.tracking.google_calendar_id != old_cal_id:
+            save_json(self.live, DATA_FILE_PATH)
+
         return True
 
     def resend_email(self, booking_id):

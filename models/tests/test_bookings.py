@@ -131,6 +131,32 @@ def test_change_status_without_reason_leaves_status_untouched(setup_bookings, mo
     assert "Status changed" not in rec.tracking.notes
 
 
+def test_change_status_survives_calendar_failure(setup_bookings, monkeypatch):
+    """Regression: a Google Calendar outage once escaped as a 500 after the leader had
+    already been emailed, leaving the status change unsaved (in memory only)."""
+    import models.bookings as bookings_module
+
+    manager = setup_bookings
+    saved = []
+
+    monkeypatch.setattr(bookings_module, "flash", lambda *a, **k: None)
+    monkeypatch.setattr(bookings_module, "send_email_notification", lambda rec: True)
+    monkeypatch.setattr(bookings_module, "save_json", lambda data, path: saved.append(path))
+
+    def boom(rec):
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr(bookings_module, "update_calendar_entry", boom)
+
+    rec = manager.live.items[0]
+
+    result = manager.change_status("frozen123", "Cancelled", description="As requested")
+
+    assert result is True
+    assert rec.tracking.status == "Cancelled"
+    assert saved, "status change must reach disk even when the calendar is unreachable"
+
+
 def _mk_booking(**overrides):
     """Minimal valid BookingData with overridable fields for stats tests"""
     defaults = dict(

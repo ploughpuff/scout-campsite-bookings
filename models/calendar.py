@@ -154,8 +154,18 @@ def _add_or_mod_event(rec: LiveBooking):
         return event_resource["id"]
 
     except HttpError as e:
+        # Google answered and refused (e.g. 404 for an event deleted behind our back),
+        # so drop the ID and let the next update insert a fresh event
         logger.error("Failed to create or mod event: %s", str(e))
         return None
+
+    except Exception:  # pylint: disable=broad-except
+        #
+        ## No usable answer from Google (socket timeout, DNS, TLS). We cannot tell
+        ## whether the write landed, so keep the ID we had rather than orphaning the
+        ## event and inserting a duplicate next time. fix_cal_events() reconciles.
+        logger.exception("Calendar create/modify failed for booking %s", rec.booking.id)
+        return rec.tracking.google_calendar_id
 
 
 def _del_from_rec(rec: LiveBooking):
@@ -192,4 +202,12 @@ def del_cal_event(google_calendar_id: str, booking_id: str):
 
         # Otherwise, it's a real error
         logger.error("Failed to delete calendar event for booking: %s %s", booking_id, str(e))
+        return google_calendar_id
+
+    except Exception:  # pylint: disable=broad-except
+        #
+        ## Transport-level failure (socket timeout, DNS, TLS) rather than a refusal.
+        ## Never let it escape: the caller has usually already emailed the leader, and
+        ## an exception here would abandon the whole status change unsaved.
+        logger.exception("Calendar delete failed for booking %s", booking_id)
         return google_calendar_id
