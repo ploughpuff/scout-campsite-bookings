@@ -10,7 +10,7 @@ from models.utils import (
     now_uk,
 )
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class LeaderData(BaseModel):
@@ -162,3 +162,7 @@ class ArchiveData(BaseModel):
     schema_version: int = Field(default=SCHEMA_VERSION)
     updated: datetime = Field(default_factory=now_uk)
     items: List[BookingData] = Field(default_factory=list)
+    # Sheet hashes of cancelled bookings deleted rather than archived. Their rows
+    # live on in Google Sheets forever, so without these tombstones the next pull
+    # imports them all over again as brand new bookings.
+    deleted_md5s: List[str] = Field(default_factory=list)

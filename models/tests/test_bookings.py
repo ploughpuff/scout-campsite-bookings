@@ -339,12 +339,15 @@ def test_archive_old_bookings_moves_completed_and_deletes_cancelled(archive_mana
     assert not hasattr(manager.archive.items[0], "leader")
     assert not hasattr(manager.archive.items[0], "tracking")
 
+    # The deleted cancelled booking leaves a tombstone behind, nothing more
+    assert manager.archive.deleted_md5s == ["md5-OLD-CANCELLED"]
+
     assert set(saved) == {"bookings.json", "archive.json"}
 
 
 def test_archive_old_bookings_persists_cancelled_only_run(archive_manager):
     """Regression: a sweep that only deletes cancelled bookings must still save
-    the live file, or the deletions come back on the next restart."""
+    both files, or the deletions come back on the next restart or pull."""
     manager, saved, _ = archive_manager
     manager.live.items = [rec for rec in manager.live.items if rec.booking.id == "OLD-CANCELLED"]
 
@@ -352,7 +355,18 @@ def test_archive_old_bookings_persists_cancelled_only_run(archive_manager):
 
     assert result == {"archived": 0, "deleted": 1}
     assert manager.live.items == []
-    assert saved == ["bookings.json"]  # live saved, archive untouched
+    assert manager.archive.deleted_md5s == ["md5-OLD-CANCELLED"]
+    assert set(saved) == {"bookings.json", "archive.json"}
+
+
+def test_deleted_cancelled_booking_is_not_pulled_again(archive_manager):
+    """The sheet row survives the deletion, so the tombstone has to stop the next
+    pull importing it as a brand new booking."""
+    manager, _, _ = archive_manager
+
+    manager.archive_old_bookings()
+
+    assert manager._find_booking_by_md5("md5-OLD-CANCELLED")  # pylint: disable=protected-access
 
 
 def test_archive_old_bookings_no_op_saves_nothing(archive_manager):

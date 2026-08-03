@@ -1205,8 +1205,8 @@ class Bookings:
 
         now = now_uk()
         to_archive = []
+        tombstoned = []
         remaining_live = []
-        deleted = 0
 
         for rec in self.live.items:
             archive_date = rec.booking.departing + timedelta(
@@ -1237,27 +1237,30 @@ class Bookings:
                 self.logger.info("%s archived", rec.booking.id)
 
             elif rec.tracking.status == "Cancelled":
-                deleted += 1
+                #
+                ## No archive copy for these, but the sheet row outlives the booking,
+                ## so keep the hash or the next pull re-imports it as a new booking.
+                tombstoned.append(rec.booking.original_sheet_md5)
                 self.logger.info("%s cancelled booking deleted (not archived)", rec.booking.id)
 
             else:
                 # Keep all other statuses
                 remaining_live.append(rec)
 
-        if not to_archive and not deleted:
+        if not to_archive and not tombstoned:
             self.logger.info("No bookings to archive.")
             return {"archived": 0, "deleted": 0}
 
         # Update live items - saved below for deletions as well as archivals
         self.live.items = remaining_live
 
-        if to_archive:
-            self.archive.items.extend(to_archive)
-            self.archive.updated = now
-            save_json(self.archive, ARCHIVE_FILE_PATH)
+        self.archive.items.extend(to_archive)
+        self.archive.deleted_md5s.extend(tombstoned)
+        self.archive.updated = now
+        save_json(self.archive, ARCHIVE_FILE_PATH)
 
         save_json(self.live, DATA_FILE_PATH)
-        return {"archived": len(to_archive), "deleted": deleted}
+        return {"archived": len(to_archive), "deleted": len(tombstoned)}
 
     def _md5_of_dict(self, data):
         # Ensure consistent ordering to get a consistent hash
@@ -1266,12 +1269,12 @@ class Bookings:
         return hashlib.md5(encoded).hexdigest()
 
     def _find_booking_by_md5(self, target_md5: str) -> bool:
-        """Look in main table and archive for matching md5"""
+        """Look in main table, archive and deletion tombstones for matching md5"""
         if any(rec.booking.original_sheet_md5 == target_md5 for rec in self.live.items):
             return True
         if any(rec.original_sheet_md5 == target_md5 for rec in self.archive.items):
             return True
-        return False
+        return target_md5 in self.archive.deleted_md5s
 
     def add_new_data(self, all_sheets) -> int:
         """Function to load a sheet of data in dict format into our booking structure

@@ -69,9 +69,16 @@ def _migrate_v3_to_v4(data: dict) -> dict:
     return data
 
 
+def _migrate_v4_to_v5(data: dict) -> dict:
+    """v5 only adds deleted_md5s to ArchiveData, which defaults to empty."""
+    data["schema_version"] = 5
+    return data
+
+
 MIGRATIONS = {
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
+    4: _migrate_v4_to_v5,
 }
 
 

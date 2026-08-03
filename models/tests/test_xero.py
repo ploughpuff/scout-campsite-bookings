@@ -167,7 +167,7 @@ def test_v2_archive_file_migrates_to_current(tmp_path):
     assert load_json(path, ArchiveData).schema_version == SCHEMA_VERSION
 
 
-def test_v3_bookings_file_migrates_to_v4(tmp_path):
+def test_v3_bookings_file_migrates_to_current(tmp_path):
     path = tmp_path / "bookings.json"
     path.write_text(
         json.dumps(
@@ -176,17 +176,21 @@ def test_v3_bookings_file_migrates_to_v4(tmp_path):
         encoding="utf-8",
     )
     data = load_json(path, LiveData)
-    assert data.schema_version == 4
+    assert data.schema_version == SCHEMA_VERSION
     assert data.next_idx == 7
 
 
-def test_v3_archive_file_migrates_to_v4(tmp_path):
+def test_v4_archive_file_migrates_to_current(tmp_path):
+    """A v4 archive predates tombstones, so it must come back with an empty list
+    rather than failing to validate."""
     path = tmp_path / "archive.json"
     path.write_text(
-        json.dumps({"schema_version": 3, "updated": now_uk().isoformat(), "items": []}),
+        json.dumps({"schema_version": 4, "updated": now_uk().isoformat(), "items": []}),
         encoding="utf-8",
     )
-    assert load_json(path, ArchiveData).schema_version == 4
+    data = load_json(path, ArchiveData)
+    assert data.schema_version == SCHEMA_VERSION
+    assert data.deleted_md5s == []
 
 
 def test_unknown_schema_version_still_raises(tmp_path):
