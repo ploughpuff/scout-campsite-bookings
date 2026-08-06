@@ -62,9 +62,31 @@ FACILITY_PREFIX = re.compile(r"^\s*\w+\)\s*")
 
 #
 ## At least one booker typed their phone number into the headcount box, which
-## parses to billions and swamps every total it touches. The biggest real
-## booking on record is 460, so this is generous while still catching it.
+## parses to billions and swamps every total it touches.
 MAX_GROUP_SIZE = 1000
+
+#
+## What the site actually holds. DofE schools register their whole cohort on
+## the form rather than the number camping, so a few overnight bookings claim
+## more people than could physically be here - one said 460. Xero bears this
+## out: those were billed as flat-rate "Exclusive site use", never per person,
+## so capacity is the honest upper bound.
+SITE_CAPACITY = 125
+
+#
+## Headcounts the form got wrong and the Xero invoice settles, by sheet row.
+CORRECTED_SIZES = {
+    ("OD", 268): (55, "INV-0635 bills 55/night, not the 115-strong cohort"),
+    ("OD", 282): (11, "INV-0641 bills 11 on 28 June"),
+}
+
+#
+## Rows to drop outright, with the evidence for doing so.
+DROPPED_ROWS = {
+    ("OD", 269): "never invoiced - cancelled; clashed with Eastwood's exclusive-site booking",
+    ("OD", 181): "never invoiced; Eastwood had exclusive site use that night (INV-0549)",
+    ("OD", 209): "never invoiced - 1st Danbury's June 2024 invoice bills the 21st, not the 28th",
+}
 
 
 # --------------------------------------------------------------------------
@@ -266,8 +288,18 @@ def convert(row: dict, sheet: str, row_no: int, known: dict, seen: set) -> tuple
     if size > MAX_GROUP_SIZE:
         return None, f"implausible group size {size} (a phone number in the headcount box)"
 
-    if any("cancel" in (v or "").lower() for v in row.values()):
-        return None, "flagged cancelled"
+    if (sheet, row_no) in DROPPED_ROWS:
+        return None, DROPPED_ROWS[(sheet, row_no)]
+    if (sheet, row_no) in CORRECTED_SIZES:
+        size, _ = CORRECTED_SIZES[(sheet, row_no)]
+
+    #
+    ## The admin columns carry the site's own verdict on a row. Trusting those
+    ## markers beats guessing: "dupe"/"Dups" catches re-submissions that the
+    ## slot check misses because the size or time was edited between them.
+    for marker, verdict in (("cancel", "flagged cancelled"), ("dup", "flagged a duplicate")):
+        if any(marker in (v or "").lower() for v in row.values()):
+            return None, verdict
 
     #
     ## Not a date cutoff. The app's own records begin in May 2025 but only get
@@ -311,6 +343,12 @@ def convert(row: dict, sheet: str, row_no: int, known: dict, seen: set) -> tuple
         return None, "departs before it arrives (corrupt departure month)"
 
     submitted = to_datetime(cell(row, "A")) or arriving
+    event_type = get_event_type(arriving.replace(tzinfo=UK_TZ), departing.replace(tzinfo=UK_TZ))
+
+    if event_type == "overnight" and size > SITE_CAPACITY:
+        # Nobody can sleep more people here than the site holds
+        reason = f"{reason}, capped from {size}"
+        size = SITE_CAPACITY
 
     booking = BookingData(
         id=f"Pre-Web-App #{sheet}{row_no}",
@@ -320,9 +358,7 @@ def convert(row: dict, sheet: str, row_no: int, known: dict, seen: set) -> tuple
         group_type=group_type,
         group_name=name,
         group_size=size,
-        event_type=get_event_type(
-            arriving.replace(tzinfo=UK_TZ), departing.replace(tzinfo=UK_TZ)
-        ),
+        event_type=event_type,
         submitted=submitted,
         arriving=arriving,
         departing=departing,
