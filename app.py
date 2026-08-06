@@ -484,16 +484,28 @@ def show_archived_bookings():
     )
 
 
+def _stats_period():
+    """Read ?period= and return (period, first month of the stats year).
+
+    "fiscal" is the company accounts year starting 1st April; anything we
+    don't recognise falls back to the calendar year, like ?year= does.
+    """
+    period = "fiscal" if request.args.get("period", "") == "fiscal" else "calendar"
+    return period, 4 if period == "fiscal" else 1
+
+
 @app.route("/admin")
 def admin():
     """Show the Admin dashboard with stats too"""
 
-    stats_data = bookings.get_yearly_stats()
+    period, fiscal_start_month = _stats_period()
+    stats_data = bookings.get_yearly_stats(fiscal_start_month)
     return render_template(
         "admin.html",
         current="admin",
         version=APP_VERSION,
         stats=stats_data,
+        period=period,
         xero=xero.token_manager.status(),
         xero_mappings=xero.count_contact_mappings(),
     )
@@ -502,13 +514,16 @@ def admin():
 @app.route("/admin/report/<int:year>")
 def year_report(year):
     """Standalone Scouts-branded annual stats report for one year"""
-    year_stats = bookings.get_year_report(year)
+    period, fiscal_start_month = _stats_period()
+    year_stats = bookings.get_year_report(year, fiscal_start_month)
     if not year_stats:
         flash(f"No booking data for {year}", "danger")
-        return redirect(url_for("admin"))
+        return redirect(url_for("admin", period=period))
     return render_template(
         "year_report.html",
         y=year_stats,
+        period=period,
+        month_start=fiscal_start_month,
         generated=get_pretty_date_str(now_uk(), inc_time=True, always_year=True),
     )
 

@@ -58,22 +58,22 @@
 
 <hr>
 
-{% macro delta_tag(val, prev_year) %}
+{% macro delta_tag(val, prev_label) %}
 {% if val is not none %}
 {% if val >= 0 %}
-<div class="stat-delta-up">&#9650; {{ val }}% vs {{ prev_year }}</div>
+<div class="stat-delta-up">&#9650; {{ val }}% vs {{ prev_label }}</div>
 {% else %}
-<div class="stat-delta-down">&#9660; {{ -val }}% vs {{ prev_year }}</div>
+<div class="stat-delta-down">&#9660; {{ -val }}% vs {{ prev_label }}</div>
 {% endif %}
 {% endif %}
 {% endmacro %}
 
-{% macro tile(value, label, delta_val=none, prev_year=none, caption=none) %}
+{% macro tile(value, label, delta_val=none, prev_label=none, caption=none) %}
 <div class="col">
     <div class="stat-tile">
         <div class="stat-value">{{ value }}</div>
         <div class="stat-label">{{ label }}</div>
-        {{ delta_tag(delta_val, prev_year) }}
+        {{ delta_tag(delta_val, prev_label) }}
         {% if caption %}<div class="stat-label">{{ caption }}</div>{% endif %}
     </div>
 </div>
@@ -89,11 +89,22 @@
     </div>
 </div>
 
+<div class="btn-group btn-group-sm mt-3" role="group" aria-label="Year type">
+    <a href="{{ url_for('admin', period='calendar') }}"
+        class="btn {% if period == 'calendar' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Calendar year (Jan&ndash;Dec)
+    </a>
+    <a href="{{ url_for('admin', period='fiscal') }}"
+        class="btn {% if period == 'fiscal' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Accounting year (Apr&ndash;Mar)
+    </a>
+</div>
+
 <ul class="nav nav-tabs mt-3" role="tablist">
     {% for y in stats.years %}
     <li class="nav-item" role="presentation">
         <button class="nav-link {{ 'active' if loop.first }}" data-bs-toggle="tab"
-            data-bs-target="#year-pane-{{ y.year }}" type="button" role="tab">{{ y.year }}</button>
+            data-bs-target="#year-pane-{{ y.year }}" type="button" role="tab">{{ y.year_label }}</button>
     </li>
     {% endfor %}
 </ul>
@@ -103,7 +114,7 @@
     <div class="tab-pane fade {{ 'show active' if loop.first }}" id="year-pane-{{ y.year }}"
         data-year="{{ y.year }}" role="tabpanel">
 
-        {% set prev = y.year - 1 %}
+        {% set prev = y.prev_label %}
 
         <div class="row row-cols-2 row-cols-md-4 g-3">
             {{ tile(y.bookings_total, "Bookings", y.deltas.bookings_total, prev,
@@ -202,7 +213,7 @@
         <div class="mt-2">
             <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
                 data-bs-target="#all-groups-{{ y.year }}">Show all groups</button>
-            <a href="{{ url_for('year_report', year=y.year) }}" class="btn btn-sm btn-primary">
+            <a href="{{ url_for('year_report', year=y.year, period=period) }}" class="btn btn-sm btn-primary">
                 &#128196; Year Report / Download PDF</a>
         </div>
 
@@ -242,6 +253,6 @@
 <script src="{{ url_for('static', filename='stats_charts.js', v=app_version) }}"></script>
 <script>
     const YEAR_STATS = {{ stats.years | tojson }};
-    StatsCharts.initAdminTabs(YEAR_STATS);
+    StatsCharts.initAdminTabs(YEAR_STATS, { monthStart: {{ stats.fiscal_start_month }} });
 </script>
 {% endblock %}

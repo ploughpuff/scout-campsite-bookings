@@ -217,12 +217,18 @@ class Bookings:
         for b in self.archive.items:
             yield b, self._estimate_cost(b), True
 
-    def get_yearly_stats(self) -> dict:
+    def get_yearly_stats(self, fiscal_start_month: int = 1) -> dict:
         """
         Build statistics for every year present in the booking data.
         Returns a dict with open-booking counts and per-year stats sorted by
         year descending. All values are JSON-primitive so the whole structure
         can be embedded in a page via | tojson for the charts.
+
+        fiscal_start_month picks the month a year starts on: 1 for the calendar
+        year (Jan-Dec), 4 for the company accounts year (Apr-Mar). A year is
+        keyed by the calendar year it starts in, so April 2025 to March 2026 is
+        year 2025, labelled "2025/26". The monthly arrays are rotated to match,
+        so index 0 is always the first month of the chosen year.
         """
         # One pass filling one bucket per year, so the counters all live here
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -265,12 +271,19 @@ class Bookings:
             if not year:
                 continue
 
+            #
+            ## Months before the start month belong to the year that began the
+            ## previous calendar year. Both lines are no-ops when it is January.
+            if b.arriving.month < fiscal_start_month:
+                year -= 1
+            month_idx = (b.arriving.month - fiscal_start_month) % 12
+
             d = years[year]
             d["bookings_total"] += 1
             d["event_bookings"][b.event_type] += 1
             d["event_people"][b.event_type] += b.group_size
-            d["monthly_bookings"][b.arriving.month - 1] += 1
-            d["monthly_people"][b.arriving.month - 1] += b.group_size
+            d["monthly_bookings"][month_idx] += 1
+            d["monthly_people"][month_idx] += b.group_size
             d["income_p"] += cost_p
             d["income_by_group_type"][b.group_type] += cost_p
             if estimated:
@@ -306,10 +319,12 @@ class Bookings:
             busiest_month = None
             if any(d["monthly_people"]):
                 peak_idx = d["monthly_people"].index(max(d["monthly_people"]))
+                # Undo the rotation to get back to a real month number
+                peak_month = (peak_idx + fiscal_start_month - 1) % 12 + 1
                 #
                 ## This is the stdlib calendar, but pylint resolves the name to our
                 ## sibling models/calendar.py and so can't see month_name.
-                busiest_month = calendar.month_name[peak_idx + 1]  # pylint: disable=no-member
+                busiest_month = calendar.month_name[peak_month]  # pylint: disable=no-member
 
             busiest_night = None
             if d["night_occupancy"]:
@@ -331,6 +346,11 @@ class Bookings:
             output.append(
                 {
                     "year": year,
+                    "year_label": (
+                        str(year)
+                        if fiscal_start_month == 1
+                        else f"{year}/{(year + 1) % 100:02d}"
+                    ),
                     "bookings_total": d["bookings_total"],
                     "day_bookings": d["event_bookings"]["day"],
                     "eve_bookings": d["event_bookings"]["eve"],
@@ -380,6 +400,7 @@ class Bookings:
         by_year = {y["year"]: y for y in output}
         for y in output:
             prev = by_year.get(y["year"] - 1)
+            y["prev_label"] = prev["year_label"] if prev else None
             y["deltas"] = {
                 key: (
                     round((y[key] - prev[key]) / prev[key] * 100, 1)
@@ -392,12 +413,13 @@ class Bookings:
         return {
             "open_bookings": sum(open_by_status.values()),
             "open_by_status": open_by_status,
+            "fiscal_start_month": fiscal_start_month,
             "years": output,
         }
 
-    def get_year_report(self, year: int) -> Optional[dict]:
+    def get_year_report(self, year: int, fiscal_start_month: int = 1) -> Optional[dict]:
         """Return the stats dict for a single year, or None if it has no data."""
-        for y in self.get_yearly_stats()["years"]:
+        for y in self.get_yearly_stats(fiscal_start_month)["years"]:
             if y["year"] == year:
                 return y
         return None

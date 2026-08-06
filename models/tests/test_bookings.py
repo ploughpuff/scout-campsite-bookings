@@ -266,6 +266,7 @@ def test_get_yearly_stats_rich(stats_manager):
     assert y["busiest_month"] == "March"
     assert y["busiest_night"]["people"] == 10
     assert "2025" in y["busiest_night"]["date"]
+    assert y["year_label"] == "2025"
 
     assert y["facility_counts"] == [("Campfire Circle", 1), ("Roxby Hut", 1)]
     assert ["Camp Group", 1, 10] in y["top_groups"]
@@ -273,6 +274,36 @@ def test_get_yearly_stats_rich(stats_manager):
 
     # Oldest year has no previous year to compare against
     assert all(v is None for v in y["deltas"].values())
+
+
+def test_get_yearly_stats_accounting_year(stats_manager):
+    """April start splits the two counted bookings across two accounts years:
+    the March day visit falls into 2024/25, the June camp into 2025/26."""
+    stats = stats_manager.get_yearly_stats(fiscal_start_month=4)
+
+    assert stats["fiscal_start_month"] == 4
+    assert [y["year"] for y in stats["years"]] == [2025, 2024]
+
+    by_year = {y["year"]: y for y in stats["years"]}
+    current, previous = by_year[2025], by_year[2024]
+
+    assert current["year_label"] == "2025/26"
+    assert previous["year_label"] == "2024/25"
+    assert current["prev_label"] == "2024/25"
+    assert previous["prev_label"] is None
+
+    # Each year holds one booking, and the months are rotated so index 0 is April
+    assert previous["bookings_total"] == 1
+    assert previous["monthly_people"][11] == 20  # March, the last month
+    assert previous["busiest_month"] == "March"
+    assert previous["day_total_visitors"] == 20
+    assert previous["income_day_p"] == 500
+
+    assert current["bookings_total"] == 1
+    assert current["monthly_people"][2] == 10  # June, three months in
+    assert current["busiest_month"] == "June"
+    assert current["ovr_total_campers"] == 10
+    assert current["person_nights"] == 30
 
 
 def test_get_year_report(stats_manager):

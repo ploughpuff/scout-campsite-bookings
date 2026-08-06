@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ sitename }} {{ y.year }} Annual Report</title>
+    <title>{{ sitename }} {{ y.year_label }} Annual Report</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -211,7 +211,7 @@
 <body>
     <div class="toolbar d-print-none">
         <button id="pdf-btn" class="btn btn-primary btn-sm" onclick="downloadPdf()">⬇ Download PDF</button>
-        <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary btn-sm">Back to Admin</a>
+        <a href="{{ url_for('admin', period=period) }}" class="btn btn-outline-secondary btn-sm">Back to Admin</a>
     </div>
 
     <div class="report" id="report">
@@ -224,7 +224,7 @@
                 </div>
                 <div class="report-title">
                     <h1>{{ sitename }} Campsite</h1>
-                    <div class="year-line">{{ y.year }} Annual Report</div>
+                    <div class="year-line">{{ y.year_label }} Annual Report</div>
                     <div class="tag">#SkillsForLife</div>
                 </div>
             </div>
@@ -406,7 +406,7 @@
         /* Build the charts, then swap each canvas for a static image so both
            printing and html2canvas capture are deterministic. */
         document.addEventListener("DOMContentLoaded", async () => {
-            const charts = StatsCharts.renderYearCharts(Y, { animate: false, dpr: 2 });
+            const charts = StatsCharts.renderYearCharts(Y, { animate: false, dpr: 2, monthStart: {{ month_start }} });
             await new Promise((r) => setTimeout(r, 150));
             for (const chart of charts) {
                 const box = chart.canvas.parentElement;
@@ -452,7 +452,7 @@
                     first = false;
                 }
 
-                pdf.save("riffhams-{{ y.year }}-annual-report.pdf");
+                pdf.save("riffhams-{{ y.year_label | replace('/', '-') }}-annual-report.pdf");
             } finally {
                 btn.disabled = false;
                 btn.textContent = "⬇ Download PDF";

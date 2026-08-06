@@ -28,6 +28,26 @@ const StatsCharts = (function () {
 
   const EVENT_LABELS = { day: "Day visits", eve: "Evening visits", overnight: "Overnight camps" };
 
+  /* The stats year can start in any month (1 = calendar, 4 = accounts year).
+     The server already rotates the monthly arrays so index 0 is the first
+     month of the year, so only the labels need turning to match.
+
+     An accounts year spans two calendar years, so the year rides along on a
+     second line under the month it changes at - Apr carries 2025, Jan carries
+     2026. Chart.js renders an array label as stacked lines. A calendar year
+     needs none of that: the tab heading above it already says which year. */
+  function monthAxisLabels(monthStart, startYear) {
+    const offset = (monthStart || 1) - 1;
+    const months = MONTH_LABELS.slice(offset).concat(MONTH_LABELS.slice(0, offset));
+    if (!offset) return months;
+    const januaryIdx = 12 - offset;
+    return months.map((month, i) => {
+      if (i === 0) return [month, String(startYear)];
+      if (i === januaryIdx) return [month, String(startYear + 1)];
+      return month;
+    });
+  }
+
   function pounds(pence) {
     return "£" + (pence / 100).toLocaleString("en-GB", {
       minimumFractionDigits: 2,
@@ -60,11 +80,11 @@ const StatsCharts = (function () {
 
   /* Monthly seasonality: single-series bars (people), bookings shown in the
      tooltip rather than on a second axis - dual axes mislead. */
-  function monthlyChart(ctx, y, animate) {
+  function monthlyChart(ctx, y, animate, monthLabels) {
     return new Chart(ctx, {
       type: "bar",
       data: {
-        labels: MONTH_LABELS,
+        labels: monthLabels,
         datasets: [{
           label: "People on site",
           data: y.monthly_people,
@@ -79,6 +99,8 @@ const StatsCharts = (function () {
           ...baseOptions(animate).plugins,
           tooltip: {
             callbacks: {
+              // Stacked labels arrive as an array; keep the tooltip on one line
+              title: (items) => [].concat(monthLabels[items[0].dataIndex]).join(" "),
               afterLabel: (item) =>
                 y.monthly_bookings[item.dataIndex] + " booking(s)",
             },
@@ -185,6 +207,7 @@ const StatsCharts = (function () {
   function renderYearCharts(y, opts) {
     const animate = !opts || opts.animate !== false;
     pixelRatio = opts && opts.dpr ? opts.dpr : undefined;
+    const monthLabels = monthAxisLabels(opts && opts.monthStart, y.year);
     const builders = {
       monthly: monthlyChart,
       events: eventChart,
@@ -195,7 +218,7 @@ const StatsCharts = (function () {
     for (const [name, build] of Object.entries(builders)) {
       const canvas = document.getElementById("chart-" + name + "-" + y.year);
       if (canvas) {
-        charts.push(build(canvas.getContext("2d"), y, animate));
+        charts.push(build(canvas.getContext("2d"), y, animate, monthLabels));
       }
     }
     return charts;
@@ -203,7 +226,7 @@ const StatsCharts = (function () {
 
   /* Admin page: charts inside hidden tab panes initialise at 0x0, so render
      the active year now and each other year once, when its tab first shows. */
-  function initAdminTabs(yearStats) {
+  function initAdminTabs(yearStats, opts) {
     const rendered = new Set();
 
     function renderYear(year) {
@@ -211,7 +234,7 @@ const StatsCharts = (function () {
       const y = yearStats.find((s) => s.year === year);
       if (y) {
         rendered.add(year);
-        renderYearCharts(y);
+        renderYearCharts(y, opts);
       }
     }
 

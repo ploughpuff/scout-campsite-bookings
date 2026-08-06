@@ -12,12 +12,19 @@ git fetch --tags
 # Get the latest tag
 latest_tag=$(git describe --tags --abbrev=0)
 
-# If the workspace is ahead of the latest tag, append "+dev"
+# The version doubles as the cache-buster on static asset URLs (templates ask
+# for stats_charts.js?v=<version>, and Flask serves static files with a week of
+# max-age). So it has to change whenever the deployed files change, or browsers
+# keep drawing the previous build's JS. That means naming the exact source:
+# the commit when we are ahead of the tag, and the build time when there are
+# uncommitted edits, which no commit identifies.
+version="$latest_tag"
 commits_ahead=$(git rev-list --count HEAD "^$latest_tag")
 if [ "$commits_ahead" -gt 0 ]; then
-    version="${latest_tag}+dev"
-else
-    version="$latest_tag"
+    version="${latest_tag}+dev.$(git rev-parse --short HEAD)"
+fi
+if [ -n "$(git status --porcelain)" ]; then
+    version="${version}+wip.$(date -u +%Y%m%d-%H%M%S)"
 fi
 
 echo "Deploying version: $version"
