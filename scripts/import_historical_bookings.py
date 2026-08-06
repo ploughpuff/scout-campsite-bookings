@@ -5,9 +5,10 @@ lives on the 'archive' worksheet of the two Google Form response spreadsheets.
 This reads both and appends them to the app's archive so the statistics pages
 have real history.
 
-Rows arriving on or after the archive's first real entry are skipped: those
-were pulled into the app before being moved to the spreadsheet's archive tab,
-so importing them would double-count.
+A row is skipped when the app already holds that booking, matched on group
+name and arrival date. Note this is deliberately not a date cutoff: the app's
+own records start in May 2025 but only become complete that September, so
+"arrived after the app went live" does not mean "the app has it".
 
 Safe to re-run - every row carries a deterministic original_sheet_md5 and rows
 already present are skipped.
@@ -45,8 +46,10 @@ CDS = "Chelmsford District Scouts"
 OSG = "Other Scout Group"
 SCH = "School or Other Youth Organisation"
 
-# Arrivals from here on are already in the app - see module docstring
-OVERLAP_FROM = datetime(2025, 5, 15)
+#
+## Imported rows are tagged with this so they can be told apart from bookings
+## the app captured itself.
+IMPORT_ID_PREFIX = "Pre-Web-App #"
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 
@@ -56,6 +59,12 @@ EXCEL_EPOCH = datetime(1899, 12, 30)
 # Facilities were numbered differently over the years ("4) Squirrels" became
 # "5) Squirrels"), so the number is stripped and only the name is matched.
 FACILITY_PREFIX = re.compile(r"^\s*\w+\)\s*")
+
+#
+## At least one booker typed their phone number into the headcount box, which
+## parses to billions and swamps every total it touches. The biggest real
+## booking on record is 460, so this is generous while still catching it.
+MAX_GROUP_SIZE = 1000
 
 
 # --------------------------------------------------------------------------
@@ -181,15 +190,28 @@ def classify(group_name: str, email: str, known: dict) -> tuple[str, str]:
     return SCH, "unresolved default"
 
 
-def known_group_types(archive: ArchiveData, live_path: Path) -> dict:
-    """group_name (lowered) -> group_type, from the data the app already holds."""
-    known = {}
+def app_bookings(archive: ArchiveData, live_path: Path) -> tuple[dict, set]:
+    """What the app already holds: group types by name, and (name, date) keys.
+
+    The keys are what stops a spreadsheet row being imported on top of a
+    booking the app captured itself. Rows this script imported are excluded -
+    re-run safety is original_sheet_md5's job, and counting them here would
+    wrongly block a genuine second booking by the same group on the same day.
+    """
+    known, seen = {}, set()
+
+    def note(booking, imported):
+        name = booking.group_name.strip().lower()
+        known.setdefault(name, booking.group_type)
+        if not imported:
+            seen.add((name, booking.arriving.date()))
+
     for item in archive.items:
-        known.setdefault(item.group_name.strip().lower(), item.group_type)
+        note(item, item.id.startswith(IMPORT_ID_PREFIX))
     live = load_json(live_path, LiveData, use_checksum=False)
     for rec in live.items if live else []:
-        known.setdefault(rec.booking.group_name.strip().lower(), rec.booking.group_type)
-    return known
+        note(rec.booking, False)
+    return known, seen
 
 
 # --------------------------------------------------------------------------
@@ -211,7 +233,7 @@ def parse_facilities(raw: str) -> list[str]:
     return list(dict.fromkeys(sort_facilities(names).valid))
 
 
-def convert(row: dict, sheet: str, row_no: int, known: dict) -> tuple:
+def convert(row: dict, sheet: str, row_no: int, known: dict, seen: set) -> tuple:
     """Return (BookingData, reason) - exactly one of the two is set."""
     # Every early return is one reason a row cannot be imported, and each is
     # reported separately, so collapsing them would only hide why rows dropped.
@@ -241,12 +263,19 @@ def convert(row: dict, sheet: str, row_no: int, known: dict) -> tuple:
         return None, "group name missing or numeric (column drift)"
     if size is None or size < 1:
         return None, f"unusable group size {cell(row, size_col)!r}"
+    if size > MAX_GROUP_SIZE:
+        return None, f"implausible group size {size} (a phone number in the headcount box)"
 
     if any("cancel" in (v or "").lower() for v in row.values()):
         return None, "flagged cancelled"
 
-    if arriving >= OVERLAP_FROM:
-        return None, "arrives after the app went live (already imported)"
+    #
+    ## Not a date cutoff. The app's own records begin in May 2025 but only get
+    ## complete from that September, so "arrived after the app went live" is
+    ## not the same as "the app has it" - assuming it was, lost every
+    ## May-to-August 2025 booking. Match the actual booking instead.
+    if (name.strip().lower(), arriving.date()) in seen:
+        return None, "already in the app"
 
     if sheet == "CD":
         # Departure is a time of day only, so it pairs with the arrival date -
@@ -302,9 +331,10 @@ def convert(row: dict, sheet: str, row_no: int, known: dict) -> tuple:
     return booking, reason
 
 
-def collect(sources: dict, known: dict, existing_md5s: set) -> tuple[list, dict]:
+def collect(sources: dict, known: dict, seen: set, existing_md5s: set) -> tuple[list, dict]:
     """Convert every row of both sheets, returning the bookings and tallies."""
     imported = []
+    slots = set()
     tally = {
         "skipped": Counter(),
         "examples": defaultdict(list),
@@ -317,7 +347,7 @@ def collect(sources: dict, known: dict, existing_md5s: set) -> tuple[list, dict]
         rows = read_sheet(path, "archive")
         print(f"{sheet}: {len(rows)} rows from {path.name}")
         for row_no, row in enumerate(rows, start=1):
-            booking, reason = convert(row, sheet, row_no, known)
+            booking, reason = convert(row, sheet, row_no, known, seen)
             if booking is None:
                 tally["skipped"][reason] += 1
                 tally["examples"][reason].append(f"{sheet}{row_no} {cell(row, 'C')[:28]}")
@@ -325,6 +355,25 @@ def collect(sources: dict, known: dict, existing_md5s: set) -> tuple[list, dict]
             if booking.original_sheet_md5 in existing_md5s:
                 tally["skipped"]["already imported"] += 1
                 continue
+
+            #
+            ## The same booking sometimes sits in the sheet twice, submitted a
+            ## few days apart. Only an exact repeat of the whole slot counts -
+            ## the same group really does book the same day at different times,
+            ## and those are separate bookings.
+            slot = (
+                booking.group_name.strip().lower(),
+                booking.arriving,
+                booking.departing,
+                booking.group_size,
+            )
+            if slot in slots:
+                tally["skipped"]["duplicate row in the spreadsheet"] += 1
+                tally["examples"]["duplicate row in the spreadsheet"].append(
+                    f"{sheet}{row_no} {booking.group_name[:28]}"
+                )
+                continue
+            slots.add(slot)
 
             imported.append(booking)
             tally["type_reasons"][f"{booking.group_type} ({reason})"] += 1
@@ -410,11 +459,11 @@ def main():
     archive = load_json(args.archive_path, ArchiveData, use_checksum=False)
     if archive is None:
         parser.error(f"no archive at {args.archive_path}")
-    known = known_group_types(archive, args.live_path)
+    known, seen = app_bookings(archive, args.live_path)
     existing_md5s = {item.original_sheet_md5 for item in archive.items}
     print(f"Archive: {args.archive_path} ({len(archive.items)} items)\n")
 
-    imported, tally = collect(sources, known, existing_md5s)
+    imported, tally = collect(sources, known, seen, existing_md5s)
     report(imported, tally, len(archive.items))
 
     if not args.write:
