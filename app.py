@@ -513,7 +513,7 @@ def admin():
 
 @app.route("/admin/report/<int:year>")
 def year_report(year):
-    """Standalone Scouts-branded annual stats report for one year"""
+    """Standalone Scouts-branded stats report for one calendar or accounting year"""
     period, fiscal_start_month = _stats_period()
     year_stats = bookings.get_year_report(year, fiscal_start_month)
     if not year_stats:
