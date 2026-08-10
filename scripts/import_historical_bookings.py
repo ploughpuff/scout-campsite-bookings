@@ -35,12 +35,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import (  # noqa: E402
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
-    FIELD_MAPPINGS_DICT,
     UK_TZ,
 )
 from models.json_utils import load_json, save_json  # noqa: E402
+from models.pricing import (  # noqa: E402
+    bookable_facilities,
+    estimate_cost,
+    sort_facilities,
+)
 from models.schemas import ArchiveData, BookingData, LiveData  # noqa: E402
-from models.utils import estimate_cost, get_event_type, sort_facilities  # noqa: E402
+from models.utils import get_event_type  # noqa: E402
 
 CDS = "Chelmsford District Scouts"
 OSG = "Other Scout Group"
@@ -241,7 +245,7 @@ def app_bookings(archive: ArchiveData, live_path: Path) -> tuple[dict, set]:
 # --------------------------------------------------------------------------
 def parse_facilities(raw: str) -> list[str]:
     """Split a facilities cell and keep only the ones the site actually books."""
-    bookable = FIELD_MAPPINGS_DICT.get("bookable_facilities", [])
+    bookable = bookable_facilities()
     names = []
     for part in raw.split(","):
         cleaned = FACILITY_PREFIX.sub("", part).strip()
@@ -367,6 +371,14 @@ def convert(row: dict, sheet: str, row_no: int, known: dict, seen: set) -> tuple
     return booking, reason
 
 
+def tally_facility_misses(tally: dict, row: dict, sheet: str) -> None:
+    """Record facility fragments that mapped to no bookable facility."""
+    for part in cell(row, "I" if sheet == "CD" else "N").split(","):
+        # Dropped means this fragment mapped to no bookable facility
+        if part.strip() and not parse_facilities(part):
+            tally["facility_misses"][FACILITY_PREFIX.sub("", part).strip()] += 1
+
+
 def collect(sources: dict, known: dict, seen: set, existing_md5s: set) -> tuple[list, dict]:
     """Convert every row of both sheets, returning the bookings and tallies."""
     imported = []
@@ -414,10 +426,7 @@ def collect(sources: dict, known: dict, seen: set, existing_md5s: set) -> tuple[
             imported.append(booking)
             tally["type_reasons"][f"{booking.group_type} ({reason})"] += 1
             tally["by_year"][booking.arriving.year] += 1
-            for part in cell(row, "I" if sheet == "CD" else "N").split(","):
-                # Dropped means this fragment mapped to no bookable facility
-                if part.strip() and not parse_facilities(part):
-                    tally["facility_misses"][FACILITY_PREFIX.sub("", part).strip()] += 1
+            tally_facility_misses(tally, row, sheet)
 
     return imported, tally
 
@@ -452,10 +461,7 @@ def report(imported: list, tally: dict, archive_count: int) -> None:
         for name, count in tally["facility_misses"].most_common(10):
             print(f"  {count:>4}  {name!r}")
 
-    income = sum(
-        estimate_cost(b.event_type, b.num_overnights(), b.group_type, b.group_size, b.facilities)
-        for b in imported
-    )
+    income = sum(estimate_cost(b) for b in imported)
     print(f"\nEstimated income added (at current rates): £{income / 100:,.2f}")
     print(f"Archive would go from {archive_count} to {archive_count + len(imported)}")
 

@@ -17,12 +17,11 @@ file lock or the connection will break on a lost update.
 import json
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import requests
 
 from config import (
-    FIELD_MAPPINGS_DICT,
     XERO_ACCOUNT_CODE,
     XERO_BRANDING_THEME,
     XERO_CLIENT_ID,
@@ -33,6 +32,7 @@ from config import (
     XERO_TOKEN_PATH,
 )
 from models.json_utils import atomic_write_json
+from models.pricing import ChargeLine, charge_lines
 from models.schemas import BookingData, LeaderData, LiveBooking
 from models.utils import get_pretty_date_str, now_uk, parse_iso_datetime
 
@@ -361,14 +361,7 @@ def build_invoice_description(b: BookingData) -> str:
     return desc
 
 
-EVENT_LINE_LABELS = {
-    "overnight": "Camping overnight",
-    "day": "Day visit",
-    "eve": "Evening visit",
-}
-
-
-def _line_date_str(dt: datetime) -> str:
+def _line_date_str(dt: date) -> str:
     """Line item date, e.g. '12th June 2026'"""
     day = dt.day
     suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
@@ -385,66 +378,28 @@ def _line(description: str, quantity: int, unit_pence: int) -> dict:
     }
 
 
+def _describe(line: ChargeLine) -> str:
+    """Line item wording, e.g. 'Roxby Hut - 5th August 2026 (4 nights)'"""
+    desc = f"{line.label} - {_line_date_str(line.night)}"
+    if line.per_night and line.quantity > 1:
+        desc += f" ({line.quantity} nights)"
+    return desc
+
+
 def _itemised_lines(b: BookingData) -> tuple[list[dict], int]:
-    """Per-night/per-facility line items priced from the charges config.
+    """Per-night/per-facility line items priced from the pricing config.
 
     Returns (lines, total_pence); ([], 0) when the pricing config can't
     itemise this booking.
     """
-    charges = FIELD_MAPPINGS_DICT.get("charges") or {}
-    event_cfg = charges.get(b.event_type) or {}
-    rate = (event_cfg.get("rates") or {}).get(b.group_type)
-    unit = event_cfg.get("unit")
-    if rate is None or unit not in {"per_person", "per_group"}:
+    lines = charge_lines(b)
+    if not lines:
         return [], 0
 
-    num_overnights = max((b.departing.date() - b.arriving.date()).days, 1)
-    lines, total = [], 0
-
-    label = EVENT_LINE_LABELS.get(b.event_type, b.event_type.capitalize())
-
-    if unit == "per_person":
-        for i in range(num_overnights):
-            night = b.arriving + timedelta(days=i)
-            size = b.size_for_night(night.date())
-            lines.append(_line(f"{label} - {_line_date_str(night)}", size, rate))
-            total += rate * size
-    else:
-        lines.append(_line(f"{label} - {_line_date_str(b.arriving)}", 1, rate))
-        total += rate
-
-    fac_lines, fac_total = _facility_lines(b, charges, num_overnights)
-    if fac_lines is None:
-        return [], 0  # config can't price a facility - don't part-itemise
-
-    return lines + fac_lines, total + fac_total
-
-
-def _facility_lines(b: BookingData, charges: dict, num_overnights: int) -> tuple[list, int]:
-    """Surcharge lines for chargeable facilities; (None, 0) if one can't be priced"""
-    facility_charges = FIELD_MAPPINGS_DICT.get("facility_charges") or {}
-    lines, total = [], 0
-
-    for facility in b.facilities:
-        charge_key = facility_charges.get(facility)
-        if not charge_key:
-            continue  # facility carries no surcharge
-        fac_cfg = charges.get(charge_key) or {}
-        fac_rate = (fac_cfg.get("rates") or {}).get(b.group_type)
-        if fac_rate is None:
-            return None, 0
-        if fac_cfg.get("unit") == "per_person":
-            for i in range(num_overnights):
-                night = b.arriving + timedelta(days=i)
-                size = b.size_for_night(night.date())
-                desc = f"{facility} - {_line_date_str(night)}"
-                lines.append(_line(desc, size, fac_rate))
-                total += fac_rate * size
-        else:
-            lines.append(_line(facility, 1, fac_rate))
-            total += fac_rate
-
-    return lines, total
+    return (
+        [_line(_describe(line), line.quantity, line.unit_pence) for line in lines],
+        sum(line.total_pence for line in lines),
+    )
 
 
 def build_invoice_line_items(rec: LiveBooking) -> list[dict]:

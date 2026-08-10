@@ -41,10 +41,9 @@ from models.mailer import (
     send_email_notification,
     send_invoice_email,
 )
+from models.pricing import SortedFacilities, estimate_cost, sort_facilities
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 from models.utils import (
-    SortedFacilities,
-    estimate_cost,
     get_booking_prefix,
     get_event_type,
     get_pretty_date_str,
@@ -53,7 +52,6 @@ from models.utils import (
     is_xero_enabled,
     now_uk,
     secs_to_hr,
-    sort_facilities,
 )
 
 #
@@ -189,14 +187,7 @@ class Bookings:
 
     def _estimate_cost(self, b: BookingData) -> int:
         """Estimate the cost of a booking in pence"""
-        return estimate_cost(
-            b.event_type,
-            b.num_overnights(),
-            b.group_type,
-            b.group_size,
-            b.facilities,
-            nightly_sizes=b.nightly_size_list() if b.nightly_group_sizes else None,
-        )
+        return estimate_cost(b)
 
     def _can_transition(self, from_status, to_status):
         return to_status in status_transitions.get(from_status, [])

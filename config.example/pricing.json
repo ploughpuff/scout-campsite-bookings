@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "amounts": "pence",
+
+  "_comment": [
+    "All amounts are in PENCE. Every charge below is priced by one rule:",
+    "    cost = rate x (headcount if per_person) x (nights if per_night)",
+    "A day or evening booking spans no nights, so a per_night rate is charged once.",
+    "Facility names here are the list the booking form offers, in this order;",
+    "a facility carries a surcharge only if it has a 'rates' block.",
+    "Every rates block must name every group type in field_mappings.json, or",
+    "the app refuses to start."
+  ],
+
+  "events": {
+    "overnight": {
+      "label": "Camping overnight",
+      "per_person": true,
+      "per_night": true,
+      "rates": {
+        "Chelmsford District Scouts": 150,
+        "Other Scout Group": 275,
+        "School or Other Youth Organisation": 350
+      }
+    },
+    "day": {
+      "label": "Day visit",
+      "per_person": true,
+      "per_night": false,
+      "rates": {
+        "Chelmsford District Scouts": 0,
+        "Other Scout Group": 100,
+        "School or Other Youth Organisation": 150
+      }
+    },
+    "eve": {
+      "label": "Evening visit",
+      "per_person": false,
+      "per_night": false,
+      "rates": {
+        "Chelmsford District Scouts": 0,
+        "Other Scout Group": 1500,
+        "School or Other Youth Organisation": 1500
+      }
+    }
+  },
+
+  "facilities": {
+    "The Glen": {},
+    "Tree Tops": {},
+    "Bottom Site": {},
+    "Squirrels": {},
+    "Roxby Hut": {
+      "per_person": false,
+      "per_night": true,
+      "rates": {
+        "Chelmsford District Scouts": 2000,
+        "Other Scout Group": 2500,
+        "School or Other Youth Organisation": 3000
+      }
+    },
+    "Campfire Circle": {}
+  }
+}

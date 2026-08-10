@@ -9,7 +9,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import CALENDAR_ID, FIELD_MAPPINGS_DICT, SERVICE_ACCOUNT_PATH
+from config import CALENDAR_ID, SERVICE_ACCOUNT_PATH
+from models.pricing import bookable_facilities
 from models.schemas import BookingData, LiveBooking
 
 logger = logging.getLogger("app_logger")
@@ -102,7 +103,7 @@ def _build_service():
 
 def create_calendar_title(b: BookingData) -> str:
     """Create Google Calendar event title using only bookable facilities."""
-    facilities = FIELD_MAPPINGS_DICT.get("bookable_facilities", [])
+    facilities = bookable_facilities()
     selected = [part.strip() for part in b.facilities if part in facilities]
     return f"{b.event_type.upper()}: " + " + ".join(selected)
 

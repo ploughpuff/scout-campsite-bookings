@@ -30,7 +30,6 @@ from config import (
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
     EMAIL_ENABLED,
-    FIELD_MAPPINGS_DICT,
     LOG_FILE_PATH,
     SITENAME,
     STATIC_DIR,
@@ -40,6 +39,7 @@ from config import (
 from models import xero
 from models.bookings import DEFAULT_STATUS_FILTER, STATUS_FILTERS, Bookings, archive_summary
 from models.logger import setup_logger
+from models.pricing import bookable_facilities
 from models.sheets import get_sheet_data
 from models.utils import get_pretty_date_str, is_email_enabled, is_xero_enabled, now_uk
 
@@ -119,7 +119,7 @@ def booking_detail(booking_id):
         valid_transitions=transitions.get(rec.tracking.status, []),
         time_now=now_uk(),
         rec_list_clash=rec_list_clash,
-        bookable_facilities=FIELD_MAPPINGS_DICT.get("bookable_facilities"),
+        bookable_facilities=bookable_facilities(),
         xero_link=bookings.get_xero_link(rec.booking.group_name),
     )
 

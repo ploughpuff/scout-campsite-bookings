@@ -90,6 +90,7 @@ XERO_BRANDING_THEME = _get_and_print("XERO_BRANDING_THEME", "")  # Theme name; b
 ## Config data
 SERVICE_ACCOUNT_PATH = Path(CONFIG_DIR) / "credentials.json"
 FIELD_MAPPING_PATH = Path(CONFIG_DIR) / "field_mappings.json"
+PRICING_PATH = Path(CONFIG_DIR) / "pricing.json"
 XERO_TOKEN_PATH = Path(CONFIG_DIR) / "xero_token.json"
 XERO_CONTACT_MAP_PATH = Path(DATA_DIR) / "xero_contacts.json"
 
@@ -131,3 +132,34 @@ if not FIELD_MAPPING_PATH.exists():
     }
 else:
     FIELD_MAPPINGS_DICT = json.loads(FIELD_MAPPING_PATH.read_text())
+
+if not PRICING_PATH.exists():
+    # Needs moving.  Fake some data so pytest runs
+    _FAKE_RATES = {"A group in my town": 100}
+    PRICING_DICT = {
+        "schema_version": 2,
+        "amounts": "pence",
+        "events": {
+            "overnight": {
+                "label": "Camping overnight",
+                "per_person": True,
+                "per_night": True,
+                "rates": dict(_FAKE_RATES),
+            },
+            "day": {
+                "label": "Day visit",
+                "per_person": True,
+                "per_night": False,
+                "rates": dict(_FAKE_RATES),
+            },
+            "eve": {
+                "label": "Evening visit",
+                "per_person": False,
+                "per_night": False,
+                "rates": dict(_FAKE_RATES),
+            },
+        },
+        "facilities": {"A Field": {}},
+    }
+else:
+    PRICING_DICT = json.loads(PRICING_PATH.read_text())

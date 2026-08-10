@@ -5,7 +5,6 @@ utils.py - Utility functions for use in Scout Campsite Booking.
 import logging
 import re
 from datetime import datetime, time
-from typing import NamedTuple, Optional, Sequence
 
 from flask import current_app, session
 
@@ -209,96 +208,4 @@ def get_event_type(start_dt: datetime, end_dt: datetime) -> str:
     else:
         rc = "eve"
 
-    return rc
-
-
-def estimate_cost(
-    event_type: str,
-    num_overnights: int,
-    group_type: str,
-    group_size: int,
-    facilities: Sequence[str],
-    nightly_sizes: Optional[Sequence[int]] = None,
-) -> int:
-    """Estimate cost of a booking based on event/group types, size, and facilities.
-    nightly_sizes, when given, holds the headcount for each night in turn and
-    overrides num_overnights * group_size for per_person pricing.
-    Robust against missing keys in FIELD_MAPPINGS_DICT.
-    """
-    # Every argument is a distinct pricing input; grouping them into an object
-    # would just move the same values behind another layer.
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    logger = logging.getLogger("app_logger")
-    charges = FIELD_MAPPINGS_DICT.get("charges") or {}
-
-    # --- Base event pricing ---
-    event_cfg = charges.get(event_type) or {}
-    unit = event_cfg.get("unit")
-    rate = (event_cfg.get("rates") or {}).get(group_type)
-
-    cost = 0
-
-    if not event_cfg:
-        logger.warning(
-            "Unknown event_type '%s' in charges mapping; defaulting cost to 0.", event_type
-        )
-    elif unit not in {"per_person", "per_group"}:
-        logger.warning(
-            "Unknown/absent unit for event_type '%s' (got %r); defaulting cost to 0.",
-            event_type,
-            unit,
-        )
-    elif rate is None:
-        logger.warning(
-            "No rate for group_type '%s' under event_type '%s'; defaulting cost to 0.",
-            group_type,
-            event_type,
-        )
-    else:
-        if group_size < 0:
-            logger.warning("Negative group_size %s; treating as 0.", group_size)
-            group_size = 0
-        people_nights = sum(nightly_sizes) if nightly_sizes else num_overnights * group_size
-        cost += rate * people_nights if unit == "per_person" else rate
-
-    # --- Facility add-ons ---
-    # Facilities that carry a surcharge are mapped to a charges key in the config,
-    # so adding/removing a chargeable facility needs no code change here.
-    facility_charges = FIELD_MAPPINGS_DICT.get("facility_charges") or {}
-    for facility in facilities:
-        charge_key = facility_charges.get(facility)
-        if not charge_key:
-            continue  # facility carries no surcharge
-
-        fac_cfg = charges.get(charge_key) or {}
-        fac_rate = (fac_cfg.get("rates") or {}).get(group_type)
-        if fac_rate is None:
-            logger.warning(
-                "No %s rate for group_type '%s'; not adding surcharge.", facility, group_type
-            )
-            continue
-
-        people_nights = sum(nightly_sizes) if nightly_sizes else num_overnights * group_size
-        cost += fac_rate * people_nights if fac_cfg.get("unit") == "per_person" else fac_rate
-
-    # Ensure int return (if your rates are ints this is a no-op)
-    return int(cost)
-
-
-class SortedFacilities(NamedTuple):
-    """Class to hold valid and extra facilitiey requests"""
-
-    valid: list[str]
-    extra: list[str]
-
-
-def sort_facilities(requested_facilities_list: list) -> SortedFacilities:
-    """From a list of strings, compare against bookable facilities and sort into valid and extra"""
-    rc = SortedFacilities(valid=[], extra=[])
-    for f in requested_facilities_list:
-        f = f.strip()
-        if f in FIELD_MAPPINGS_DICT.get("bookable_facilities", []):
-            rc.valid.append(f)
-        else:
-            rc.extra.append(f)
     return rc

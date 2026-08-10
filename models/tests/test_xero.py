@@ -6,6 +6,7 @@ test_xero.py
 import json
 import logging
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +14,7 @@ import models.bookings as bookings_module
 import models.xero as xero
 from models.bookings import Bookings
 from models.json_utils import load_json
-import models.utils as utils_module
+import models.pricing as pricing_module
 from models.schemas import (
     SCHEMA_VERSION,
     ArchiveData,
@@ -23,8 +24,33 @@ from models.schemas import (
     LiveData,
     TrackingData,
 )
-from models.utils import estimate_cost, now_uk
+from models.pricing import estimate_cost
+from models.utils import now_uk
 from models.xero import XeroError, XeroNotConnectedError, XeroTokenManager
+
+
+CDS = "Chelmsford District Scouts"
+
+
+def _pricing(facilities=None):
+    """A minimal but valid pricing config; overnight 150p pp/night, eve 1500p flat."""
+    return {
+        "schema_version": 2,
+        "events": {
+            "overnight": {
+                "label": "Camping overnight",
+                "per_person": True,
+                "per_night": True,
+                "rates": {CDS: 150},
+            },
+            "day": {"label": "Day visit", "per_person": True, "per_night": False, "rates": {CDS: 100}},
+            "eve": {"label": "Evening visit", "per_person": False, "per_night": False, "rates": {CDS: 1500}},
+        },
+        "facilities": facilities or {},
+    }
+
+
+OVERNIGHT_ONLY = _pricing()
 
 
 class FakeResponse:
@@ -299,11 +325,7 @@ def test_create_invoice_payload(monkeypatch, live_booking):
 
 def test_line_items_split_per_night_when_config_matches(monkeypatch, live_booking):
     # 2 nights (12th-14th) x 24 people x 150p = 7200p
-    monkeypatch.setattr(
-        xero,
-        "FIELD_MAPPINGS_DICT",
-        {"charges": {"overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}}}},
-    )
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", OVERNIGHT_ONLY)
     live_booking.tracking.cost_estimate = 7200
 
     lines = xero.build_invoice_line_items(live_booking)
@@ -315,22 +337,24 @@ def test_line_items_split_per_night_when_config_matches(monkeypatch, live_bookin
 
 def test_line_items_include_flat_facility_surcharge(monkeypatch, live_booking):
     monkeypatch.setattr(
-        xero,
-        "FIELD_MAPPINGS_DICT",
-        {
-            "charges": {
-                "overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}},
-                "roxby_hut": {"unit": "per_group", "rates": {"Chelmsford District Scouts": 500}},
-            },
-            "facility_charges": {"Main Field": "roxby_hut"},
-        },
+        pricing_module,
+        "PRICING_DICT",
+        _pricing(
+            facilities={
+                "Main Field": {
+                    "per_person": False,
+                    "per_night": False,
+                    "rates": {"Chelmsford District Scouts": 500},
+                }
+            }
+        ),
     )
     live_booking.tracking.cost_estimate = 7700  # 7200 + 500 flat
 
     lines = xero.build_invoice_line_items(live_booking)
     assert len(lines) == 3
     assert lines[2] == {
-        "Description": "Main Field",
+        "Description": "Main Field - 12th June 2026",
         "Quantity": 1.0,
         "UnitAmount": 5.00,
         "AccountCode": xero.XERO_ACCOUNT_CODE,
@@ -338,12 +362,37 @@ def test_line_items_include_flat_facility_surcharge(monkeypatch, live_booking):
     }
 
 
-def test_line_items_fall_back_to_single_line_on_manual_override(monkeypatch, live_booking):
+def test_line_items_charge_flat_facility_for_every_night(monkeypatch, live_booking):
+    """A per_night facility bills once per night, on one line (2 nights x 500p)."""
     monkeypatch.setattr(
-        xero,
-        "FIELD_MAPPINGS_DICT",
-        {"charges": {"overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}}}},
+        pricing_module,
+        "PRICING_DICT",
+        _pricing(
+            facilities={
+                "Roxby Hut": {
+                    "per_person": False,
+                    "per_night": True,
+                    "rates": {"Chelmsford District Scouts": 500},
+                }
+            }
+        ),
     )
+    live_booking.booking.facilities = ["Roxby Hut"]
+    live_booking.tracking.cost_estimate = 7200 + 1000
+
+    lines = xero.build_invoice_line_items(live_booking)
+    assert len(lines) == 3
+    assert lines[2] == {
+        "Description": "Roxby Hut - 12th June 2026 (2 nights)",
+        "Quantity": 2.0,
+        "UnitAmount": 5.00,
+        "AccountCode": xero.XERO_ACCOUNT_CODE,
+        "TaxType": xero.XERO_TAX_TYPE,
+    }
+
+
+def test_line_items_fall_back_to_single_line_on_manual_override(monkeypatch, live_booking):
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", OVERNIGHT_ONLY)
     live_booking.tracking.cost_estimate = 5000  # manual override, != 7200 itemised
 
     lines = xero.build_invoice_line_items(live_booking)
@@ -611,38 +660,135 @@ def test_wrong_status_rejected(manager, live_booking):
 
 #
 ## Per-night group sizes
-CHARGES = {
-    "charges": {"overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}}}
-}
 NIGHTLY = {"2026-06-12": 20, "2026-06-13": 15}  # fixture stay is 12th-14th June
 
 
-def test_estimate_cost_with_nightly_sizes(monkeypatch):
-    monkeypatch.setattr(utils_module, "FIELD_MAPPINGS_DICT", CHARGES)
-    cost = estimate_cost(
-        "overnight", 2, "Chelmsford District Scouts", 20, [], nightly_sizes=[20, 15]
+def test_estimate_cost_with_nightly_sizes(monkeypatch, live_booking):
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", OVERNIGHT_ONLY)
+    live_booking.booking.nightly_group_sizes = dict(NIGHTLY)
+    assert estimate_cost(live_booking.booking) == 150 * (20 + 15)
+
+
+def test_estimate_cost_uniform_unchanged_without_nightly_sizes(monkeypatch, live_booking):
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", OVERNIGHT_ONLY)
+    assert estimate_cost(live_booking.booking) == 150 * 2 * 24
+
+
+def test_estimate_cost_nightly_sizes_apply_to_per_person_facility(monkeypatch, live_booking):
+    monkeypatch.setattr(
+        pricing_module,
+        "PRICING_DICT",
+        _pricing(
+            facilities={
+                "Main Field": {
+                    "per_person": True,
+                    "per_night": True,
+                    "rates": {"Chelmsford District Scouts": 50},
+                }
+            }
+        ),
     )
-    assert cost == 150 * (20 + 15)
+    live_booking.booking.nightly_group_sizes = dict(NIGHTLY)
+    live_booking.booking.facilities = ["Main Field"]
+    assert estimate_cost(live_booking.booking) == (150 + 50) * (20 + 15)
 
 
-def test_estimate_cost_uniform_unchanged_without_nightly_sizes(monkeypatch):
-    monkeypatch.setattr(utils_module, "FIELD_MAPPINGS_DICT", CHARGES)
-    assert estimate_cost("overnight", 2, "Chelmsford District Scouts", 24, []) == 150 * 2 * 24
-
-
-def test_estimate_cost_nightly_sizes_apply_to_per_person_facility(monkeypatch):
-    charges = {
-        "charges": {
-            "overnight": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 150}},
-            "hall": {"unit": "per_person", "rates": {"Chelmsford District Scouts": 50}},
-        },
-        "facility_charges": {"Main Field": "hall"},
-    }
-    monkeypatch.setattr(utils_module, "FIELD_MAPPINGS_DICT", charges)
-    cost = estimate_cost(
-        "overnight", 2, "Chelmsford District Scouts", 20, ["Main Field"], nightly_sizes=[20, 15]
+def test_flat_nightly_facility_charged_per_night(monkeypatch, live_booking):
+    """The Roxby Hut case: a flat nightly rate scales with the length of stay."""
+    monkeypatch.setattr(
+        pricing_module,
+        "PRICING_DICT",
+        _pricing(
+            facilities={
+                "Roxby Hut": {
+                    "per_person": False,
+                    "per_night": True,
+                    "rates": {"Chelmsford District Scouts": 2000},
+                }
+            }
+        ),
     )
-    assert cost == (150 + 50) * (20 + 15)
+    live_booking.booking.facilities = ["Roxby Hut"]
+    assert estimate_cost(live_booking.booking) == 150 * 2 * 24 + 2000 * 2
+
+
+def test_day_visit_charges_per_head_without_nights(monkeypatch, live_booking):
+    """A day visit spans no nights but must still bill every head."""
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", OVERNIGHT_ONLY)
+    b = live_booking.booking
+    b.event_type = "day"
+    b.departing = b.arriving.replace(hour=16)
+    assert b.num_overnights() == 0
+    assert estimate_cost(b) == 100 * 24
+
+
+def test_nightly_facility_charged_once_for_a_day_visit(monkeypatch, live_booking):
+    """No nights still means one use of the hut, so charge the nightly rate once."""
+    monkeypatch.setattr(
+        pricing_module,
+        "PRICING_DICT",
+        _pricing(
+            facilities={
+                "Roxby Hut": {
+                    "per_person": False,
+                    "per_night": True,
+                    "rates": {"Chelmsford District Scouts": 2000},
+                }
+            }
+        ),
+    )
+    b = live_booking.booking
+    b.event_type = "eve"
+    b.departing = b.arriving.replace(hour=21)
+    b.facilities = ["Roxby Hut"]
+    assert estimate_cost(b) == 1500 + 2000
+
+
+def test_unpriced_facility_adds_nothing(monkeypatch, live_booking):
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", _pricing(facilities={"The Glen": {}}))
+    live_booking.booking.facilities = ["The Glen"]
+    assert estimate_cost(live_booking.booking) == 150 * 2 * 24
+
+
+#
+## Pricing config validation
+def test_validate_pricing_rejects_missing_group_type():
+    pricing = _pricing()
+    groups = [{"description": "Chelmsford District Scouts"}, {"description": "Other Scout Group"}]
+    with pytest.raises(RuntimeError, match="Other Scout Group"):
+        pricing_module.validate_pricing(pricing, groups)
+
+
+def test_validate_pricing_rejects_unknown_group_type():
+    pricing = _pricing()
+    with pytest.raises(RuntimeError, match="unknown group type"):
+        pricing_module.validate_pricing(pricing, [{"description": "Someone Else"}])
+
+
+def test_validate_pricing_rejects_wrong_schema_version():
+    pricing = _pricing()
+    pricing["schema_version"] = 1
+    with pytest.raises(RuntimeError, match="schema_version"):
+        pricing_module.validate_pricing(pricing, [])
+
+
+def test_validate_pricing_rejects_non_pence_rate():
+    pricing = _pricing()
+    pricing["events"]["overnight"]["rates"]["Chelmsford District Scouts"] = 1.5
+    with pytest.raises(RuntimeError, match="whole number of pence"):
+        pricing_module.validate_pricing(pricing, [])
+
+
+def test_validate_pricing_accepts_the_shipped_config():
+    pricing = json.loads(
+        (Path(__file__).resolve().parents[2] / "config.example" / "pricing.json").read_text()
+    )
+    groups = [
+        {"description": "Chelmsford District Scouts"},
+        {"description": "Other Scout Group"},
+        {"description": "School or Other Youth Organisation"},
+    ]
+    pricing_module.validate_pricing(pricing, groups)
 
 
 def test_nightly_size_helpers(live_booking):
@@ -674,7 +820,7 @@ def test_nightly_group_sizes_validation():
 
 
 def test_itemised_lines_use_nightly_sizes(monkeypatch, live_booking):
-    monkeypatch.setattr(xero, "FIELD_MAPPINGS_DICT", CHARGES)
+    monkeypatch.setattr(pricing_module, "PRICING_DICT", OVERNIGHT_ONLY)
     live_booking.booking.nightly_group_sizes = dict(NIGHTLY)
     live_booking.tracking.cost_estimate = 150 * (20 + 15)
 

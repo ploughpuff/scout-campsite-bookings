@@ -1,5 +1,29 @@
 # scout-campsite-bookings
 
+## Pricing
+
+Prices live in `docker-mnt/config/pricing.json` (template:
+`config.example/pricing.json`). Every charge - the event itself and each
+chargeable facility - is priced by one rule:
+
+    cost = rate x (headcount if per_person) x (nights if per_night)
+
+All amounts are in **pence**. Set both flags per charge, so a flat nightly
+charge (`per_person: false, per_night: true`, e.g. the Roxby Hut) and a
+per-head single visit (`per_person: true, per_night: false`, e.g. a day visit)
+are both expressible. A day or evening booking spans no nights, so a
+`per_night` rate is charged once for that single occasion.
+
+The `facilities` block is also the list of facilities the booking form offers,
+in the order given; a facility carries a surcharge only if it has a `rates`
+block. Every rates block must name every group type in `field_mappings.json` -
+the app refuses to start otherwise, since a missing rate would silently
+invoice nothing.
+
+Changing a rate does **not** reprice existing bookings: stored estimates only
+recalculate when a booking is edited. `python scripts/check_repricing.py` is a
+read-only dry run showing which bookings a config change would affect.
+
 ## Xero invoicing
 
 When a booking with money owed passes its departure date it moves to `Invoice`
@@ -7,9 +31,10 @@ status. The booking page then offers **Raise Invoice in Xero**, which creates
 an AUTHORISED sales invoice via the Xero API (reference = booking ID), emails
 it from the app to the leader's address on the booking (invoice PDF attached,
 plus Xero's view/pay-online link), and marks the booking `Completed`. Line
-items are per night per person where the pricing config can reproduce the
-booking's cost estimate; a manually overridden estimate falls back to one
-line for the total.
+items are itemised from the pricing config where they reproduce the booking's
+cost estimate exactly; a manually overridden estimate falls back to one line
+for the total. A flat nightly facility charge bills as a single line with the
+night count as its quantity, e.g. `Roxby Hut - 5th August 2026 (4 nights)`.
 
 A group's first invoice always shows a confirmation page to link the group to
 a Xero contact: pick from likely matches, search Xero by another name, or
