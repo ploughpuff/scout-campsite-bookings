@@ -12,7 +12,8 @@ import hashlib
 import json
 import logging
 import os
-from datetime import date, datetime, timedelta
+import threading
+from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import median
 from typing import Iterable, List, Optional, Tuple, get_args
@@ -42,7 +43,9 @@ from models.mailer import (
     send_invoice_email,
 )
 from models.pricing import SortedFacilities, estimate_cost, sort_facilities
+from models.run_state import load_run_state, save_run_state
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
+from models.sheets import get_sheet_data
 from models.utils import (
     get_booking_prefix,
     get_event_type,
@@ -114,6 +117,23 @@ def test_only(func):
     return wrapper
 
 
+def locked(func):
+    """Serialise a method that mutates the booking data.
+
+    gunicorn runs four threads and the scheduler adds a fifth, all sharing one
+    Bookings instance. Every mutation is read-modify-write over self.live
+    followed by a whole-file save, so two at once can lose one of them. The
+    lock is reentrant because the archive sweep calls through itself.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        with self.lock:
+            return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Bookings:
     """Class for managing the booking data.
 
@@ -126,14 +146,17 @@ class Bookings:
     def __init__(self):
         self.logger = logging.getLogger("app_logger")
 
+        #
+        ## Guards every mutation of live/archive - see the locked() decorator.
+        self.lock = threading.RLock()
+
         self.live = self._load_or_initialize(DATA_FILE_PATH, LiveData)
         self.archive = self._load_or_initialize(ARCHIVE_FILE_PATH, ArchiveData)
 
         #
-        ## Date of the last archive sweep, so page traffic only triggers one a day.
-        ## Held in memory only: the sweep is idempotent, so an extra run after a
-        ## restart is harmless, and this avoids a daily no-op write to archive.json.
-        self._archive_last_run: Optional[date] = None
+        ## When the unattended jobs last ran. Persisted, so a restart does not
+        ## forget that today's archive sweep has already happened.
+        self.run_state = load_run_state()
 
     def _load_or_initialize(self, path: Path, model: BaseModel) -> BaseModel:
         if path.exists():
@@ -178,12 +201,17 @@ class Bookings:
 
     def age(self):
         """
-        String showing the age of the bookings or when they were last retrieved from sheets
+        String showing how long ago the bookings were last retrieved from sheets.
+
+        Doubles as the scheduler's heartbeat: nothing else refreshes this, so if
+        the hourly pull dies the age just keeps climbing where you can see it.
 
         Returns:
-            str: Either 'NEVER' if not data exists, or string like '1d 5h 35m 17s'
+            str: Either 'NEVER' if no pull has happened, or string like '1d 5h 35m 17s'
         """
-        return secs_to_hr((now_uk() - self.live.updated).total_seconds())
+        if self.run_state.pulled_at is None:
+            return "NEVER"
+        return secs_to_hr((now_uk() - self.run_state.pulled_at).total_seconds())
 
     def _estimate_cost(self, b: BookingData) -> int:
         """Estimate the cost of a booking in pence"""
@@ -480,6 +508,7 @@ class Bookings:
         counts = Counter(b.arriving.year for b in self.archive.items)
         return dict(sorted(counts.items(), reverse=True))
 
+    @locked
     def change_status(self, booking_id: str, new_status: str, description: str = None):
         """Change the status of a single booking.
 
@@ -545,6 +574,7 @@ class Bookings:
 
         return True
 
+    @locked
     def resend_email(self, booking_id):
         """Resend the last type of email again"""
         rec = self._get_booking_by_id(booking_id)
@@ -552,6 +582,7 @@ class Bookings:
             self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
             save_json(self.live, DATA_FILE_PATH)
 
+    @locked
     def request_confirm_numbers(self, booking_id):
         """Email the leader asking them to confirm final attendance numbers.
 
@@ -572,6 +603,7 @@ class Bookings:
             )
             save_json(self.live, DATA_FILE_PATH)
 
+    @locked
     def raise_xero_invoice(
         self,
         booking_id: str,
@@ -692,6 +724,7 @@ class Bookings:
                 f"Invoice {number} {action} but emailing it failed - send it from Xero.", "warning"
             )
 
+    @locked
     def resend_invoice_email(self, booking_id) -> bool:
         """Re-email an already-raised Xero invoice to the leader.
 
@@ -728,6 +761,7 @@ class Bookings:
         save_json(self.live, DATA_FILE_PATH)
         return True
 
+    @locked
     def amend_xero_invoice(
         self,
         booking_id: str,
@@ -832,6 +866,7 @@ class Bookings:
         """Xero contact page URL per group name, for the bookings given. File read only."""
         return xero.get_contact_urls({rec.booking.group_name for rec in recs})
 
+    @locked
     def link_xero_contact(
         self,
         booking_id: str,
@@ -966,6 +1001,7 @@ class Bookings:
                 )
                 rec.tracking.cost_estimate = cost_estimate
 
+    @locked
     def modify_fields(self, booking_id, update_data: dict) -> bool:
         """Modify fields in the booking from the html page.
 
@@ -1096,8 +1132,15 @@ class Bookings:
         old_value = tracking.notes
         tracking.notes = new_note_entry + ("\n" + old_value if old_value else "")
 
-    def auto_update_statuses(self):
-        """Look for bookings to automatically change the status of"""
+    @locked
+    def auto_update_statuses(self) -> list[str]:
+        """Roll bookings whose departure has passed on to Invoice or Completed.
+
+        Returns a message per booking moved. It returns them rather than
+        flashing them because the scheduler calls this too, and flash() needs a
+        request context - the route does the flashing.
+        """
+        moved = []
 
         for rec in self.live.items:
             #
@@ -1120,12 +1163,14 @@ class Bookings:
                 )
                 rec.tracking.status = new_status
                 save_json(self.live, DATA_FILE_PATH)
-                flash(
-                    f"{rec.booking.id} Auto Status Change: From: [Comfirmed] "
-                    f"To: [{new_status}] now booking has passed",
-                    "warning",
+                moved.append(
+                    f"{rec.booking.id} Auto Status Change: From: [Confirmed] "
+                    f"To: [{new_status}] now booking has passed"
                 )
 
+        return moved
+
+    @locked
     def fix_cal_events(self, dry_run: bool = True) -> dict:
         """Attempt to fix the calendar entries using latest live data"""
 
@@ -1190,32 +1235,51 @@ class Bookings:
 
         return {"good": good, "missing": missing, "delete": delete, "extra": extra}
 
-    def auto_archive_old_bookings(self):
-        """Run the archive sweep once a day, piggy-backed on page traffic."""
+    @locked
+    def auto_archive_old_bookings(self) -> Optional[dict]:
+        """Run the archive sweep at most once a day.
 
+        Driven from two places: the scheduler at 03:00, and page traffic. The
+        date gate makes whichever fires first the one that does the work, so a
+        sweep missed while the NAS was off still happens on your next visit.
+
+        Returns the sweep result, or None if today's has already run.
+        """
         today = now_uk().date()
-        if self._archive_last_run == today:
-            return
+        if self.run_state.archived_on == today:
+            return None
 
         #
         ## Stamp the date before the sweep: if it raises, we retry tomorrow rather
         ## than on every page load for the rest of today.
-        self._archive_last_run = today
+        self.run_state.record_archive(today, {"archived": 0, "deleted": 0})
+        save_run_state(self.run_state)
+
         result = self.archive_old_bookings()
 
-        if result["archived"] or result["deleted"]:
-            flash(archive_summary(result), "info")
+        self.run_state.record_archive(today, result)
+        save_run_state(self.run_state)
+        return result
 
+    @locked
     def archive_old_bookings(self) -> dict:
         """
         Archive or delete old bookings:
         - 'Completed' bookings 90+ days after departure are archived.
         - 'Cancelled' bookings 90+ days after departure are deleted.
 
+        Records the run, so forcing a sweep from the Admin page also counts as
+        today's and the automatic one stays out of its way.
+
         Returns counts of what was done: {"archived": int, "deleted": int}
         """
-        self._archive_last_run = now_uk().date()
+        result = self._sweep_old_bookings()
+        self.run_state.record_archive(now_uk().date(), result)
+        save_run_state(self.run_state)
+        return result
 
+    def _sweep_old_bookings(self) -> dict:
+        """The sweep itself. See archive_old_bookings()."""
         now = now_uk()
         to_archive = []
         tombstoned = []
@@ -1289,6 +1353,7 @@ class Bookings:
             return True
         return target_md5 in self.archive.deleted_md5s
 
+    @locked
     def add_new_data(self, all_sheets) -> int:
         """Function to load a sheet of data in dict format into our booking structure
 
@@ -1301,9 +1366,6 @@ class Bookings:
         added = 0
         if "updated" in all_sheets and all_sheets["updated"]:
 
-            # Sheets records timestamp in ISO format.  Convert to dt object
-            self.live.updated = all_sheets["updated"]
-
             #
             ## Need to normalise the new data from Sheet to our structure
             for single_sheet in all_sheets["data"]:
@@ -1314,22 +1376,55 @@ class Bookings:
                     ## Create MD5 of sheet line item so we can track if its new or seen before
                     new_booking_md5 = self._md5_of_dict(row)
 
-                    if not self._find_booking_by_md5(new_booking_md5):
+                    if self._find_booking_by_md5(new_booking_md5):
+                        continue
 
+                    #
+                    ## One unparseable row must not cost us the rest of the pull.
+                    ## Unattended, the alternative is an exception in a background
+                    ## thread and no new bookings until someone notices.
+                    try:
                         rec = self.create_rec_from_sheet_row(
                             row,
                             new_booking_md5,
                             single_sheet.get("group_type"),
                             single_sheet.get("contains"),
                         )
+                    except (ValueError, KeyError, ValidationError):
+                        self.logger.exception("Skipping unreadable sheet row: %s", row)
+                        continue
 
-                        self._add_to_notes(rec.tracking, "Pulled from sheets")
-                        self.live.items.append(rec)
-                        self.live.next_idx += 1
-                        self.logger.info("New booking added: %s", rec.booking.id)
-                        added += 1
+                    self._add_to_notes(rec.tracking, "Pulled from sheets")
+                    self.live.items.append(rec)
+                    self.live.next_idx += 1
+                    self.logger.info("New booking added: %s", rec.booking.id)
+                    added += 1
 
-            save_json(self.live, DATA_FILE_PATH)
+            #
+            ## Nothing new means nothing to write. An hourly pull that finds no
+            ## bookings must not rewrite the file and rotate a backup off the end.
+            if added:
+                save_json(self.live, DATA_FILE_PATH)
+        return added
+
+    @locked
+    def pull_from_sheets(self) -> int:
+        """Fetch the booking forms and add anything new. Returns the number added.
+
+        The one entry point for both the Pull Now button and the scheduler, so
+        the two cannot drift. Records the outcome in run_state either way: a
+        pull that fails at 3am has to leave a trace someone can find.
+        """
+        try:
+            added = self.add_new_data(get_sheet_data())
+        except Exception as exc:  # pylint: disable=broad-except
+            self.logger.exception("Pull from sheets failed")
+            self.run_state.record_pull_failure(f"{type(exc).__name__}: {exc}")
+            save_run_state(self.run_state)
+            raise
+
+        self.run_state.record_pull(added)
+        save_run_state(self.run_state)
         return added
 
     def create_rec_from_sheet_row(

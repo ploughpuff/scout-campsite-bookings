@@ -18,17 +18,45 @@ from models.schemas import SCHEMA_VERSION
 logger = logging.getLogger("app_logger")
 
 
-def save_json(data: BaseModel, path: Path) -> None:
-    """Save a Pydantic model to JSON with backup, atomic write, and checksum."""
+def save_json(data: BaseModel, path: Path) -> bool:
+    """Save a Pydantic model to JSON with backup, atomic write, and checksum.
+
+    Writing is skipped when the file would come out byte for byte identical.
+    Only 50 backups are kept, so without this a job that runs on a timer and
+    finds nothing to do would quietly flush the backup history.
+
+    Returns True if the file was written.
+    """
+    serialized = data.model_dump(mode="json")  # Proper JSON-safe serialization
+
+    if _would_be_unchanged(serialized, path):
+        logger.debug("%s unchanged - save skipped", path.name)
+        return False
 
     if path.exists():
         backup_with_rotation(path, MAX_BACKUPS_TO_KEEP)
 
-    serialized = data.model_dump(mode="json")  # Proper JSON-safe serialization
-
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(serialized, path)
     write_checksum(path)
+    return True
+
+
+def _would_be_unchanged(serialized: dict, path: Path) -> bool:
+    """True when writing `serialized` would reproduce the file exactly as it stands.
+
+    Compares against the stored checksum rather than re-reading and parsing the
+    file. A file that has drifted from its own checksum is treated as changed,
+    so a rewrite repairs it rather than being skipped.
+    """
+    checksum_path = path.with_suffix(".sha256")
+    if not path.exists() or not checksum_path.exists() or not verify_checksum(path):
+        return False
+
+    # Must match atomic_write_json byte for byte, hence the same indent.
+    candidate = json.dumps(serialized, indent=2)
+    digest = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+    return digest == checksum_path.read_text(encoding="utf-8").strip()
 
 
 def load_json(path: Path, model: Type[BaseModel], use_checksum: bool = True) -> BaseModel | None:
@@ -75,10 +103,23 @@ def _migrate_v4_to_v5(data: dict) -> dict:
     return data
 
 
+def _migrate_v5_to_v6(data: dict) -> dict:
+    """v6 drops LiveData.updated - last-pulled now lives in run_state.json.
+
+    next_idx is unique to the live file, so archive.json passes through with
+    only its version bumped.
+    """
+    if "next_idx" in data:
+        data.pop("updated", None)
+    data["schema_version"] = 6
+    return data
+
+
 MIGRATIONS = {
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
     4: _migrate_v4_to_v5,
+    5: _migrate_v5_to_v6,
 }
 
 

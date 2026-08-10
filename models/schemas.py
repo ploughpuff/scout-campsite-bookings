@@ -10,7 +10,7 @@ from models.utils import (
     now_uk,
 )
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class LeaderData(BaseModel):
@@ -148,10 +148,14 @@ class LiveBooking(BaseModel):
 
 
 class LiveData(BaseModel):
-    """Live data that contains the active bookings"""
+    """Live data that contains the active bookings
+
+    No `updated` timestamp: when the bookings were last pulled lives in
+    run_state.json instead. Stamping it here rewrote the file (and burned a
+    backup) on every pull that found nothing.
+    """
 
     schema_version: int = Field(default=SCHEMA_VERSION)
-    updated: datetime = Field(default_factory=now_uk)
     next_idx: int = Field(default=1)
     items: List[LiveBooking] = Field(default_factory=list)
 

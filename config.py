@@ -65,6 +65,7 @@ CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = Path(DATA_DIR) / "app.log"
 DATA_FILE_PATH = Path(DATA_DIR) / "bookings.json"
 ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
+RUN_STATE_FILE_PATH = Path(DATA_DIR) / "run_state.json"
 
 LOG_LEVEL_STR = _get_and_print("LOG_LEVEL", "INFO").upper()
 
@@ -104,6 +105,14 @@ DATE_FORMAT_WITH_SECONDS = "%Y-%m-%d %H:%M:%S"
 #
 ## Anonymise bookings by removing personnel information once a completed is X days old
 ARCHIVE_BOOKINGS_AFTER_DEPARTING_DAYS = 90
+
+#
+## Unattended jobs. The pull is what puts new booking forms on the page without
+## anyone pressing Pull Now; the archive hour is UK local time, not the
+## container's UTC. Set SCHEDULER_ENABLED=False to fall back to manual pulls.
+SCHEDULER_ENABLED = _get_and_print("SCHEDULER_ENABLED", "True") == "True"
+PULL_INTERVAL_MINUTES = int(_get_and_print("PULL_INTERVAL_MINUTES", "60"))
+ARCHIVE_AT_HOUR = int(_get_and_print("ARCHIVE_AT_HOUR", "3"))
 
 MAX_BACKUPS_TO_KEEP = 50  # Keep 50 recent JSON backups for safety
 

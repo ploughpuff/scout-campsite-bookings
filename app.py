@@ -27,10 +27,13 @@ from werkzeug.exceptions import HTTPException
 from config import (
     APP_SECRET_KEY,
     APP_VERSION,
+    ARCHIVE_AT_HOUR,
     ARCHIVE_FILE_PATH,
     DATA_FILE_PATH,
     EMAIL_ENABLED,
     LOG_FILE_PATH,
+    PULL_INTERVAL_MINUTES,
+    SCHEDULER_ENABLED,
     SITENAME,
     STATIC_DIR,
     TEMPLATE_DIR,
@@ -40,7 +43,7 @@ from models import xero
 from models.bookings import DEFAULT_STATUS_FILTER, STATUS_FILTERS, Bookings, archive_summary
 from models.logger import setup_logger
 from models.pricing import bookable_facilities
-from models.sheets import get_sheet_data
+from models.scheduler import Scheduler
 from models.utils import get_pretty_date_str, is_email_enabled, is_xero_enabled, now_uk
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
@@ -62,6 +65,13 @@ logger.info("Starting")
 
 bookings = Bookings()
 
+#
+## The unattended pull/archive jobs. Disabled under test so importing the app
+## never reaches out to Google Sheets.
+if SCHEDULER_ENABLED and os.getenv("APP_ENV") != "test":
+    scheduler = Scheduler(bookings)
+    scheduler.start()
+
 
 @app.route("/")
 @app.route("/bookings")
@@ -74,8 +84,12 @@ def all_bookings():
     This page also drives the housekeeping: statuses roll forward on every load,
     and the archive sweep runs on the first load of each day.
     """
-    bookings.auto_update_statuses()
-    bookings.auto_archive_old_bookings()
+    for message in bookings.auto_update_statuses():
+        flash(message, "warning")
+
+    archived = bookings.auto_archive_old_bookings()
+    if archived and (archived["archived"] or archived["deleted"]):
+        flash(archive_summary(archived), "info")
 
     status_filter = request.args.get("status", DEFAULT_STATUS_FILTER)
     if status_filter not in STATUS_FILTERS:
@@ -366,7 +380,12 @@ def modify_fields(booking_id):
 @app.route("/pull")
 def pull_now():
     """Pull new data from sheets and add to bookings."""
-    added = bookings.add_new_data(get_sheet_data())
+    try:
+        added = bookings.pull_from_sheets()
+    except Exception as exc:  # pylint: disable=broad-except
+        flash(f"Pull from Google Sheets failed: {exc}", "danger")
+        return redirect(url_for("all_bookings"))
+
     flash(f"New Bookings Added from Google Sheets: {added}", "success")
     return redirect(url_for("all_bookings"))
 
@@ -508,6 +527,10 @@ def admin():
         period=period,
         xero=xero.token_manager.status(),
         xero_mappings=xero.count_contact_mappings(),
+        run_state=bookings.run_state,
+        scheduler_enabled=SCHEDULER_ENABLED,
+        pull_interval_minutes=PULL_INTERVAL_MINUTES,
+        archive_hour=ARCHIVE_AT_HOUR,
     )
 
 

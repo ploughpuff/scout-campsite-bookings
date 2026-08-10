@@ -5,6 +5,7 @@ test_xero.py
 # pylint: disable=all
 import json
 import logging
+import threading
 from datetime import timedelta
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from models.schemas import (
     TrackingData,
 )
 from models.pricing import estimate_cost
+from models.run_state import RunState
 from models.utils import now_uk
 from models.xero import XeroError, XeroNotConnectedError, XeroTokenManager
 
@@ -90,8 +92,10 @@ def manager(live_booking, monkeypatch):
     """A Bookings instance with one Invoice-status booking and no disk/Flask side effects"""
     m = Bookings.__new__(Bookings)
     m.logger = logging.getLogger("test")
+    m.lock = threading.RLock()
     m.live = LiveData(items=[live_booking])
     m.archive = ArchiveData(items=[])
+    m.run_state = RunState()
 
     monkeypatch.setattr(bookings_module, "flash", lambda *a, **k: None)
     monkeypatch.setattr(bookings_module, "save_json", lambda *a, **k: None)

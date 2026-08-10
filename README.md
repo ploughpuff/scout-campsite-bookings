@@ -24,6 +24,32 @@ Changing a rate does **not** reprice existing bookings: stored estimates only
 recalculate when a booking is edited. `python scripts/check_repricing.py` is a
 read-only dry run showing which bookings a config change would affect.
 
+## Unattended jobs
+
+A background thread in the Flask process pulls new booking forms every
+`PULL_INTERVAL_MINUTES` (default 60) and runs the archive sweep at
+`ARCHIVE_AT_HOUR` (default 03:00, **UK local time** - the container runs UTC, so
+this is not the same as 3am UTC in summer). Set `SCHEDULER_ENABLED=False` to
+turn both off and go back to pressing **Pull Now**.
+
+It runs in-process rather than as a cron container because the app holds every
+booking in memory and rewrites `bookings.json` wholesale - a separate process
+writing that file would be overwritten the moment the app next saved.
+
+The archive sweep is still triggered by page traffic as well. Both paths go
+through the same once-a-day gate, so whichever happens first does the work and a
+sweep missed while the NAS was off still runs on your next visit.
+
+`data/run_state.json` records when each job last ran and how it got on; the
+Admin page shows it, and "Bookings Last Retrieved" on the bookings page is the
+heartbeat - if the pull dies, that age just keeps climbing. Nothing about a
+failed pull is silent: it is logged, recorded, and shown on the Admin page,
+and the thread survives to try again.
+
+Saving skips the write entirely when a file would come out unchanged, so an
+hourly pull that finds nothing costs no disk and does not rotate a backup off
+the end of the 50 kept.
+
 ## Xero invoicing
 
 When a booking with money owed passes its departure date it moves to `Invoice`

@@ -297,8 +297,8 @@ def test_live_data_default_values(live_booking):
     # Create the LiveData instance
     live_data = LiveData(items=[live_booking])
 
-    # Check if updated field is correctly initialized to the current UK time
-    assert now_uk() - timedelta(seconds=5) <= live_data.updated <= now_uk()
+    # No `updated` field: when the bookings were last pulled lives in run_state.json
+    assert not hasattr(live_data, "updated")
 
     # Check if next_idx is initialized to 1 by default
     assert live_data.next_idx == 1

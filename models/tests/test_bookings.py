@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from models.bookings import Bookings
+from models.run_state import RunState
 from models.schemas import ArchiveData, BookingData, LeaderData, LiveBooking, LiveData, TrackingData
 
 
@@ -350,6 +351,10 @@ def archive_manager(leader_data, monkeypatch):
     monkeypatch.setattr(bookings_module, "save_json", lambda data, path: saved.append(path.name))
     monkeypatch.setattr(bookings_module, "delete_calendar_entry", lambda rec: None)
     monkeypatch.setattr(bookings_module, "flash", lambda msg, cat=None: flashed.append(msg))
+    monkeypatch.setattr(bookings_module, "save_run_state", lambda state: None)
+
+    # A real run_state.json on disk must not decide whether these tests sweep
+    manager.run_state = RunState()
 
     return manager, saved, flashed
 
@@ -409,24 +414,43 @@ def test_archive_old_bookings_no_op_saves_nothing(archive_manager):
 
 
 def test_auto_archive_runs_once_a_day(archive_manager):
-    manager, saved, flashed = archive_manager
+    manager, saved, _ = archive_manager
 
-    manager.auto_archive_old_bookings()
-    assert len(flashed) == 1
-    assert "1 booking(s) archived" in flashed[0]
+    assert manager.auto_archive_old_bookings() == {"archived": 1, "deleted": 1}
 
-    # Second call the same day does nothing at all
+    # Second call the same day does nothing at all, and says so with None
     saved.clear()
-    manager.auto_archive_old_bookings()
+    assert manager.auto_archive_old_bookings() is None
     assert saved == []
-    assert len(flashed) == 1
+
+
+def test_auto_archive_never_flashes(archive_manager):
+    """The scheduler calls this with no request context, so flash() would raise."""
+    manager, _, flashed = archive_manager
+
+    manager.auto_archive_old_bookings()
+
+    assert flashed == []
+
+
+def test_auto_archive_survives_a_restart(archive_manager):
+    """The run date is persisted, so a restart must not trigger a second sweep."""
+    manager, saved, _ = archive_manager
+    manager.auto_archive_old_bookings()
+
+    # A fresh manager loading the same run state should stand down
+    saved.clear()
+    restarted, _, _ = archive_manager
+    restarted.run_state = manager.run_state
+    assert restarted.auto_archive_old_bookings() is None
+    assert saved == []
 
 
 def test_auto_archive_stays_quiet_when_nothing_to_do(archive_manager):
     manager, _, flashed = archive_manager
     manager.live.items = [rec for rec in manager.live.items if rec.booking.id == "NEW-COMPLETED"]
 
-    manager.auto_archive_old_bookings()
+    assert manager.auto_archive_old_bookings() == {"archived": 0, "deleted": 0}
     assert flashed == []
 
 

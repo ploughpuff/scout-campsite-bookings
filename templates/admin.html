@@ -22,10 +22,51 @@
 </div>
 
 <p class="text-muted small mt-2 mb-0">
-    Archiving runs automatically on the first visit to the bookings page each day: completed
-    bookings 90+ days past departure lose their leader and tracking details and move to the
-    archive, and cancelled ones are deleted. Use the button only to force a sweep now.
+    Archiving runs once a day: completed bookings 90+ days past departure lose their leader and
+    tracking details and move to the archive, and cancelled ones are deleted. Use the button only
+    to force a sweep now.
 </p>
+
+<hr>
+
+<h2>Unattended jobs</h2>
+
+{% if scheduler_enabled %}
+<p class="text-muted small">
+    New booking forms are pulled every {{ pull_interval_minutes }} minutes, so they are on the
+    bookings page without anyone pressing <strong>Pull Now</strong>. The archive sweep runs at
+    {{ '%02d' % archive_hour }}:00 UK time, or on your next visit if the app was down then.
+</p>
+
+<ul>
+    <li>
+        <strong>Last pull:</strong>
+        {% if run_state.pulled_at %}
+        {{ run_state.pulled_at.strftime('%d %b %Y at %H:%M') }}
+        ({{ run_state.pull_added }} added)
+        {% else %}
+        never
+        {% endif %}
+        {% if run_state.pull_ok %}✔️{% else %}
+        ❌ <span class="text-danger">last attempt failed: {{ run_state.pull_error }}</span>
+        {% endif %}
+    </li>
+    <li>
+        <strong>Last archive sweep:</strong>
+        {% if run_state.archived_on %}
+        {{ run_state.archived_on.strftime('%d %b %Y') }} -
+        {{ run_state.archived_count }} archived, {{ run_state.deleted_count }} deleted
+        {% else %}
+        never
+        {% endif %}
+    </li>
+</ul>
+{% else %}
+<p class="text-muted small">
+    Disabled (<code>SCHEDULER_ENABLED=False</code>). Use <strong>Pull Now</strong> to fetch new
+    bookings; the archive sweep still runs on the first visit to the bookings page each day.
+</p>
+{% endif %}
 
 <div class="version-info">
     <strong>Running Version:</strong> {{ version }}
