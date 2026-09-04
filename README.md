@@ -54,9 +54,12 @@ The GHCR package is public, so the NAS needs no `docker login`.
 ### What build am I running?
 
 ```sh
-curl -s http://jam:8080/health
-# {"ok":true,"version":"v2.2.2","commit":"4d1c86f","built":"2026-09-05T19:02:11Z"}
+curl -s http://192.168.1.123:8080/health
+# {"ok":true,"version":"v2.3.0","commit":"0cf11ad","built":"2026-09-04T20:38:34Z"}
 ```
+
+Use the NAS's IP, not `jam`: that name is an SSH-config alias, and under WSL it
+resolves to `::1` (localhost), so `http://jam:8080` quietly hits nothing.
 
 The Admin page shows the same thing under **Running Version**. The values are
 baked into the image at build time (Docker build args set by the workflow), so
