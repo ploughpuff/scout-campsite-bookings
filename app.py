@@ -25,10 +25,13 @@ from markupsafe import Markup
 from werkzeug.exceptions import HTTPException
 
 from config import (
+    APP_BUILD_DATE,
+    APP_COMMIT,
     APP_SECRET_KEY,
     APP_VERSION,
     ARCHIVE_AT_HOUR,
     ARCHIVE_FILE_PATH,
+    ASSET_VERSION,
     DATA_FILE_PATH,
     EMAIL_ENABLED,
     LOG_FILE_PATH,
@@ -56,8 +59,9 @@ app.config["XERO_ENABLED"] = XERO_ENABLED == "True"
 Compress(app)
 
 #
-## Let the browser hold onto static assets. APP_VERSION is appended to every
-## static url_for() as a cache buster, so a new build still picks up changes.
+## Let the browser hold onto static assets. ASSET_VERSION (the build's commit)
+## is appended to every static url_for() as a cache buster, so a new build still
+## picks up changed JS and CSS.
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24 * 7  # 1 week
 
 logger = setup_logger()
@@ -71,6 +75,21 @@ bookings = Bookings()
 if SCHEDULER_ENABLED and os.getenv("APP_ENV") != "test":
     scheduler = Scheduler(bookings)
     scheduler.start()
+
+
+@app.route("/health")
+def health():
+    """Liveness probe for the Docker healthcheck, and what build is running.
+
+    Flask serialises the returned dict to JSON. Deliberately unauthenticated and
+    cheap: the container healthcheck hits it every 30 seconds.
+    """
+    return {
+        "ok": True,
+        "version": APP_VERSION,
+        "commit": APP_COMMIT,
+        "built": APP_BUILD_DATE,
+    }
 
 
 @app.route("/")
@@ -523,6 +542,8 @@ def admin():
         "admin.html",
         current="admin",
         version=APP_VERSION,
+        commit=APP_COMMIT,
+        built=APP_BUILD_DATE,
         stats=stats_data,
         period=period,
         xero=xero.token_manager.status(),
@@ -582,10 +603,11 @@ def toggle_xero():
 
 @app.context_processor
 def inject_globals():
-    """Make sitename, app version and feature flags available in all templates"""
+    """Make sitename, build identity and feature flags available in all templates"""
     return {
         "sitename": SITENAME,
         "app_version": APP_VERSION,
+        "asset_version": ASSET_VERSION,
         "is_email_enabled": is_email_enabled,
         "is_xero_enabled": is_xero_enabled,
     }

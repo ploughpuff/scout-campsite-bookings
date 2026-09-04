@@ -1,0 +1,103 @@
+name: Build and publish image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      # requirements.txt already pins pytest and pylint, so this is the whole
+      # toolchain: CI runs the same versions the laptop does.
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Tests first: a lint nit shouldn't stop us finding out whether the code works.
+      - name: Run pytest
+        env:
+          PYTHONPATH: .
+        run: pytest
+
+      # Runs even if the tests failed, so one push reports both problems at once.
+      - name: Lint with pylint
+        if: ${{ !cancelled() }}
+        run: pylint $(git ls-files '*.py')
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    # Don't push for pull requests — build only, to validate the Dockerfile.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # `git describe` below needs history and tags
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - name: Resolve build metadata
+        id: build
+        run: |
+          # Nearest release tag, so builds off main inherit the last version
+          # rather than showing only a SHA. Falls back to the SHA before the
+          # first tag exists. The commit below disambiguates a build that is
+          # some way past the tag it names — and is what busts the static asset
+          # cache, since the version stands still between tags.
+          version="$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --short HEAD)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            VERSION=${{ steps.build.outputs.version }}
+            COMMIT=${{ steps.build.outputs.commit }}
+            BUILD_DATE=${{ steps.build.outputs.date }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -70,6 +70,9 @@
 
 <div class="version-info">
     <strong>Running Version:</strong> {{ version }}
+    {% if commit != 'unknown' %}
+    <span class="text-muted">({{ commit }}{% if built %}, built {{ built[:10] }}{% endif %})</span>
+    {% endif %}
 </div>
 
 <hr>
@@ -291,7 +294,7 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='stats_charts.js', v=app_version) }}"></script>
+<script src="{{ url_for('static', filename='stats_charts.js', v=asset_version) }}"></script>
 <script>
     const YEAR_STATS = {{ stats.years | tojson }};
     StatsCharts.initAdminTabs(YEAR_STATS, { monthStart: {{ stats.fiscal_start_month }} });

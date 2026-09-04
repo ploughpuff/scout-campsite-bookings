@@ -1,20 +1,30 @@
 services:
   scout-campsite-bookings:
-    build:
-      context: .
-      args:
-        APP_VERSION: ${APP_VERSION:-dev}
-        APP_ENV: production
-    image: scout-campsite-bookings:latest
+    image: ghcr.io/ploughpuff/scout-campsite-bookings:latest   # built and published by GitHub Actions
     container_name: scout-campsite-bookings-container
+    # The image is always pulled, never built here: the NAS holds only this
+    # file and docker-mnt/, with no source tree to build from. Development
+    # happens in the git checkout, and GitHub Actions publishes the image.
     ports:
       - "8080:80"
-    volumes:
-      - ./docker-mnt/data:/app/data
-      - ./docker-mnt/email_templates:/app/email_templates
-      - ./docker-mnt/config:/app/config
-    env_file:
-      - ./docker-mnt/config/.env.production
-    restart: always
     environment:
+      # Load-bearing: config.py only enforces the production variables when this
+      # is set, and .env.production deliberately doesn't contain it.
       - APP_ENV=production
+    env_file:
+      # Secrets and settings. Hand-maintained on the NAS, never in git.
+      - /volume1/docker/scout-campsite-bookings/docker-mnt/config/.env.production
+    volumes:
+      # Real NAS folders, so bookings, config and email templates survive an
+      # image update and are covered by the NAS's own backup jobs.
+      - /volume1/docker/scout-campsite-bookings/docker-mnt/data:/app/data
+      - /volume1/docker/scout-campsite-bookings/docker-mnt/email_templates:/app/email_templates
+      - /volume1/docker/scout-campsite-bookings/docker-mnt/config:/app/config
+    restart: unless-stopped
+    healthcheck:
+      # /health also reports the running build's version and commit - see app.py.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:80/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -5,6 +5,7 @@ config.py - Contains configuration settings for Scout Campsite Bookings
 
 import json
 import os
+import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -46,7 +47,20 @@ if APP_ENV == "production":
 else:
     load_dotenv(".env")
 
+#
+## Build provenance, baked into the image by the Dockerfile's ARG/ENV block.
+## A container run straight from a checkout reports dev / unknown.
 APP_VERSION = _get_and_print("APP_VERSION", "dev")
+APP_COMMIT = _get_and_print("APP_COMMIT", "unknown")
+APP_BUILD_DATE = _get_and_print("APP_BUILD_DATE", "")
+
+#
+## Cache buster for static asset URLs. APP_VERSION names the nearest release
+## tag, so it stands still between tags while scripts.js keeps changing - the
+## commit is what actually identifies a build. Outside a CI-built image there is
+## no commit, so fall back to process start time: restarting the dev server then
+## picks up edited JS/CSS instead of serving a week-old cached copy.
+ASSET_VERSION = APP_COMMIT if APP_COMMIT != "unknown" else f"dev-{int(time.time())}"
 
 APP_SECRET_KEY = _get_and_print("SECRET_KEY", show=False)
 SITENAME = _get_and_print("SITENAME", "Paddington")

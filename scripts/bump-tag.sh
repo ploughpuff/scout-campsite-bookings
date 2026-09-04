@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # Bump the semantic version tag and push it. Usage: bash scripts/bump-tag.sh [major|minor|patch]
+# Pushing the tag triggers the release build in .github/workflows/docker-publish.yml,
+# which publishes ghcr.io/ploughpuff/scout-campsite-bookings:X.Y.Z and :X.Y.
 set -euo pipefail
+
+# The tag build publishes :X.Y.Z, so the commit must already be on origin/main -
+# otherwise the release names a commit main doesn't have, while :latest (which
+# only tracks main) stays behind.
+git fetch --quiet origin main
+if ! git merge-base --is-ancestor HEAD origin/main; then
+    echo "HEAD is not on origin/main - push your commits first" >&2; exit 1
+fi
 
 level="${1:-patch}"
 case "$level" in
