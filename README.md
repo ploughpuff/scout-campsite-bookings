@@ -24,6 +24,86 @@ Changing a rate does **not** reprice existing bookings: stored estimates only
 recalculate when a booking is edited. `python scripts/check_repricing.py` is a
 read-only dry run showing which bookings a config change would affect.
 
+## Build, deploy & releases
+
+The image is built by GitHub Actions on every push to `main` and published to
+**`ghcr.io/ploughpuff/scout-campsite-bookings:latest`**. Nothing is built on the
+NAS: `/volume1/docker/scout-campsite-bookings/` holds only `docker-compose.yml`
+and `docker-mnt/` (data, config and email templates), with no source tree.
+
+### Deploying a change
+
+1. Push to `main` and wait for **Build and publish image** to go green
+   (`gh run watch`). A red run publishes nothing - the build job needs pytest
+   and pylint to pass first.
+2. From WSL run `bash scripts/deploy.sh` (or `powershell scripts\deploy.ps1`
+   from Windows). Both do the same thing over SSH:
+
+   ```sh
+   cd /volume1/docker/scout-campsite-bookings
+   sudo docker compose pull      # fetch the newly built image
+   sudo docker compose up -d     # recreate the container with it
+   ```
+
+   A plain `restart` is **not** enough - it reuses the image already on disk, so
+   you must `pull` first.
+3. The script prints the container status and the running build's `/health`.
+
+The GHCR package is public, so the NAS needs no `docker login`.
+
+### What build am I running?
+
+```sh
+curl -s http://jam:8080/health
+# {"ok":true,"version":"v2.2.2","commit":"4d1c86f","built":"2026-09-05T19:02:11Z"}
+```
+
+The Admin page shows the same thing under **Running Version**. The values are
+baked into the image at build time (Docker build args set by the workflow), so
+they describe the image, not the host; a container run straight from a checkout
+reports `dev` / `unknown`.
+
+`version` is the **nearest release tag** (`git describe --tags --abbrev=0`), so
+a `:latest` image built from `main` still shows `v2.2.2` rather than only a hash.
+The commit alongside it is what identifies the exact build - and it is also the
+cache buster appended to every static asset URL (`styles.css?v=4d1c86f`), which
+is why the version alone can't do that job: Flask serves static files with a
+week of max-age, and the version stands still between tags.
+
+### Cutting a release
+
+```sh
+bash scripts/bump-tag.sh patch     # or minor / major
+```
+
+That creates and pushes the next `vX.Y.Z`, which publishes
+`ghcr.io/ploughpuff/scout-campsite-bookings:2.3.0` and `:2.3`, and makes that
+build report `v2.3.0` as its version. Push your commits to `main` **first** (the
+script refuses otherwise): a tag push does not move `:latest`, which only tracks
+`main`, so tagging an unpushed commit gives you a release image `main` lacks.
+
+### The compose file
+
+`docker-compose.yml` in this repo is the master copy; the one on the NAS is a
+manual copy of it (there is no checkout on the NAS to `git pull`). If you change
+ports, mounts or the healthcheck here, copy the file across and
+`sudo docker compose up -d` again.
+
+## Release history
+
+Versions deployed to the NAS before the release log moved to git tags:
+
+- v1.4.3 - 25 May 2025
+- v1.4.5 - 19 Jun 2025 - Fixed Day Visits missing leader address
+- v2.0.0 - 6 Jul 2025 - Moved to schema v2, added cost estimate, facilities
+- v2.0.1 - 6 Aug 2025 - Fixed manual pricing being overwritten by the estimator
+- v2.0.2 - 26 Aug 2025 - Better handle group name not found in field mappings
+- v2.0.3 - 29 Aug 2025 - Fixed cost estimate covering only one day
+- v2.0.4 - 4 Sep 2025 - Improved archive old bookings function
+- v2.0.5 - 6 Nov 2025 - del_cal_event() handles already-deleted entries
+- v2.1.0 - 2 Feb 2026 - Added STATS section to the Admin page
+- v2.1.1 - 8 Jun 2026 - 10 minor bug fixes
+
 ## Unattended jobs
 
 A background thread in the Flask process pulls new booking forms every
