@@ -4,11 +4,8 @@ sheets.py - Handle pull operations to Google sheets.
 
 import logging
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-
 from config import FIELD_MAPPINGS_DICT, SERVICE_ACCOUNT_PATH
+from models.net import classify, google_service
 from models.utils import normalize_key, now_uk
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -78,29 +75,29 @@ def _fetch_google_sheets_data(spreadsheet_id, sheet_range):
 
     Returns:
         list[dict]: List of rows as dictionaries using the first row as headers.
+
+    Raises:
+        Retryable or Permanent: the fetch did not happen. Never returns [] for a
+        failure - an empty list means the sheet really was empty, and conflating
+        the two let a 503 be recorded as a successful pull of zero bookings,
+        leaving every indicator green while booking forms stopped arriving.
     """
     logger = logging.getLogger("app_logger")
 
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_PATH, scopes=SCOPES
-    )
-
-    service = build("sheets", "v4", credentials=credentials)
-
-    # pylint: disable=no-member
-    sheet = service.spreadsheets()
-
     try:
+        service = google_service("sheets", "v4", SCOPES, SERVICE_ACCOUNT_PATH)
+
+        # pylint: disable=no-member
+        sheet = service.spreadsheets()
         result = sheet.values().get(spreadsheetId=spreadsheet_id, range=sheet_range).execute()
-    except HttpError as e:
-        logger.error("Google Sheets API error: %s", e)
-        return []
-    except (TypeError, ValueError, KeyError) as e:
-        logger.error("Unexpected data format: %s", e)
-        return []
-    except TimeoutError as e:
-        logger.error("Timeout waiting to receive data from Google sheets: %s", e)
-        return []
+    except Exception as e:  # pylint: disable=broad-except
+        #
+        ## Credential load and build() are inside the try as well: the service
+        ## account's token exchange happens lazily on the first call, so an
+        ## outage surfaces from any of these three lines, not just the last.
+        error = classify(e)
+        logger.error("Could not fetch sheet %s: %s", spreadsheet_id, error)
+        raise error from e
 
     values = result.get("values", [])
 

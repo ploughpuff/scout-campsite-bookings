@@ -95,6 +95,17 @@ class XeroTokenManager:
             return token["access_token"]
 
     def _refresh(self, token: dict) -> dict:
+        #
+        ## Xero rotates the refresh token on use, so the moment this request is
+        ## sent the copy on disk may already be spent. If the reply never
+        ## arrives - read timeout, TLS reset, container killed - the token is
+        ## dead server-side and the replacement is lost, which can only be
+        ## fixed by re-running scripts/xero_bootstrap.py on a PC. The window
+        ## cannot be closed, but it can be made visible: leave a mark before
+        ## sending, clear it on success, and let status() report the doubt
+        ## instead of claiming a healthy connection.
+        self._mark_refresh_started(token)
+
         try:
             resp = requests.post(
                 XERO_TOKEN_URL,
@@ -110,21 +121,39 @@ class XeroTokenManager:
                 raise XeroNotConnectedError()
             raise XeroError(f"Xero token refresh failed [{resp.status_code}]: {resp.text}")
 
-        fresh = resp.json()
-        new_token = {
-            "access_token": fresh["access_token"],
-            "refresh_token": fresh["refresh_token"],
-            # Refresh 30s early so a token never expires mid-request
-            "expires_at": (now_uk() + timedelta(seconds=fresh["expires_in"] - 30)).isoformat(),
-            "tenant_id": token.get("tenant_id"),
-            "tenant_name": token.get("tenant_name"),
-            "last_refreshed": now_uk().isoformat(),
-        }
+        #
+        ## A 200 with a body we cannot use is still a failed refresh, and used
+        ## to escape as a bare ValueError or KeyError past every XeroError
+        ## handler in the app and onto the generic 500 page.
+        try:
+            fresh = resp.json()
+            new_token = {
+                "access_token": fresh["access_token"],
+                "refresh_token": fresh["refresh_token"],
+                # Refresh 30s early so a token never expires mid-request
+                "expires_at": (now_uk() + timedelta(seconds=fresh["expires_in"] - 30)).isoformat(),
+                "tenant_id": token.get("tenant_id"),
+                "tenant_name": token.get("tenant_name"),
+                "last_refreshed": now_uk().isoformat(),
+                "refresh_started_at": None,
+            }
+        except (ValueError, KeyError, TypeError) as e:
+            raise XeroError(f"Xero token refresh returned an unusable response: {e}") from e
 
         # The old refresh token is now dead - persist before using
         atomic_write_json(new_token, self.token_path)
         logger.info("Xero token refreshed")
         return new_token
+
+    def _mark_refresh_started(self, token: dict) -> None:
+        """Note that a refresh is in flight, so a lost reply leaves a trace."""
+        try:
+            marked = {**token, "refresh_started_at": now_uk().isoformat()}
+            atomic_write_json(marked, self.token_path)
+        except OSError as e:
+            #
+            ## Only the warning is lost, not the refresh. Carry on.
+            logger.warning("Could not mark Xero refresh as started: %s", e)
 
     def get_tenant_id(self) -> str:
         """Tenant ID selected during bootstrap"""
@@ -136,9 +165,17 @@ class XeroTokenManager:
     def status(self) -> dict:
         """Connection summary for the admin page. Reads the file only - no API call."""
         token = self._load() or {}
+
+        #
+        ## A refresh that started and never finished means the stored refresh
+        ## token was probably spent server-side and its replacement lost. The
+        ## file still looks connected, so say plainly that it may not be.
+        in_doubt = bool(token.get("refresh_started_at"))
+
         return {
             "configured": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
-            "connected": bool(token.get("refresh_token")),
+            "connected": bool(token.get("refresh_token")) and not in_doubt,
+            "refresh_in_doubt": in_doubt,
             "tenant_name": token.get("tenant_name"),
             "expires_at": token.get("expires_at"),
             "last_refreshed": token.get("last_refreshed"),

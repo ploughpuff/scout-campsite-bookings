@@ -42,7 +42,7 @@ from config import (
     TEMPLATE_DIR,
     XERO_ENABLED,
 )
-from models import xero
+from models import net, outbox, xero
 from models.bookings import DEFAULT_STATUS_FILTER, STATUS_FILTERS, Bookings, archive_summary
 from models.logger import setup_logger
 from models.pricing import bookable_facilities
@@ -67,11 +67,20 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24 * 7  # 1 week
 logger = setup_logger()
 logger.info("Starting")
 
+#
+## Before anything can open a socket. Every integration sets its own deadline,
+## but this catches whatever we have not thought of: a call with no timeout can
+## park the scheduler thread for good, and nothing restarts a thread that is
+## merely blocked.
+net.install_default_socket_timeout()
+
 bookings = Bookings()
 
 #
-## The unattended pull/archive jobs. Disabled under test so importing the app
-## never reaches out to Google Sheets.
+## The unattended pull/archive/outbox jobs. Disabled under test so importing
+## the app never reaches out to Google Sheets. Bound either way, because the
+## Admin page asks it whether a job has overrun.
+scheduler: Scheduler | None = None
 if SCHEDULER_ENABLED and os.getenv("APP_ENV") != "test":
     scheduler = Scheduler(bookings)
     scheduler.start()
@@ -478,11 +487,16 @@ def archive_old_bookings():
 
 @app.route("/admin/list_cal_events")
 def list_cal_events():
-    "Route to list all calendar events"
-    dry_run = request.args.get("dry_run", "true").lower() == "true"
-    # dry_run = True  # Hardcode to True whilst the real cal is updated
-
-    data = bookings.fix_cal_events(dry_run)
+    """Show how the calendar and the bookings differ. Read-only."""
+    #
+    ## Reconciling needs the calendar's side of the story, so there is nothing
+    ## useful to show without it. Say so and go back, rather than rendering four
+    ## empty cards that look like "all clear" or dying on the generic 500 page.
+    try:
+        data = bookings.fix_cal_events(dry_run=True)
+    except (net.Retryable, net.Permanent) as exc:
+        flash(f"Could not read the calendar: {exc}", "danger")
+        return redirect(url_for("admin"))
 
     return render_template(
         "list_cal_events.html",
@@ -491,6 +505,24 @@ def list_cal_events():
         delete=data["delete"],
         extra=data["extra"],
     )
+
+
+@app.route("/admin/fix_cal_events", methods=["POST"])
+def fix_cal_events():
+    """Make the calendar match the bookings.
+
+    POST only. This deletes calendar events and rewrites bookings.json, and as
+    a GET it could be fired by a browser prefetch or a revisited history entry.
+    """
+    try:
+        data = bookings.fix_cal_events(dry_run=False)
+    except (net.Retryable, net.Permanent) as exc:
+        flash(f"Could not read the calendar: {exc}", "danger")
+        return redirect(url_for("admin"))
+
+    queued = len(data["missing"]) + len(data["delete"]) + len(data["extra"])
+    flash(f"Calendar reconciliation queued: {queued} change(s).", "info")
+    return redirect(url_for("list_cal_events"))
 
 
 @app.route("/bookings/archived")
@@ -549,10 +581,62 @@ def admin():
         xero=xero.token_manager.status(),
         xero_mappings=xero.count_contact_mappings(),
         run_state=bookings.run_state,
+        outbox=_outbox_summary(),
         scheduler_enabled=SCHEDULER_ENABLED,
         pull_interval_minutes=PULL_INTERVAL_MINUTES,
         archive_hour=ARCHIVE_AT_HOUR,
     )
+
+
+def _outbox_summary() -> dict:
+    """What the Admin page needs to say about outstanding outbound work.
+
+    Includes whether a scheduled job has overrun, which only a request thread
+    can tell: a job blocked on a dead socket is precisely the thread that would
+    otherwise be doing the noticing.
+    """
+    #
+    ## Named "queue", not "items": Jinja resolves dict.items to the dict's
+    ## own method before it looks for a key of that name, so the template
+    ## would silently iterate a bound method instead of the work list.
+    return {
+        "queue": outbox.items(),
+        "pending": outbox.pending_count(),
+        "blocked": outbox.blocked_count(),
+        "oldest": outbox.oldest_pending(),
+        "stuck": scheduler.stuck_job() if scheduler else None,
+    }
+
+
+@app.route("/admin/outbox/retry/<item_id>", methods=["POST"])
+def outbox_retry(item_id):
+    """Put a waiting or blocked item back at the front of the queue."""
+    if outbox.retry_now(item_id):
+        outcome = outbox.drain(limit=1)
+        if outcome["sent"]:
+            flash("Done.", "success")
+        else:
+            flash("Still not getting through - it stays queued.", "warning")
+    else:
+        flash("That item is no longer in the outbox.", "info")
+
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/outbox/discard/<item_id>", methods=["POST"])
+def outbox_discard(item_id):
+    """Drop an item without carrying it out.
+
+    Deliberately manual: nothing in the app discards queued work on its own,
+    because silently dropping outbound work is the failure this queue exists
+    to prevent.
+    """
+    if outbox.discard(item_id):
+        flash("Discarded - it will not be sent.", "info")
+    else:
+        flash("That item is no longer in the outbox.", "info")
+
+    return redirect(url_for("admin"))
 
 
 @app.route("/admin/report/<int:year>")

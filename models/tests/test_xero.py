@@ -174,6 +174,68 @@ def test_missing_token_raises_not_connected(tmp_path):
 
 
 #
+## A lost refresh reply is unrecoverable - Xero has already spent the stored
+## refresh token - so the least it can do is stop claiming to be connected.
+def test_a_lost_refresh_reply_leaves_the_connection_in_doubt(tmp_path, monkeypatch):
+    token_path = tmp_path / "xero_token.json"
+    _write_token(token_path)
+
+    monkeypatch.setattr(
+        xero.requests,
+        "post",
+        lambda *a, **k: (_ for _ in ()).throw(xero.requests.Timeout("reply never came")),
+    )
+    manager = XeroTokenManager(token_path)
+
+    with pytest.raises(XeroError):
+        manager.get_access_token()
+
+    status = manager.status()
+    assert status["refresh_in_doubt"] is True
+    assert status["connected"] is False  # the file still holds a token, but it may be dead
+
+
+def test_a_completed_refresh_clears_the_doubt(tmp_path, monkeypatch):
+    token_path = tmp_path / "xero_token.json"
+    _write_token(token_path)
+
+    monkeypatch.setattr(
+        xero.requests,
+        "post",
+        lambda *a, **k: FakeResponse(
+            200,
+            {
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "expires_in": 1800,
+            },
+        ),
+    )
+    manager = XeroTokenManager(token_path)
+    manager.get_access_token()
+
+    status = manager.status()
+    assert status["refresh_in_doubt"] is False
+    assert status["connected"] is True
+
+
+def test_a_200_with_an_unusable_body_is_a_xero_error(tmp_path, monkeypatch):
+    """It used to escape as a bare KeyError, past every XeroError handler in
+    the app and onto the generic 500 page."""
+    token_path = tmp_path / "xero_token.json"
+    _write_token(token_path)
+
+    monkeypatch.setattr(
+        xero.requests,
+        "post",
+        lambda *a, **k: FakeResponse(200, {"unexpected": "shape"}),
+    )
+
+    with pytest.raises(XeroError):
+        XeroTokenManager(token_path).get_access_token()
+
+
+#
 ## Schema migration
 def test_v2_bookings_file_migrates_to_current(tmp_path):
     path = tmp_path / "bookings.json"
@@ -456,7 +518,7 @@ def test_happy_path_raises_emails_and_completes(manager, live_booking, monkeypat
     assert live_booking.booking.xero_invoice_number == "INV-0042"
     assert live_booking.tracking.status == "Completed"
     assert emailed == [("INV-0042", "https://in.xero.com/abc", b"%PDF-fake", "2026-07-20")]
-    assert "emailed to leader: jane@example.com" in live_booking.tracking.notes
+    assert "email queued to leader: jane@example.com" in live_booking.tracking.notes
 
 
 def test_xero_error_leaves_booking_untouched(manager, live_booking, monkeypatch):
@@ -489,7 +551,7 @@ def test_email_failure_still_completes(manager, live_booking, monkeypatch):
     assert result["ok"] is True
     assert live_booking.booking.xero_invoice_number == "INV-0042"
     assert live_booking.tracking.status == "Completed"
-    assert "FAILED" in live_booking.tracking.notes
+    assert "email not queued" in live_booking.tracking.notes
 
 
 def test_email_skipped_when_email_disabled(manager, live_booking, monkeypatch):
@@ -953,7 +1015,7 @@ def test_amend_happy_path(invoiced_manager, live_booking, monkeypatch):
     assert live_booking.tracking.cost_estimate == 5250
     assert live_booking.tracking.status == "Completed"
     assert "amended" in live_booking.tracking.notes
-    assert "emailed to leader: jane@example.com" in live_booking.tracking.notes
+    assert "email queued to leader: jane@example.com" in live_booking.tracking.notes
     assert emailed
 
 
@@ -1025,7 +1087,7 @@ def test_amend_email_failure_still_saves_amendment(invoiced_manager, live_bookin
 
     assert invoiced_manager.amend_xero_invoice("CDS-2026-0001", dict(NIGHTLY)) is True
     assert live_booking.tracking.cost_estimate == 5250
-    assert "FAILED" in live_booking.tracking.notes
+    assert "email not queued" in live_booking.tracking.notes
 
 
 def test_amend_rejected_without_invoice_or_wrong_status(invoiced_manager, live_booking):

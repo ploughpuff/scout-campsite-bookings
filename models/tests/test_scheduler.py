@@ -112,6 +112,59 @@ def test_a_failing_job_does_not_kill_the_thread():
     assert fake.pulls == 1
 
 
+#
+## The hang watchdog. A job blocked on a dead socket cannot notice its own
+## hang - the loop that would notice is the thing that is blocked - so the
+## state has to be readable from a request thread instead.
+def test_nothing_is_stuck_while_the_scheduler_is_idle():
+    assert Scheduler(FakeBookings()).stuck_job() is None
+
+
+def test_a_job_in_flight_is_not_stuck_until_it_overruns():
+    scheduler = Scheduler(FakeBookings())
+    seen = []
+
+    def slow():
+        seen.append(scheduler.stuck_job())
+
+    scheduler._guard("pull", slow)
+
+    assert seen == [None]  # running, but well inside its budget
+
+
+def test_a_job_that_overruns_its_budget_reads_as_stuck(monkeypatch):
+    from models import scheduler as scheduler_module
+
+    scheduler = Scheduler(FakeBookings())
+    seen = []
+
+    def slow():
+        #
+        ## Wind the clock on rather than actually waiting five minutes.
+        started = scheduler._running[1]
+        monkeypatch.setattr(
+            scheduler_module,
+            "now_uk",
+            lambda: started + timedelta(seconds=scheduler_module.JOB_BUDGET_SECONDS + 1),
+        )
+        seen.append(scheduler.stuck_job())
+
+    scheduler._guard("pull", slow)
+
+    assert seen[0][0] == "pull"
+    assert seen[0][1] > scheduler_module.JOB_BUDGET_SECONDS
+    assert scheduler.stuck_job() is None  # cleared once the job returns
+
+
+def test_the_running_marker_is_cleared_even_when_the_job_throws():
+    """Otherwise one bad run makes the scheduler look permanently hung."""
+    scheduler = Scheduler(FakeBookings(pull_error=RuntimeError("boom")))
+
+    scheduler._guard("pull", scheduler.pull)
+
+    assert scheduler._running is None
+
+
 def test_archive_job_tolerates_page_traffic_getting_there_first():
     fake = FakeBookings(archive_result=None)
     Scheduler(fake).archive()  # None means "already run today" - must not blow up

@@ -68,6 +68,82 @@
 </p>
 {% endif %}
 
+<hr>
+
+<h2>Outbox</h2>
+
+<p class="text-muted small">
+    Emails and calendar changes are queued here first and only leave once the far end has
+    confirmed them, so an outage delays work rather than losing it. Anything still waiting is
+    retried automatically, backing off as it goes.
+</p>
+
+{% if outbox.stuck %}
+<div class="alert alert-danger">
+    <strong>The {{ outbox.stuck[0] }} job has been running for
+        {{ (outbox.stuck[1] / 60) | round | int }} minutes.</strong>
+    It is most likely blocked on a network call that is not coming back. Nothing else will run
+    until it finishes, so restart the container if this does not clear.
+</div>
+{% endif %}
+
+{% if not outbox.queue %}
+<p>✔️ Nothing waiting - everything has been delivered.</p>
+{% else %}
+<ul>
+    <li><strong>Waiting:</strong> {{ outbox.pending }}
+        {% if outbox.oldest %}
+        (oldest queued {{ outbox.oldest.created_at.strftime('%d %b at %H:%M') }})
+        {% endif %}
+    </li>
+    {% if outbox.blocked %}
+    <li class="text-danger"><strong>Needs attention:</strong> {{ outbox.blocked }}</li>
+    {% endif %}
+</ul>
+
+<div class="table-responsive">
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>What</th>
+                <th>Booking</th>
+                <th>Tries</th>
+                <th>Last problem</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in outbox.queue %}
+            <tr {% if item.state=='blocked' %}class="table-danger" {% endif %}>
+                <td>{{ item.kind }}</td>
+                <td>
+                    {% if item.booking_id %}
+                    <a href="{{ url_for('booking_detail', booking_id=item.booking_id) }}"
+                        class="text-decoration-none">{{ item.booking_id }}</a>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.attempts }}</td>
+                <td class="small">{{ item.last_error or '-' }}</td>
+                <td class="text-nowrap">
+                    <form method="post" action="{{ url_for('outbox_retry', item_id=item.id) }}"
+                        class="d-inline">
+                        <button class="btn btn-sm btn-outline-primary">Try now</button>
+                    </form>
+                    <form method="post" action="{{ url_for('outbox_discard', item_id=item.id) }}"
+                        class="d-inline"
+                        onsubmit="return confirm('Discard this without doing it?');">
+                        <button class="btn btn-sm btn-outline-danger">Discard</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <div class="version-info">
     <strong>Running Version:</strong> {{ version }}
     {% if commit != 'unknown' %}
@@ -85,6 +161,14 @@
     <li><strong>Connected:</strong> {{ '✔️' if xero.connected else '❌' }}
         {% if xero.tenant_name %} to <strong>{{ xero.tenant_name }}</strong>{% endif %}
     </li>
+    {% if xero.refresh_in_doubt %}
+    <li class="text-danger">
+        <strong>A token refresh did not complete.</strong>
+        Xero rotates the refresh token as soon as it is used, so the stored one is probably
+        already spent and its replacement was lost in transit. If Xero calls keep failing,
+        re-run <code>scripts/xero_bootstrap.py</code> to reconnect.
+    </li>
+    {% endif %}
     {% if xero.last_refreshed %}
     <li><strong>Token last refreshed:</strong> {{ xero.last_refreshed }}</li>
     {% endif %}
