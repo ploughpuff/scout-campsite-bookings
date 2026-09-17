@@ -133,6 +133,46 @@ Saving skips the write entirely when a file would come out unchanged, so an
 hourly pull that finds nothing costs no disk and does not rotate a backup off
 the end of the 50 kept.
 
+## The outbox
+
+Every email and calendar change is queued in `data/outbox.json` first and only
+leaves once the far end has confirmed it. A third scheduler job drains the queue
+on every 30-second tick, so work stranded by an outage resumes within half a
+minute of the network coming back. The Admin page lists anything outstanding,
+with **Try now** and **Discard** per item.
+
+This exists because of what happened in June 2026. The archive sweep asked
+Google to delete six calendar events, DNS was down each time, the delete failed
+silently, and the bookings were archived anyway - and since the archive keeps
+only `BookingData`, the `google_calendar_id` went with them. Six events were
+left on the calendar with nothing anywhere pointing at them.
+
+Two rules keep that from recurring:
+
+- **A queued payload is self-contained.** It carries everything needed to carry
+  the action out, with no lookup back into a live booking, because the record
+  may be edited or archived long before the queue drains. A calendar delete
+  carries the event id *and* the booking id; an email carries the message,
+  already rendered.
+- **Handlers are idempotent.** A failure we could not read might still have
+  landed, so a retry has to cope with either. Calendar events are found by the
+  `booking_id` stamped on them rather than by a stored id, and an event that is
+  already gone counts as done.
+
+Failures are sorted into two kinds. *Retryable* means we never got a usable
+answer - DNS, timeout, TLS, 5xx - and the item backs off (1 min, doubling, capped
+at 6 hours) and tries again. *Permanent* means the far end answered and refused -
+a bad address, a rejected login - and the item is **blocked**: kept, never
+retried, and shown on the Admin page. Anything still failing after 48 hours
+blocks too. Nothing is ever dropped silently; discarding is a manual decision.
+
+Every outbound call also carries a timeout. Without one a black-holed socket
+blocks its caller forever, and when that caller is the single scheduler thread
+every background job stops for good - the thread stays alive, so nothing
+restarts it. The Admin page reports a job that has overrun, which only a request
+thread can notice: the thread that would otherwise spot it is the one that is
+stuck.
+
 ## Xero invoicing
 
 When a booking with money owed passes its departure date it moves to `Invoice`

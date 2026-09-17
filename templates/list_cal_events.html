@@ -6,7 +6,18 @@ Calendar Events
 
 {% block content %}
 
-<p><a href="{{ url_for('list_cal_events', dry_run=False) }}">Fix-It!!</a></p>
+{# A POST, not a link: Fix-It deletes calendar events and rewrites bookings.json,
+   which a browser prefetch or a revisited history entry must never trigger. #}
+<form method="post" action="{{ url_for('fix_cal_events') }}" class="mb-3"
+    onsubmit="return confirm('Apply these changes to the calendar?');">
+    <button type="submit" class="btn btn-warning"
+        {% if not missing and not delete and not extra %}disabled{% endif %}>
+        Fix-It!!
+    </button>
+    {% if not missing and not delete and not extra %}
+    <span class="text-muted ms-2">Nothing to fix</span>
+    {% endif %}
+</form>
 
 <div class="card" style="width: 18rem;">
     <div class="card-header">
@@ -56,12 +67,27 @@ Calendar Events
 
 <div class="card" style="width: 18rem;">
     <div class="card-header">
-        Extra
+        Events on the calendar with no live booking
     </div>
     <ul class="list-group list-group-flush">
-        {% for rec in extra %}
+        {% for event in extra %}
         <li class="list-group-item">
-            <a href="">{{ rec }}</a>
+            {# Every event the app creates is stamped with its booking id, so most
+               of these can say where they came from rather than being a bare id. #}
+            {% if event.booking_id %}
+            <div class="fw-semibold">{{ event.booking_id }}</div>
+            {% else %}
+            <div class="fw-semibold text-muted">Not created by this app</div>
+            {% endif %}
+            {% if event.summary %}
+            <div class="small">{{ event.summary }}</div>
+            {% endif %}
+            {% if event.html_link %}
+            <a href="{{ event.html_link }}" target="_blank" rel="noopener"
+                class="small text-decoration-none">View in Google Calendar</a>
+            {% else %}
+            <code class="small">{{ event.event_id }}</code>
+            {% endif %}
         </li>
         {% endfor %}
     </ul>

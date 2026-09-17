@@ -170,3 +170,44 @@ class ArchiveData(BaseModel):
     # live on in Google Sheets forever, so without these tombstones the next pull
     # imports them all over again as brand new bookings.
     deleted_md5s: List[str] = Field(default_factory=list)
+
+
+class OutboxItem(BaseModel):
+    """One piece of outbound work that has not been confirmed done yet.
+
+    The payload is deliberately self-contained: everything needed to carry the
+    action out, with no lookup back into a live booking. A cal_delete carries
+    the event id, an email carries the rendered message. Six calendar events
+    were orphaned because the id lived only on a record that got archived
+    before the delete succeeded, and nothing in this queue may repeat that.
+    """
+
+    id: str
+    kind: Literal["email", "cal_upsert", "cal_delete", "xero_invoice", "xero_email"]
+    payload: Dict = Field(default_factory=dict)
+    booking_id: Optional[str] = None
+
+    created_at: datetime = Field(default_factory=now_uk)
+    attempts: int = 0
+    next_attempt_at: datetime = Field(default_factory=now_uk)
+    last_error: Optional[str] = None
+
+    #
+    ## "blocked" means a human has to look: either the far end refused outright,
+    ## or we ran out of attempts. Blocked items stay in the file and show up on
+    ## the Admin page rather than being retried into the void.
+    state: Literal["pending", "blocked"] = "pending"
+
+
+#
+## Versioned separately from the booking data on purpose. The queue holds work,
+## not records, and a bookings migration must never be a reason to fail to read
+## it - losing the queue means losing emails nobody knows were never sent.
+OUTBOX_SCHEMA_VERSION = 1
+
+
+class OutboxData(BaseModel):
+    """The queue file."""
+
+    schema_version: int = Field(default=OUTBOX_SCHEMA_VERSION)
+    items: List[OutboxItem] = Field(default_factory=list)

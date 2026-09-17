@@ -62,7 +62,12 @@ APP_BUILD_DATE = _get_and_print("APP_BUILD_DATE", "")
 ## picks up edited JS/CSS instead of serving a week-old cached copy.
 ASSET_VERSION = APP_COMMIT if APP_COMMIT != "unknown" else f"dev-{int(time.time())}"
 
-APP_SECRET_KEY = _get_and_print("SECRET_KEY", show=False)
+#
+## Production lists SECRET_KEY as required above, so this fallback only ever
+## applies to dev and test. Without it there is no session, which means flash()
+## raises - and every error path that reports itself with a flash turns into a
+## 500 locally, hiding the very error it was trying to show.
+APP_SECRET_KEY = _get_and_print("SECRET_KEY", "dev-only-not-a-secret", show=False)
 SITENAME = _get_and_print("SITENAME", "Paddington")
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -80,6 +85,12 @@ LOG_FILE_PATH = Path(DATA_DIR) / "app.log"
 DATA_FILE_PATH = Path(DATA_DIR) / "bookings.json"
 ARCHIVE_FILE_PATH = Path(DATA_DIR) / "archive.json"
 RUN_STATE_FILE_PATH = Path(DATA_DIR) / "run_state.json"
+
+#
+## Work that still has to reach Google, Xero or the leader's inbox. Unlike
+## run_state.json this file is not disposable: losing it loses the work.
+OUTBOX_FILE_PATH = Path(DATA_DIR) / "outbox.json"
+OUTBOX_PAYLOAD_DIR = Path(DATA_DIR) / "outbox_payloads"
 
 LOG_LEVEL_STR = _get_and_print("LOG_LEVEL", "INFO").upper()
 

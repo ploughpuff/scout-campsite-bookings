@@ -5,13 +5,17 @@ mailer.py - Provide functions to send emails from the app.
 import logging
 import smtplib
 from datetime import datetime, timedelta
+from email import policy
 from email.message import EmailMessage
+from email.parser import BytesParser
 
 import html2text
 from flask import flash
 from jinja2 import Environment, FileSystemLoader, TemplateError
 
 import config
+from models import outbox
+from models.net import SMTP_TIMEOUT, classify_smtp
 from models.schemas import LiveBooking
 from models.utils import get_pretty_date_str, is_email_enabled, now_uk
 
@@ -40,6 +44,14 @@ def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
     if not msg:
         return False
 
+    #
+    ## Stamp only once the message is on the queue. It used to be stamped first
+    ## and never rolled back, so after an SMTP outage the record claimed an
+    ## email the notes had no trace of - two halves of the same record
+    ## disagreeing, with the wrong half being the one that survived.
+    if not _send_email(msg, rec.leader.email, booking_id=rec.booking.id):
+        return False
+
     if rec.tracking.status == "Pending":
         rec.tracking.pending_email_sent = now_uk()
     elif rec.tracking.status == "Confirmed":
@@ -47,7 +59,7 @@ def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
     else:
         rec.tracking.cancel_email_sent = now_uk()
 
-    return _send_email(msg, rec.leader.email)
+    return True
 
 
 def send_invoice_email(
@@ -105,7 +117,7 @@ def send_invoice_email(
             filename=f"{invoice_number}.pdf",
         )
 
-    return _send_email(msg, rec.leader.email)
+    return _send_email(msg, rec.leader.email, booking_id=rec.booking.id)
 
 
 def send_confirm_numbers_email(rec: LiveBooking) -> bool:
@@ -151,7 +163,7 @@ def send_confirm_numbers_email(rec: LiveBooking) -> bool:
     msg.set_content(h.handle(body))
     msg.add_alternative(body, subtype="html")
 
-    return _send_email(msg, rec.leader.email)
+    return _send_email(msg, rec.leader.email, booking_id=rec.booking.id)
 
 
 def _build_email_body(rec: LiveBooking):
@@ -215,40 +227,66 @@ def _create_email_message(body: str, rec: LiveBooking, subject_append_str: str =
     return msg
 
 
-def _send_email(msg, recipient):
+def _send_email(msg, recipient, booking_id: str = None) -> bool:
+    """Queue a prepared message for delivery.
+
+    Returns True when the message is on the queue and will therefore be
+    delivered, False when email is switched off and it never will be. The
+    distinction matters: this used to return True in both cases, so callers
+    journalled "Email Sent" against mail that was never going anywhere.
+
+    The send itself happens in the handler below, which may run long after this
+    returns - so nothing here may depend on a request context.
     """
-    Send the prepared email message to the recipient.
-
-    In production, this sends via SMTP. Otherwise, logs the content for testing.
-
-    Args:
-        msg (EmailMessage): The email message to be sent.
-        recipient (str): The recipient's email address.
-
-    Returns:
-        bool: True if email was sent/logged successfully, False if sending failed.
-    """
-    # If email_enabled exists in session (from toggle button), use it. Otherwise, fall back to
-    # config.
-    if is_email_enabled():
-        try:
-            if config.APP_ENV == "production":
-                # Add bcc to site owner
-                all_recipients = [recipient, config.EMAIL_FROM_ADDRESS]
-                with smtplib.SMTP("smtp.office365.com", 587) as server:
-                    server.starttls()
-                    server.login(config.EMAIL_LOGIN_USERNAME, config.EMAIL_LOGIN_PASSWD)
-                    server.send_message(msg, to_addrs=all_recipients)
-            else:
-                with smtplib.SMTP("localhost", 25) as server:
-                    server.send_message(msg)
-
-        # OSError covers connection refused, timeouts, and DNS failures
-        # (socket.gaierror when offline) - none of which should raise out of here.
-        except (smtplib.SMTPException, OSError) as e:
-            logger.error("%s - Failed to send email to %s: %s", config.APP_ENV, recipient, e)
-            flash(f"{config.APP_ENV} - Failed to send email to {recipient}: {e}", "danger")
-            return False
-    else:
+    if not is_email_enabled():
         flash(f"Email sending disabled by env var EMAIL_ENABLED: {recipient}:", "info")
+        return False
+
+    #
+    ## Rendered now, stored as bytes, sent later. Freezing the message at the
+    ## moment the decision was made means a booking edited - or archived - while
+    ## the queue is backed up cannot change what the leader is told.
+    outbox.enqueue(
+        "email",
+        {"recipient": recipient, "subject": msg["Subject"]},
+        booking_id=booking_id,
+        blob=msg.as_bytes(),
+    )
     return True
+
+
+@outbox.handler("email")
+def _handle_email(item) -> None:
+    """Actually put the message on the wire."""
+    msg = BytesParser(policy=policy.default).parsebytes(outbox.read_payload(item.id))
+    recipient = item.payload["recipient"]
+
+    delivered = False
+    try:
+        if config.APP_ENV == "production":
+            # Add bcc to site owner
+            all_recipients = [recipient, config.EMAIL_FROM_ADDRESS]
+            with smtplib.SMTP("smtp.office365.com", 587, timeout=SMTP_TIMEOUT) as server:
+                server.starttls()
+                server.login(config.EMAIL_LOGIN_USERNAME, config.EMAIL_LOGIN_PASSWD)
+                server.send_message(msg, to_addrs=all_recipients)
+                delivered = True
+        else:
+            with smtplib.SMTP("localhost", 25, timeout=SMTP_TIMEOUT) as server:
+                server.send_message(msg)
+                delivered = True
+
+    except (smtplib.SMTPException, OSError) as e:
+        #
+        ## Once send_message returns, the mail has gone - whatever happens next.
+        ## Office365 answers 250 to QUIT and smtplib's context manager raises on
+        ## any reply but 221, so closing the session used to report a delivered
+        ## email as a failure. Retrying that would send it twice.
+        if delivered:
+            logger.warning("Email to %s was accepted but the session ended badly: %s", recipient, e)
+            return
+
+        logger.error("%s - Could not send email to %s: %s", config.APP_ENV, recipient, e)
+        raise classify_smtp(e) from e
+
+    logger.info("Email sent to %s: %s", recipient, item.payload.get("subject"))

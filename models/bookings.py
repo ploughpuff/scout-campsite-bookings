@@ -30,12 +30,12 @@ from config import (
     UK_TZ,
 )
 from models.calendar import (
-    del_cal_event,
     delete_calendar_entry,
     get_cal_events,
+    set_event_id_recorder,
     update_calendar_entry,
 )
-from models import xero
+from models import outbox, xero
 from models.json_utils import load_json, save_json
 from models.mailer import (
     send_confirm_numbers_email,
@@ -105,6 +105,29 @@ def archive_summary(result: dict) -> str:
     return " and ".join(parts) + "."
 
 
+def _index_cal_events(cal_events: list) -> tuple[dict, dict]:
+    """Index the calendar two ways: by booking id, and by event id.
+
+    Every event the app creates carries its booking id in a private extended
+    property, so that property - not a stored id the app might have lost - is
+    the primary key. Matching this way round is also what lets an unmatched
+    event say which booking it came from, instead of showing an opaque id with
+    an empty link beside it.
+
+    Returns (events stamped with a booking id, every event keyed by its own id).
+    """
+    by_booking = {}
+    unclaimed = {}
+
+    for event in cal_events:
+        unclaimed[event["id"]] = event
+        stamped = event.get("extendedProperties", {}).get("private", {}).get("booking_id")
+        if stamped:
+            by_booking[stamped] = event
+
+    return by_booking, unclaimed
+
+
 def test_only(func):
     """Decorator to stop test functions being available in production"""
 
@@ -157,6 +180,28 @@ class Bookings:
         ## When the unattended jobs last ran. Persisted, so a restart does not
         ## forget that today's archive sweep has already happened.
         self.run_state = load_run_state()
+
+        #
+        ## Let the calendar hand back an event id once Google has confirmed it.
+        ## The calendar is the authority on which event belongs to which
+        ## booking; the copy on the record is only what the admin listing reads.
+        set_event_id_recorder(self.record_calendar_id)
+
+    @locked
+    def record_calendar_id(self, booking_id: str, event_id: Optional[str]) -> None:
+        """Cache a confirmed calendar event id against its booking.
+
+        Called from the outbox after Google has actually accepted the write, so
+        the stored id always reflects something that really happened. A booking
+        that has been archived in the meantime is simply not found, which is
+        fine - the queue item carried everything the delete needed.
+        """
+        for rec in self.live.items:
+            if rec.booking.id == booking_id:
+                if rec.tracking.google_calendar_id != event_id:
+                    rec.tracking.google_calendar_id = event_id or ""
+                    save_json(self.live, DATA_FILE_PATH)
+                return
 
     def _load_or_initialize(self, path: Path, model: BaseModel) -> BaseModel:
         if path.exists():
@@ -553,24 +598,27 @@ class Bookings:
 
         self._add_to_notes(rec.tracking, f"Status changed [{old_status}] > [{new_status}]")
         if send_email_notification(rec):
-            self._add_to_notes(rec.tracking, f"Email Sent: change_status: {rec.leader.email}")
+            self._add_to_notes(rec.tracking, f"Email Queued: change_status: {rec.leader.email}")
 
         #
-        ## Save before touching the calendar. The leader has already been emailed by
-        ## this point, so a calendar outage must not throw away the status change -
-        ## fix_cal_events() can reconcile a stale event, but nothing can un-send mail.
+        ## Save before queuing the calendar work. The email is already on the
+        ## outbox and nothing can un-send mail, so the status change has to
+        ## reach disk first - and a calendar entry that never got queued is
+        ## recoverable from /admin/list_cal_events, where an unsaved status
+        ## change would be gone for good.
         save_json(self.live, DATA_FILE_PATH)
 
-        old_cal_id = rec.tracking.google_calendar_id
         try:
             update_calendar_entry(rec)
         except Exception:  # pylint: disable=broad-except
+            #
+            ## Queuing barely touches the network, so this is now about the disk
+            ## rather than Google. Still guarded: the status change is saved and
+            ## must survive whatever goes wrong here.
             self.logger.exception(
-                "Calendar update failed for %s - status change already saved", rec.booking.id
+                "Could not queue calendar update for %s - status change already saved",
+                rec.booking.id,
             )
-
-        if rec.tracking.google_calendar_id != old_cal_id:
-            save_json(self.live, DATA_FILE_PATH)
 
         return True
 
@@ -579,7 +627,7 @@ class Bookings:
         """Resend the last type of email again"""
         rec = self._get_booking_by_id(booking_id)
         if send_email_notification(rec, "RESEND"):
-            self._add_to_notes(rec.tracking, f"Email Sent: resend_email: {rec.leader.email}")
+            self._add_to_notes(rec.tracking, f"Email Queued: resend_email: {rec.leader.email}")
             save_json(self.live, DATA_FILE_PATH)
 
     @locked
@@ -599,7 +647,7 @@ class Bookings:
         if send_confirm_numbers_email(rec):
             rec.tracking.numbers_email_sent = now_uk()
             self._add_to_notes(
-                rec.tracking, f"Email Sent: confirm numbers request: {rec.leader.email}"
+                rec.tracking, f"Email Queued: confirm numbers request: {rec.leader.email}"
             )
             save_json(self.live, DATA_FILE_PATH)
 
@@ -715,13 +763,16 @@ class Bookings:
 
         if send_invoice_email(rec, number, online_url, pdf_bytes, inv.get("due_date")):
             self._add_to_notes(
-                rec.tracking, f"Invoice {number} emailed to leader: {rec.leader.email}"
+                rec.tracking, f"Invoice {number} email queued to leader: {rec.leader.email}"
             )
             flash(f"Invoice {number} {action} and emailed to {rec.leader.email}", "success")
         else:
-            self._add_to_notes(rec.tracking, f"Invoice {number} email FAILED: {rec.leader.email}")
+            self._add_to_notes(
+                rec.tracking, f"Invoice {number} email not queued: {rec.leader.email}"
+            )
             flash(
-                f"Invoice {number} {action} but emailing it failed - send it from Xero.", "warning"
+                f"Invoice {number} {action} but the email was not queued - send it from Xero.",
+                "warning",
             )
 
     @locked
@@ -752,7 +803,17 @@ class Bookings:
 
         # Refetch so the email carries the current due date and to confirm the
         # invoice is still live (not voided) before emailing.
-        inv = xero.find_invoice_by_reference(rec.booking.id)
+        #
+        ## Guarded like every other Xero call: unguarded, an unreachable Xero
+        ## made this button answer with the generic 500 page instead of saying
+        ## what went wrong.
+        try:
+            inv = xero.find_invoice_by_reference(rec.booking.id)
+        except xero.XeroError as e:
+            self.logger.error("Invoice lookup for %s failed: %s", booking_id, e)
+            flash(str(e), "danger")
+            return False
+
         if not inv:
             flash(f"No live Xero invoice found for {booking_id} to resend", "danger")
             return False
@@ -1092,7 +1153,7 @@ class Bookings:
             ):
                 if send_email_notification(rec, "MODIFIED"):
                     self._add_to_notes(
-                        rec.tracking, f"Email Sent: modified_fields: {rec.leader.email}"
+                        rec.tracking, f"Email Queued: modified_fields: {rec.leader.email}"
                     )
             update_calendar_entry(rec)
             save_json(self.live, DATA_FILE_PATH)
@@ -1174,10 +1235,15 @@ class Bookings:
     def fix_cal_events(self, dry_run: bool = True) -> dict:
         """Attempt to fix the calendar entries using latest live data"""
 
-        cal_events = get_cal_events()
-        event_ids = set(event["id"] for event in cal_events)
         good, missing, delete, extra = [], [], [], []
         now = now_uk()
+        by_booking, unclaimed = _index_cal_events(get_cal_events())
+
+        def event_for(rec):
+            found = by_booking.get(rec.booking.id)
+            if found is None and rec.tracking.google_calendar_id:
+                found = unclaimed.get(rec.tracking.google_calendar_id)
+            return found
 
         def should_have_event(rec):
             if rec.tracking.status in ["Confirmed", "Invoice"]:
@@ -1200,39 +1266,54 @@ class Bookings:
             return False
 
         for rec in self.live.items:
-            cal_id = rec.tracking.google_calendar_id
-            has_event = cal_id in event_ids
+            event = event_for(rec)
+            if event is not None:
+                unclaimed.pop(event["id"], None)
 
             if should_have_event(rec):
-                if has_event:
+                if event is not None:
                     good.append(rec)
-                    event_ids.remove(cal_id)
                 else:
-                    if dry_run:
-                        missing.append(rec)
-                    else:
-                        rec.tracking.google_calendar_id = ""
+                    missing.append(rec)
+                    if not dry_run:
+                        #
+                        ## The upsert handler finds or creates, so there is
+                        ## nothing to clear first - and clearing was how a failed
+                        ## write used to lose track of an event that did exist.
                         update_calendar_entry(rec)
-                        save_json(self.live, DATA_FILE_PATH)
 
-            elif should_delete_event(rec):
-                if has_event:
-                    event_ids.remove(cal_id)
+            elif should_delete_event(rec) and event is not None:
+                delete.append(rec)
+                if not dry_run:
+                    #
+                    ## The id stays on the record until the delete is actually
+                    ## confirmed, at which point the outbox clears it. Wiping it
+                    ## here used to orphan the event whenever the delete failed.
+                    delete_calendar_entry(rec)
 
-                    if dry_run:
-                        delete.append(rec)
-                    else:
-                        delete_calendar_entry(rec)
-                        rec.tracking.google_calendar_id = ""
-                        save_json(self.live, DATA_FILE_PATH)
+        #
+        ## Whatever is left belongs to no live booking: either its record has
+        ## been archived since, or it was put on the calendar by hand.
+        for event in unclaimed.values():
+            stamped = event.get("extendedProperties", {}).get("private", {}).get("booking_id")
+            extra.append(
+                {
+                    "event_id": event["id"],
+                    "booking_id": stamped,
+                    "summary": event.get("summary"),
+                    "html_link": event.get("htmlLink"),
+                }
+            )
+            if not dry_run:
+                outbox.enqueue(
+                    "cal_delete",
+                    {"event_id": event["id"], "booking_id": stamped},
+                    booking_id=stamped,
+                )
 
-        # Remaining event_ids are "extra"
-        for event_id in event_ids:
-            if dry_run:
-                extra.append(event_id)
-            else:
-                del_cal_event(event_id, f"Raw id {event_id}")
-
+        #
+        ## The lists describe what was found either way, so the caller can say
+        ## how much it queued rather than reporting zero every time it acted.
         return {"good": good, "missing": missing, "delete": delete, "extra": extra}
 
     @locked
@@ -1297,15 +1378,15 @@ class Bookings:
 
             if rec.tracking.status == "Completed":
                 #
-                ## The sweep now runs unattended on page load, so a broken calendar
-                ## must not stop us stripping personal data. Any event left behind
-                ## is picked up as an "extra" by fix_cal_events().
-                try:
-                    delete_calendar_entry(rec)
-                except Exception:  # pylint: disable=broad-except
-                    self.logger.exception(
-                        "Calendar delete failed for %s - archiving anyway", rec.booking.id
-                    )
+                ## Queue the delete before archiving, never instead of it. The
+                ## archive keeps only BookingData, so the moment this record is
+                ## archived its google_calendar_id is gone for good - and for
+                ## six events in June 2026 that happened while the delete was
+                ## failing on DNS, leaving events nothing could trace. The queue
+                ## now holds the event id and the booking id independently of
+                ## the record, so a broken calendar delays the delete instead of
+                ## losing it, and personal data is still stripped on time.
+                delete_calendar_entry(rec)
 
                 # Deep copy only the booking part (exclude GDPR-related data)
                 archive_copy = copy.deepcopy(rec.booking)

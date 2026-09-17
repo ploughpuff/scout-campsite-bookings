@@ -7,11 +7,13 @@ have its work overwritten the moment the app next saved. gunicorn runs a single
 worker (see the lock comment at the top of xero.py), so there is exactly one of
 these threads and no leader election to get wrong.
 
-Two jobs:
+Three jobs:
 
   - pull from the booking forms, hourly, so new requests are already on the
     page when you open it rather than waiting for someone to press Pull Now
   - archive sweep, once a day at 03:00 UK time
+  - drain the outbox, every tick, so outbound work stranded by a network
+    outage resumes within half a minute of the network coming back
 
 Page traffic still triggers the archive sweep as well. Both routes go through
 Bookings.auto_archive_old_bookings(), which does the work at most once a day, so
@@ -24,6 +26,7 @@ import threading
 from datetime import datetime, timedelta
 
 from config import ARCHIVE_AT_HOUR, PULL_INTERVAL_MINUTES, UK_TZ
+from models import outbox
 from models.utils import now_uk
 
 logger = logging.getLogger("app_logger")
@@ -32,6 +35,12 @@ logger = logging.getLogger("app_logger")
 ## How long to sleep between checks. Short enough that stop() is responsive and
 ## a clock jump can't strand us, long enough to be invisible.
 TICK_SECONDS = 30.0
+
+#
+## How long a job may take before it is worth complaining about. Comfortably
+## more than a pull that is merely slow, comfortably less than the hour until
+## the next one, so an overrun is always visible before it starts costing pulls.
+JOB_BUDGET_SECONDS = 300.0
 
 
 def next_daily_run(now: datetime, hour: int) -> datetime:
@@ -62,6 +71,11 @@ class Scheduler:
         self.archive_hour = ARCHIVE_AT_HOUR if archive_hour is None else archive_hour
         self._stop = threading.Event()
         self._thread = None
+        #
+        ## What this thread is in the middle of, as (name, started_at), or None
+        ## when it is idle. Written only by the scheduler thread and read by
+        ## request threads, which is safe for a single tuple assignment.
+        self._running = None
 
     def start(self) -> None:
         """Start the background thread. Daemon, so it never holds up a shutdown."""
@@ -101,6 +115,13 @@ class Scheduler:
                 self._guard("archive sweep", self.archive)
                 next_archive = next_daily_run(now_uk(), self.archive_hour)
 
+            #
+            ## Every tick. Items that are not due yet are skipped by the queue
+            ## itself, so an empty or waiting outbox costs one list comprehension
+            ## - and work stranded by an outage restarts within 30 seconds of the
+            ## network coming back.
+            self._guard("outbox drain", self.drain_outbox)
+
             self._stop.wait(TICK_SECONDS)
 
     def pull(self) -> None:
@@ -122,6 +143,34 @@ class Scheduler:
                 "Archive sweep: %d archived, %d deleted", result["archived"], result["deleted"]
             )
 
+    def drain_outbox(self) -> None:
+        """Push whatever outbound work is due. Quiet when there is none."""
+        tally = outbox.drain()
+        if any(tally.values()):
+            logger.info(
+                "Outbox drain: %d sent, %d to retry, %d blocked",
+                tally["sent"],
+                tally["retry"],
+                tally["blocked"],
+            )
+
+    def stuck_job(self):
+        """The job that has overrun its budget, as (name, seconds), or None.
+
+        Deliberately readable from a request thread: a job blocked on a dead
+        socket cannot notice its own hang, because the loop that would notice is
+        the thing that is blocked. Asking from outside is the only way to see it.
+        """
+        running = self._running
+        if running is None:
+            return None
+
+        what, started = running
+        elapsed = (now_uk() - started).total_seconds()
+        if elapsed < JOB_BUDGET_SECONDS:
+            return None
+        return (what, elapsed)
+
     def _guard(self, what: str, job) -> None:
         """Run a job, swallowing anything it throws.
 
@@ -129,7 +178,18 @@ class Scheduler:
         thread stays alive for the next attempt, the traceback goes to the log,
         and a failed pull is already recorded in run_state for the Admin page.
         """
+        started = now_uk()
+        self._running = (what, started)
         try:
             job()
         except Exception:  # pylint: disable=broad-except
             logger.exception("Scheduled %s failed", what)
+        finally:
+            self._running = None
+            elapsed = (now_uk() - started).total_seconds()
+            if elapsed >= JOB_BUDGET_SECONDS:
+                #
+                ## It finished, so nothing is stuck now - but a job that takes
+                ## this long is one timeout away from blocking every later tick,
+                ## and the log is where that pattern becomes visible.
+                logger.warning("Scheduled %s took %.0fs", what, elapsed)
