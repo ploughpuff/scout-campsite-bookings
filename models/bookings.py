@@ -761,7 +761,17 @@ class Bookings:
 
         online_url = xero.get_online_invoice_url(rec.booking.xero_invoice_id)
 
-        if send_invoice_email(rec, number, online_url, pdf_bytes, inv.get("due_date")):
+        #
+        ## Telling Xero it was sent rides on the back of the email rather than
+        ## happening here: if the message never leaves, Xero must not start
+        ## reminding the leader about an invoice they were never sent.
+        if send_invoice_email(
+            rec,
+            online_url,
+            pdf_bytes,
+            inv.get("due_date"),
+            then=xero.mark_sent_follow_on(rec.booking.xero_invoice_id, number),
+        ):
             self._add_to_notes(
                 rec.tracking, f"Invoice {number} email queued to leader: {rec.leader.email}"
             )

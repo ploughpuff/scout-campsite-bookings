@@ -139,6 +139,26 @@ def _capture(sink):
     return context
 
 
+def test_work_waiting_on_the_email_only_runs_once_it_has_gone(monkeypatch):
+    """Telling Xero an invoice was sent has to follow the sending, not precede it."""
+    marked = []
+    outbox._handlers["xero_email"] = lambda item: marked.append(item.payload["invoice_id"])
+    then = [{"kind": "xero_email", "payload": {"invoice_id": "inv-guid"}}]
+
+    _smtp(monkeypatch, send_raises=smtplib.SMTPServerDisconnected("dropped"))
+    mailer._send_email(_msg(), "leader@example.com", booking_id="CDS-1", then=then)
+    assert marked == []
+    assert [i.kind for i in outbox.items()] == ["email"]
+
+    _smtp(monkeypatch)
+    outbox.retry_now(outbox.items()[0].id)  # past the backoff, as "Try now" does
+    outbox.drain()  # the email gets through, which queues the follow-on
+    outbox.drain()  # and the next tick carries it out
+
+    assert marked == ["inv-guid"]
+    assert outbox.items() == []
+
+
 def test_the_payload_file_goes_when_the_email_does(monkeypatch):
     _smtp(monkeypatch)
 

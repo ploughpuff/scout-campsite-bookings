@@ -64,16 +64,23 @@ def send_email_notification(rec: LiveBooking, subject_append_str: str = ""):
 
 def send_invoice_email(
     rec: LiveBooking,
-    invoice_number: str,
     online_url: str = None,
     pdf_bytes: bytes = None,
     due_date_iso: str = None,
+    then: list[dict] = None,
 ) -> bool:
     """Email the Xero invoice to the booking's leader, with the PDF attached.
 
     Sent from the app (not Xero) so it goes to the leader's address on the
-    booking rather than whatever emails the Xero contact holds.
+    booking rather than whatever emails the Xero contact holds. `then` is
+    outbox work to queue once this message has actually been delivered, passed
+    through untouched - the caller owns what it means.
+
+    The invoice number is read off the record rather than passed in: it is
+    written there before anything emails it, and one source for it means the
+    subject line and the booking's notes cannot disagree.
     """
+    invoice_number = rec.booking.xero_invoice_number
     due_str = None
     if due_date_iso:
         try:
@@ -117,7 +124,7 @@ def send_invoice_email(
             filename=f"{invoice_number}.pdf",
         )
 
-    return _send_email(msg, rec.leader.email, booking_id=rec.booking.id)
+    return _send_email(msg, rec.leader.email, booking_id=rec.booking.id, then=then)
 
 
 def send_confirm_numbers_email(rec: LiveBooking) -> bool:
@@ -227,7 +234,7 @@ def _create_email_message(body: str, rec: LiveBooking, subject_append_str: str =
     return msg
 
 
-def _send_email(msg, recipient, booking_id: str = None) -> bool:
+def _send_email(msg, recipient, booking_id: str = None, then: list[dict] = None) -> bool:
     """Queue a prepared message for delivery.
 
     Returns True when the message is on the queue and will therefore be
@@ -248,7 +255,7 @@ def _send_email(msg, recipient, booking_id: str = None) -> bool:
     ## the queue is backed up cannot change what the leader is told.
     outbox.enqueue(
         "email",
-        {"recipient": recipient, "subject": msg["Subject"]},
+        {"recipient": recipient, "subject": msg["Subject"], "then": then},
         booking_id=booking_id,
         blob=msg.as_bytes(),
     )

@@ -31,7 +31,9 @@ from config import (
     XERO_TAX_TYPE,
     XERO_TOKEN_PATH,
 )
+from models import outbox
 from models.json_utils import atomic_write_json
+from models.net import RETRYABLE_STATUSES, Permanent, Retryable
 from models.pricing import ChargeLine, charge_lines
 from models.schemas import BookingData, LeaderData, LiveBooking
 from models.utils import get_pretty_date_str, now_uk, parse_iso_datetime
@@ -47,6 +49,15 @@ REQUEST_TIMEOUT = 20
 
 class XeroError(Exception):
     """Xero API failure with a message safe to flash to the user."""
+
+
+class XeroUnavailableError(XeroError):
+    """Xero never gave a usable answer, so the same call is still worth making.
+
+    The distinction only matters to the outbox handler below, which has to sort
+    a failure into Retryable or Permanent. Without it every failure looks alike
+    and a DNS blip would block queued work that a minute's wait would fix.
+    """
 
 
 class XeroNotConnectedError(XeroError):
@@ -114,7 +125,7 @@ class XeroTokenManager:
                 timeout=REQUEST_TIMEOUT,
             )
         except requests.RequestException as e:
-            raise XeroError(f"Could not reach Xero to refresh token: {e}") from e
+            raise XeroUnavailableError(f"Could not reach Xero to refresh token: {e}") from e
 
         if resp.status_code != 200:
             if "invalid_grant" in resp.text:
@@ -202,10 +213,17 @@ def _request(method: str, path: str, params: dict = None, json_body: dict = None
             timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as e:
-        raise XeroError(f"Could not reach Xero: {e}") from e
+        raise XeroUnavailableError(f"Could not reach Xero: {e}") from e
 
     if not resp.ok:
-        raise XeroError(f"Xero {method} {path} failed [{resp.status_code}]: {_error_detail(resp)}")
+        #
+        ## Same rule as net.py: a 5xx is Xero having a bad day and a 408/429 is
+        ## Xero asking us to wait, both worth repeating. Anything else in 4xx is
+        ## a refusal that will refuse again just as fast.
+        detail = f"Xero {method} {path} failed [{resp.status_code}]: {_error_detail(resp)}"
+        if resp.status_code >= 500 or resp.status_code in RETRYABLE_STATUSES:
+            raise XeroUnavailableError(detail)
+        raise XeroError(detail)
 
     return resp.json() if resp.content else {}
 
@@ -235,7 +253,7 @@ def test_connection() -> str:
             timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as e:
-        raise XeroError(f"Could not reach Xero: {e}") from e
+        raise XeroUnavailableError(f"Could not reach Xero: {e}") from e
 
     if not resp.ok:
         raise XeroError(f"Xero connections check failed [{resp.status_code}]")
@@ -586,3 +604,55 @@ def get_online_invoice_url(invoice_id: str) -> str | None:
     except (XeroError, KeyError, IndexError) as e:
         logger.warning("No online invoice URL for [%s]: %s", invoice_id, e)
         return None
+
+
+#
+## Marking an invoice as sent
+##
+## The app emails the invoice itself rather than asking Xero to, so Xero has no
+## way of knowing it went out and leaves SentToContact false. Its own list then
+## reads "Invoice not sent", and - the part that actually costs money - it holds
+## back the payment reminders it would otherwise send on an overdue invoice.
+def mark_sent_follow_on(invoice_id: str, invoice_number: str) -> list[dict]:
+    """The queue entry that tells Xero this invoice went out, once it really has.
+
+    Handed to the mailer rather than done here on purpose. Telling Xero an
+    invoice was sent when our email was refused would set its reminders chasing
+    a leader over something they never received, so this only ever runs off the
+    back of a delivery the far end accepted.
+    """
+    return [
+        {
+            "kind": "xero_email",
+            "payload": {"invoice_id": invoice_id, "invoice_number": invoice_number},
+        }
+    ]
+
+
+@outbox.handler("xero_email")
+def _handle_mark_sent(item) -> None:
+    """Flag an invoice as sent in Xero, so it stops reading "Invoice not sent".
+
+    Idempotent for free: setting the flag true a second time is the same call,
+    which is what a retry after an answer we never read needs it to be.
+    """
+    invoice_id = item.payload["invoice_id"]
+
+    try:
+        #
+        ## POST updates in place and omitted fields are retained, so this
+        ## touches nothing but the flag - the line items are not resent.
+        _request(
+            "POST",
+            f"Invoices/{invoice_id}",
+            json_body={"Invoices": [{"InvoiceID": invoice_id, "SentToContact": True}]},
+        )
+    except XeroUnavailableError as e:
+        raise Retryable(str(e)) from e
+    except XeroError as e:
+        #
+        ## Caught second: XeroUnavailableError is one of these too.
+        raise Permanent(str(e)) from e
+
+    number = item.payload.get("invoice_number") or invoice_id
+    logger.info("Xero invoice [%s] marked as sent", number)

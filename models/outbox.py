@@ -19,6 +19,12 @@ done. Two rules make that work:
     failure means we never got an answer, so the work may or may not have
     landed, and the retry has to cope with either.
 
+Work that may only happen once something else has been confirmed rides along as
+a follow-on: an item's payload may carry a "then" list, and each entry is queued
+in the item's place once it succeeds. Telling Xero an invoice was sent is the
+reason it exists - claiming that before the email leaves would set Xero chasing
+a leader over an invoice they never received.
+
 Storage is deliberately atomic_write_json rather than save_json: the queue
 changes far too often for save_json's fifty-backup rotation, which would flush
 the bookings backup history in a day. Durability here comes from the atomic
@@ -92,7 +98,7 @@ def _ensure_handlers() -> None:
         return
 
     # pylint: disable=import-outside-toplevel,unused-import,cyclic-import
-    from models import calendar, mailer  # noqa: F401
+    from models import calendar, mailer, xero  # noqa: F401
 
     _handlers_loaded = True
 
@@ -262,6 +268,25 @@ def _remove(item: OutboxItem) -> None:
     _discard_payload(item.id)
 
 
+def _finish(item: OutboxItem) -> None:
+    """Retire an item that is done, and queue whatever was waiting on it."""
+    follow_ons = list(item.payload.get("then") or [])
+
+    with _lock:
+        _remove(item)
+
+    #
+    ## Removed before the follow-on is queued, not after. A crash in between
+    ## loses the follow-on, which is visible and harmless - a Xero invoice that
+    ## still reads "not sent". The other order would re-run the item itself, and
+    ## for an email that means a second copy in the leader's inbox.
+    ##
+    ## send_now would re-enter _attempt from inside it; the next drain tick is
+    ## half a minute away and nothing here is urgent.
+    for follow in follow_ons:
+        enqueue(follow["kind"], follow["payload"], booking_id=item.booking_id, send_now=False)
+
+
 def _attempt(item: OutboxItem) -> str:
     """Carry out one item. Returns "sent", "retry" or "blocked"."""
     _ensure_handlers()
@@ -284,9 +309,11 @@ def _attempt(item: OutboxItem) -> str:
     try:
         func(item)
     except Skip as exc:
+        #
+        ## The far end already reflects what we wanted, so the item has done its
+        ## job - and anything waiting on it is still owed.
         logger.info("%s for %s already done: %s", item.kind, item.booking_id or "-", exc)
-        with _lock:
-            _remove(item)
+        _finish(item)
         return "sent"
     except Permanent as exc:
         return _block(item, str(exc))
@@ -299,8 +326,7 @@ def _attempt(item: OutboxItem) -> str:
         logger.exception("Outbox handler for %s failed unexpectedly", item.kind)
         return _block(item, f"{type(exc).__name__}: {exc}")
 
-    with _lock:
-        _remove(item)
+    _finish(item)
     logger.info("Sent %s for %s", item.kind, item.booking_id or "-")
     return "sent"
 

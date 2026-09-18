@@ -49,7 +49,7 @@ DEFAULT_SOCKET_TIMEOUT = 60
 ## HTTP statuses worth another go. 408 and 429 are the server asking us to wait;
 ## 5xx is the server having a bad day. Everything else in 4xx is a refusal that
 ## will refuse again just as fast next time.
-_RETRYABLE_STATUSES = {408, 429}
+RETRYABLE_STATUSES = {408, 429}
 
 
 class Retryable(Exception):
@@ -122,7 +122,7 @@ def _is_retryable(exc: BaseException) -> bool:
 
     if isinstance(exc, (HttpError, requests.exceptions.RequestException)):
         status = status_of(exc)
-        return status is None or status >= 500 or status in _RETRYABLE_STATUSES
+        return status is None or status >= 500 or status in RETRYABLE_STATUSES
 
     return False
 

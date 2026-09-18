@@ -16,6 +16,7 @@ import models.xero as xero
 from models.bookings import Bookings
 from models.json_utils import load_json
 import models.pricing as pricing_module
+from models.net import Permanent, Retryable
 from models.schemas import (
     SCHEMA_VERSION,
     ArchiveData,
@@ -23,12 +24,18 @@ from models.schemas import (
     LeaderData,
     LiveBooking,
     LiveData,
+    OutboxItem,
     TrackingData,
 )
 from models.pricing import estimate_cost
 from models.run_state import RunState
 from models.utils import now_uk
-from models.xero import XeroError, XeroNotConnectedError, XeroTokenManager
+from models.xero import (
+    XeroError,
+    XeroNotConnectedError,
+    XeroTokenManager,
+    XeroUnavailableError,
+)
 
 
 CDS = "Chelmsford District Scouts"
@@ -304,6 +311,127 @@ def test_contact_mapping_roundtrip(tmp_path, monkeypatch):
 
 
 #
+## Which failures are worth repeating.
+##
+## Only matters to the outbox handler below: without the distinction every Xero
+## failure looks alike, and a minute of bad DNS would block queued work for good.
+class _StubTokens:
+    def get_access_token(self):
+        return "tok"
+
+    def get_tenant_id(self):
+        return "tenant-1"
+
+
+@pytest.fixture
+def stub_tokens(monkeypatch):
+    monkeypatch.setattr(xero, "token_manager", _StubTokens())
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 408, 429])
+def test_a_bad_day_at_xero_is_worth_another_go(status, stub_tokens, monkeypatch):
+    monkeypatch.setattr(
+        xero.requests, "request", lambda *a, **k: FakeResponse(status, {"Detail": "later"})
+    )
+
+    with pytest.raises(XeroUnavailableError):
+        xero._request("GET", "Invoices")
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_a_refusal_from_xero_is_not(status, stub_tokens, monkeypatch):
+    monkeypatch.setattr(
+        xero.requests, "request", lambda *a, **k: FakeResponse(status, {"Detail": "no"})
+    )
+
+    with pytest.raises(XeroError) as e:
+        xero._request("GET", "Invoices")
+    assert not isinstance(e.value, XeroUnavailableError)
+
+
+def test_never_reaching_xero_at_all_is_worth_another_go(stub_tokens, monkeypatch):
+    def unreachable(*a, **k):
+        raise xero.requests.exceptions.ConnectionError("dns")
+
+    monkeypatch.setattr(xero.requests, "request", unreachable)
+
+    with pytest.raises(XeroUnavailableError):
+        xero._request("GET", "Invoices")
+
+
+#
+## Marking an invoice as sent, so Xero stops holding back its reminders
+def _mark_sent_item():
+    return OutboxItem(
+        id="abc",
+        kind="xero_email",
+        payload={"invoice_id": "inv-guid", "invoice_number": "INV-0042"},
+        booking_id="CDS-2026-0001",
+    )
+
+
+def test_marking_sent_touches_nothing_but_the_flag(monkeypatch):
+    """A resent line item would be a second invoice; only SentToContact may move."""
+    calls = []
+
+    def fake_request(method, path, params=None, json_body=None):
+        calls.append((method, path, json_body))
+        return {}
+
+    monkeypatch.setattr(xero, "_request", fake_request)
+
+    xero._handle_mark_sent(_mark_sent_item())
+
+    assert calls == [
+        (
+            "POST",
+            "Invoices/inv-guid",
+            {"Invoices": [{"InvoiceID": "inv-guid", "SentToContact": True}]},
+        )
+    ]
+
+
+def test_an_unreachable_xero_leaves_the_mark_sent_queued(monkeypatch):
+    def unavailable(*a, **k):
+        raise XeroUnavailableError("Could not reach Xero: dns")
+
+    monkeypatch.setattr(xero, "_request", unavailable)
+
+    with pytest.raises(Retryable):
+        xero._handle_mark_sent(_mark_sent_item())
+
+
+def test_a_refused_mark_sent_is_put_in_front_of_a_human(monkeypatch):
+    def refused(*a, **k):
+        raise XeroError("Xero POST Invoices/inv-guid failed [400]: voided")
+
+    monkeypatch.setattr(xero, "_request", refused)
+
+    with pytest.raises(Permanent):
+        xero._handle_mark_sent(_mark_sent_item())
+
+
+def test_a_dead_token_needs_a_human_not_a_retry(monkeypatch):
+    def not_connected(*a, **k):
+        raise XeroNotConnectedError()
+
+    monkeypatch.setattr(xero, "_request", not_connected)
+
+    with pytest.raises(Permanent):
+        xero._handle_mark_sent(_mark_sent_item())
+
+
+def test_the_follow_on_carries_the_invoice_and_nothing_else():
+    """Self-contained, like everything on the queue: no lookup back into a booking."""
+    assert xero.mark_sent_follow_on("inv-guid", "INV-0042") == [
+        {
+            "kind": "xero_email",
+            "payload": {"invoice_id": "inv-guid", "invoice_number": "INV-0042"},
+        }
+    ]
+
+
+#
 ## Branding theme
 def test_branding_theme_resolved_and_cached(monkeypatch):
     monkeypatch.setattr(xero, "XERO_BRANDING_THEME", "Riffhams")
@@ -505,10 +633,14 @@ def test_happy_path_raises_emails_and_completes(manager, live_booking, monkeypat
     monkeypatch.setattr(xero, "get_online_invoice_url", lambda iid: "https://in.xero.com/abc")
     emailed = []
 
-    def fake_send(rec, number, online_url=None, pdf_bytes=None, due_date_iso=None):
-        emailed.append((number, online_url, pdf_bytes, due_date_iso))
+    def fake_send(rec, online_url=None, pdf_bytes=None, due_date_iso=None, then=None):
+        emailed.append(
+            (rec.booking.xero_invoice_number, online_url, pdf_bytes, due_date_iso)
+        )
+        follow_ons.append(then)
         return True
 
+    follow_ons = []
     monkeypatch.setattr(bookings_module, "send_invoice_email", fake_send)
 
     result = manager.raise_xero_invoice("CDS-2026-0001")
@@ -519,6 +651,18 @@ def test_happy_path_raises_emails_and_completes(manager, live_booking, monkeypat
     assert live_booking.tracking.status == "Completed"
     assert emailed == [("INV-0042", "https://in.xero.com/abc", b"%PDF-fake", "2026-07-20")]
     assert "email queued to leader: jane@example.com" in live_booking.tracking.notes
+
+    #
+    ## Xero is told the invoice went out by the email itself, not by us here -
+    ## so the mark-sent travels with the message rather than firing beside it.
+    assert follow_ons == [
+        [
+            {
+                "kind": "xero_email",
+                "payload": {"invoice_id": "inv-guid", "invoice_number": "INV-0042"},
+            }
+        ]
+    ]
 
 
 def test_xero_error_leaves_booking_untouched(manager, live_booking, monkeypatch):

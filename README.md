@@ -159,6 +159,11 @@ Two rules keep that from recurring:
   `booking_id` stamped on them rather than by a stored id, and an event that is
   already gone counts as done.
 
+Work that may only happen *after* something else has been confirmed rides along
+as a follow-on: an item can carry a `then` list, and each entry is queued in its
+place once the item succeeds. Marking a Xero invoice as sent is why this exists -
+see below.
+
 Failures are sorted into two kinds. *Retryable* means we never got a usable
 answer - DNS, timeout, TLS, 5xx - and the item backs off (1 min, doubling, capped
 at 6 hours) and tries again. *Permanent* means the far end answered and refused -
@@ -184,6 +189,18 @@ items are itemised from the pricing config where they reproduce the booking's
 cost estimate exactly; a manually overridden estimate falls back to one line
 for the total. A flat nightly facility charge bills as a single line with the
 night count as its quantity, e.g. `Roxby Hut - 5th August 2026 (4 nights)`.
+
+Once that email has actually been delivered - not merely queued - the invoice is
+flagged as **sent** in Xero (`SentToContact`). Xero holds back its payment
+reminders on an invoice it believes was never sent, and its list reads "Invoice
+not sent" until this lands. It is chained off the outbox rather than done beside
+the email on purpose: if the message is refused (a bad leader address), Xero is
+never told it went out, so its reminders cannot chase a leader over an invoice
+they never received. A `xero_email` item briefly appears on the Admin page
+between the two.
+
+Reminders also have to be switched on in Xero itself, and the contact needs an
+email address there - neither is anything this app sets.
 
 A group's first invoice always shows a confirmation page to link the group to
 a Xero contact: pick from likely matches, search Xero by another name, or

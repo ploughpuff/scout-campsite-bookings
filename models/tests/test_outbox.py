@@ -223,6 +223,90 @@ def test_a_stuck_booking_does_not_hold_up_anyone_else():
 
 
 #
+## Follow-on work, for anything that may only happen once something else has
+## been confirmed. Telling Xero an invoice was sent is why this exists.
+def _with_follow_on(payload=None):
+    return {
+        **(payload or {}),
+        "then": [{"kind": "xero_email", "payload": {"invoice_id": "inv-guid"}}],
+    }
+
+
+def test_a_follow_on_is_queued_once_the_work_it_waited_on_succeeds():
+    _handler("email", lambda item: None)
+
+    outbox.enqueue("email", _with_follow_on({"recipient": "jane@example.com"}),
+                   booking_id="CDS-1")
+
+    waiting = outbox.items()
+    assert [i.kind for i in waiting] == ["xero_email"]
+    assert waiting[0].payload == {"invoice_id": "inv-guid"}
+
+
+def test_a_follow_on_inherits_the_booking_it_belongs_to():
+    """It has to, or drain() cannot keep it behind that booking's other work."""
+    _handler("email", lambda item: None)
+
+    outbox.enqueue("email", _with_follow_on(), booking_id="CDS-1")
+
+    assert outbox.items()[0].booking_id == "CDS-1"
+
+
+def test_an_outage_queues_no_follow_on():
+    """The email is still owed, so nothing may act as though it had gone."""
+
+    def no_answer(item):
+        raise Retryable("dns")
+
+    _handler("email", no_answer)
+    outbox.enqueue("email", _with_follow_on(), booking_id="CDS-1")
+
+    assert [i.kind for i in outbox.items()] == ["email"]
+
+
+def test_a_refused_email_queues_no_follow_on():
+    """A bad address must never leave Xero reminding someone who got nothing."""
+
+    def refused(item):
+        raise Permanent("550 no such mailbox")
+
+    _handler("email", refused)
+    outbox.enqueue("email", _with_follow_on(), booking_id="CDS-1")
+
+    remaining = outbox.items()
+    assert [i.kind for i in remaining] == ["email"]
+    assert remaining[0].state == "blocked"
+
+
+def test_work_that_was_already_done_still_queues_its_follow_on():
+    """Skip means the far end already reflects what we wanted - so it happened."""
+
+    def already_gone(item):
+        raise outbox.Skip("nothing left to do")
+
+    _handler("email", already_gone)
+    outbox.enqueue("email", _with_follow_on(), booking_id="CDS-1")
+
+    assert [i.kind for i in outbox.items()] == ["xero_email"]
+
+
+def test_a_follow_on_waits_for_the_next_drain():
+    """Queued, not run from inside the attempt that spawned it."""
+    done = []
+    _handler("email", lambda item: None)
+    _handler("xero_email", lambda item: done.append(item.payload["invoice_id"]))
+
+    outbox.enqueue("email", _with_follow_on(), booking_id="CDS-1", send_now=False)
+
+    outbox.drain()
+    assert done == []
+
+    outbox.drain()
+    assert done == ["inv-guid"]
+    assert outbox.items() == []
+
+
+#
 ## Counting the attempt before making it, so a crash cannot loop
 def test_the_attempt_is_counted_before_it_is_made(isolated_outbox):
     """A crash mid-send must come back to an item scheduled for later, not one
