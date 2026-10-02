@@ -267,7 +267,7 @@ Booking Details
       {% endif %}
 
       {# Link group to Xero contact ahead of invoicing #}
-      {% if not xero_link and rec.tracking.status in ['New', 'Pending', 'Confirmed'] %}
+      {% if not xero_link and rec.tracking.status in ['New', 'Pending', 'Confirmed', 'Invoice'] %}
       <form method="POST" action="{{ url_for('xero_link_contact', booking_id=rec.booking.id) }}" class="d-inline"
         onsubmit="showLoadingOverlay()">
         <button type="submit" class="btn btn-info">🔗 Link Xero Contact</button>

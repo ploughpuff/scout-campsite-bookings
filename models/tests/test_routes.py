@@ -15,6 +15,12 @@ import pytest  # pylint: disable=wrong-import-position
 import app as flask_app  # pylint: disable=wrong-import-position
 from models import outbox  # pylint: disable=wrong-import-position
 from models.net import Retryable  # pylint: disable=wrong-import-position
+from models.schemas import (  # pylint: disable=wrong-import-position
+    BookingData,
+    LeaderData,
+    LiveBooking,
+    TrackingData,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -127,3 +133,52 @@ def test_the_admin_page_shows_outstanding_work(client):
 
     assert "CDS-2026-0250" in body
     assert "Outbox" in body
+
+
+#
+## Linking a group to its Xero contact
+def invoice_booking():
+    return LiveBooking(
+        booking=BookingData(
+            id="CDS-2026-0001",
+            original_sheet_md5="abc123",
+            group_type="Chelmsford District Scouts",
+            group_name="3rd Chelmsford",
+            group_size=24,
+            event_type="overnight",
+            submitted="2026-05-02T09:30:00",
+            arriving="2026-06-12T16:00:00",
+            departing="2026-06-14T10:00:00",
+            facilities=["Main Field"],
+        ),
+        leader=LeaderData(name="Jane Smith", email="jane@example.com", phone="0777123456"),
+        tracking=TrackingData(status="Invoice", cost_estimate=12345, notes=""),
+    )
+
+
+def test_an_unlinked_booking_awaiting_its_invoice_can_still_be_linked(client, monkeypatch):
+    """The button used to vanish at Invoice, leaving Raise Invoice as the only
+    way to pick a contact - which raises the invoice in the same breath."""
+    monkeypatch.setattr(
+        flask_app.bookings, "get_bookings_list", lambda **kwargs: [invoice_booking()]
+    )
+    monkeypatch.setattr(flask_app.bookings, "get_xero_link", lambda group_name: None)
+
+    body = client.get("/booking/CDS-2026-0001").get_data(as_text=True)
+
+    assert "/xero/link_contact/CDS-2026-0001" in body
+
+
+def test_a_linked_booking_is_not_offered_the_link_again(client, monkeypatch):
+    monkeypatch.setattr(
+        flask_app.bookings, "get_bookings_list", lambda **kwargs: [invoice_booking()]
+    )
+    monkeypatch.setattr(
+        flask_app.bookings,
+        "get_xero_link",
+        lambda group_name: {"contact_id": "cid-1", "contact_name": "3rd Chelmsford"},
+    )
+
+    body = client.get("/booking/CDS-2026-0001").get_data(as_text=True)
+
+    assert "/xero/link_contact/CDS-2026-0001" not in body
